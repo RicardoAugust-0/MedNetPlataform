@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext';
 import { applyAccent } from './utils';
 import LoginPage from './auth/LoginPage';
 import SetPasswordPage from './auth/SetPasswordPage';
+import Profile from './modules/Profile';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import TweaksPanel from './components/TweaksPanel';
@@ -51,6 +52,7 @@ function AppShell() {
           <Panel id="workspace"><Workspace /></Panel>
           <Panel id="notas"><Notes /></Panel>
           <Panel id="links"><Links /></Panel>
+          <Panel id="perfil"><Profile /></Panel>
         </div>
       </div>
       <TweaksPanel />

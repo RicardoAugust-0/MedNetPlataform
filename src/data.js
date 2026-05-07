@@ -6,12 +6,13 @@ export const APP_CONFIG = {
 
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',      icon: 'ti-layout-dashboard', group: 'Operação' },
-  { id: 'monitor',   label: 'Monitor Sascar', icon: 'ti-truck-delivery',   group: 'Operação', badge: 4 },
+  { id: 'monitor',   label: 'Monitor Sascar', icon: 'ti-truck-delivery',   group: 'Operação' },
   { id: 'agenda',    label: 'Agenda',         icon: 'ti-calendar-event',   group: 'Operação' },
   { id: 'templates', label: 'Templates',      icon: 'ti-message-2',        group: 'Conhecimento' },
   { id: 'workspace', label: 'Workspace',      icon: 'ti-notebook',         group: 'Conhecimento' },
   { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
   { id: 'links',     label: 'Links Rápidos',  icon: 'ti-link',             group: 'Conhecimento' },
+  { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
 ];
 
 export const PANEL_TITLES = {
@@ -22,6 +23,7 @@ export const PANEL_TITLES = {
   workspace: { t: 'Workspace',              s: 'Páginas e procedimentos da equipe' },
   notas:     { t: 'Bloco de Notas',         s: 'Anotações pessoais e operacionais' },
   links:     { t: 'Links Rápidos',          s: 'Acessos a sistemas e ferramentas' },
+  perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
 };
 
 export const MOCK_DRIVERS = [
@@ -101,10 +103,4 @@ export const NOTES_DEFAULT = [
   { id:3, title:'Reunião 06/05',         body:'Pontos discutidos:\n- Aumento de alertas no turno noturno\n- Novo template para Transval\n- Revisar tempo médio de intervenção', date:'06 mai' },
 ];
 
-export const REMINDERS_DEFAULT = [
-  { id:1, title:'Retorno motorista Carlos Silva',     sub:'Confirmar pausa após alerta crítico',  time:'09:30', urgent:false, done:false },
-  { id:2, title:'Relatório diário para supervisão',   sub:'Enviar até as 12h',                    time:'12:00', urgent:false, done:false },
-  { id:3, title:'Alerta crítico — BR-101 km 88',      sub:'Intervenção pendente · Carlos Silva',  time:'08:15', urgent:true,  done:false },
-  { id:4, title:'Reunião com Transval',               sub:'Sala virtual · revisar SLA',           time:'15:00', urgent:false, done:false },
-  { id:5, title:'Checklist fim de turno',             sub:'',                                     time:'18:00', urgent:false, done:false },
-];
+export const REMINDERS_DEFAULT = [];

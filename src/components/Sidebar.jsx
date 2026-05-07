@@ -4,8 +4,10 @@ import { NAV_ITEMS, APP_CONFIG } from '../data';
 import { iniciais } from '../utils';
 
 export default function Sidebar() {
-  const { activePanel, setActivePanel } = useApp();
+  const { activePanel, setActivePanel, drivers } = useApp();
   const { profile, signOut } = useAuth();
+
+  const alertCount = drivers.filter(d => d.alertas > 0).length;
 
   let curGroup = '';
   const navRows = [];
@@ -14,6 +16,7 @@ export default function Sidebar() {
       curGroup = item.group;
       navRows.push(<div className="nav-group-label" key={'g-' + item.group}>{item.group}</div>);
     }
+    const badge = item.id === 'monitor' ? (alertCount > 0 ? alertCount : null) : (item.badge || null);
     navRows.push(
       <div
         key={item.id}
@@ -22,7 +25,7 @@ export default function Sidebar() {
       >
         <i className={`ti ${item.icon} nav-icon`}></i>
         <span className="nav-label">{item.label}</span>
-        {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+        {badge ? <span className="nav-badge">{badge}</span> : null}
       </div>
     );
   });
@@ -48,7 +51,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav">{navRows}</nav>
 
       <div className="sidebar-footer">
-        <div className="user-card">
+        <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => setActivePanel('perfil')} title="Abrir perfil">
           <div className="user-avatar">{profile ? iniciais(profile.nome) : '?'}</div>
           <div className="user-meta">
             <div className="user-name">{profile?.nome || '—'}</div>
@@ -56,7 +59,7 @@ export default function Sidebar() {
           </div>
           <button
             title="Sair"
-            onClick={signOut}
+            onClick={e => { e.stopPropagation(); signOut(); }}
             style={{
               marginLeft: 'auto', background: 'none', border: 'none',
               cursor: 'pointer', color: 'var(--text-muted)', padding: '4px',
