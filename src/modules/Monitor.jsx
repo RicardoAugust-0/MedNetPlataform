@@ -1,0 +1,443 @@
+import { useState } from 'react';
+import { useApp } from '../context';
+import { useAuth } from '../auth/AuthContext';
+import { useAtendimentos } from '../hooks/useAtendimentos';
+import { iniciais } from '../utils';
+import { parseSheetFile } from '../parseSheet';
+
+export default function Monitor() {
+  const {
+    drivers, setDrivers,
+    filters, setFilters,
+    excluirTecnicos, setExcluirTecnicos,
+    setActivePanel,
+  } = useApp();
+  const { profile } = useAuth();
+  const { history, loading: histLoading, error: histError, registrar } = useAtendimentos();
+
+  const [activeTab, setActiveTab]   = useState('intervencao');
+  const [statusMsg, setStatusMsg]   = useState('Aguardando carga da planilha (.xlsx ou .csv)');
+  const [statusKind, setStatusKind] = useState('idle');
+  const [loadStats, setLoadStats]   = useState(null);
+  const [loading, setLoading]       = useState(false);
+
+  /* ── Filtros ── */
+  const filtered = drivers.filter(d => {
+    const f = filters;
+    if (excluirTecnicos && d.alertas === 0 && d.reportaveis === 0) return false;
+    if (f.turno && d.turno !== f.turno) return false;
+    if (f.empresa && d.transportadora !== f.empresa) return false;
+    if (f.comportamento) {
+      const todos = [...(d.tipos || []), ...(d.tiposReportar || [])];
+      if (!todos.some(t => t.includes(f.comportamento))) return false;
+    }
+    if (f.prioridade === 'gravissimo' && d.severidade !== 'Gravíssimo') return false;
+    if (f.prioridade === 'grave'      && d.severidade !== 'Grave')      return false;
+    if (f.prioridade === 'normal'     && d.severidade !== 'Normal')     return false;
+    return true;
+  });
+
+  const intervencaoList = filtered.filter(d => d.alertas > 0).sort((a, b) => b.alertas - a.alertas);
+  const reportarList    = filtered.filter(d => d.alertas === 0 && d.reportaveis > 0).sort((a, b) => b.reportaveis - a.reportaveis);
+  const tecList         = filtered.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0);
+  const transps         = [...new Set(drivers.map(d => d.transportadora))].sort();
+
+  /* ── Upload ── */
+  const handleFile = async (file) => {
+    setLoading(true);
+    setStatusKind('idle');
+    setStatusMsg(`Processando ${file.name}…`);
+    try {
+      const { drivers: newDrivers, stats } = await parseSheetFile(file);
+      setDrivers(newDrivers);
+      setLoadStats(stats);
+      setStatusKind('active');
+      setStatusMsg(
+        `${file.name} · ${stats.comIntervencao} para intervenção · ` +
+        `${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`
+      );
+      setActiveTab('intervencao');
+    } catch (err) {
+      setStatusKind('error');
+      setStatusMsg(`Erro ao ler planilha: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  /* ── Ações ── */
+  const attend = async (d) => {
+    if (!confirm(`Iniciar atendimento: ${d.nome}?`)) return;
+    await registrar({
+      motorista:      d.nome,
+      placa:          d.placa,
+      transportadora: d.transportadora,
+      tipo:           'intervencao',
+      obs:            `Atendimento · ${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`,
+    });
+    setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+  };
+
+  const reportar = async (d) => {
+    if (!confirm(`Registrar notificação para a empresa: ${d.nome}?`)) return;
+    await registrar({
+      motorista:      d.nome,
+      placa:          d.placa,
+      transportadora: d.transportadora,
+      tipo:           'reportar',
+      obs:            `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})`,
+    });
+    setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
+  };
+
+  const deleteAlert = async (d) => {
+    if (!confirm(`Descartar alerta de intervenção de ${d.nome}?`)) return;
+    await registrar({
+      motorista:      d.nome,
+      placa:          d.placa,
+      transportadora: d.transportadora,
+      tipo:           'descarte',
+      obs:            `Alerta descartado · ${d.alertas} evento(s) removidos`,
+    });
+    setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+  };
+
+  const clearAll = async () => {
+    const ativos = drivers.filter(x => x.alertas > 0).length;
+    if (!ativos) { alert('Não há intervenções ativas.'); return; }
+    if (!confirm(`Limpar todas as ${ativos} intervenções da fila?`)) return;
+    await registrar({
+      motorista:  `${ativos} motoristas`,
+      tipo:       'limpeza',
+      obs:        `Limpeza em massa · ${ativos} intervenções descartadas`,
+    });
+    setDrivers(drivers.map(d => ({ ...d, alertas: 0, tipos: [] })));
+  };
+
+  const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
+
+  /* ── Lookup maps ── */
+  const histIcon  = { intervencao: 'ti-headset', reportar: 'ti-building', descarte: 'ti-trash', limpeza: 'ti-trash' };
+  const tipoLabel = { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' };
+  const tipoBadge = { intervencao: 'danger', reportar: 'warning', descarte: 'info', limpeza: 'info' };
+
+  /* ── Helpers ── */
+  const sevClass = (d) => {
+    if (d.severidade === 'Gravíssimo') return 'danger';
+    if (d.severidade === 'Grave')      return 'warning';
+    return 'ok';
+  };
+
+  const TiposBadge = ({ tipos, variant = 'warning' }) =>
+    tipos?.length > 0
+      ? <div className="d-tags">{tipos.map((t, i) => <span key={i} className="d-tag">{t}</span>)}</div>
+      : null;
+
+  return (
+    <div className="monitor-grid">
+
+      {/* Status bar */}
+      <div className="status-bar" style={{ marginBottom: 12 }}>
+        <div className={`dot ${statusKind === 'active' ? 'active' : statusKind === 'error' ? 'error' : ''}`}></div>
+        <div className="status-text">{statusMsg}{loading && ' — a processar…'}</div>
+        <button className="btn btn-sm btn-danger" onClick={clearAll}><i className="ti ti-trash"></i> Limpar fila</button>
+        <a href="https://www.sascar.com.br/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: 'none' }}>
+          <i className="ti ti-external-link"></i> Abrir Sascar
+        </a>
+      </div>
+
+      {/* Upload */}
+      <label
+        className="upload-area"
+        style={{ cursor: 'pointer' }}
+        onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+        onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
+        onDrop={handleDrop}
+      >
+        <div className="upload-icon"><i className="ti ti-cloud-upload"></i></div>
+        <div className="upload-text">
+          <div className="upload-title">Solte aqui o relatório de detalhes de evento do Sascar</div>
+          <div className="upload-hint">
+            .xlsx · .xls · .csv &nbsp;·&nbsp; Falsos positivos removidos automaticamente
+          </div>
+        </div>
+        <input type="file" accept=".xlsx,.xls,.csv" hidden
+          onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
+      </label>
+
+      {/* KPIs pós-carga */}
+      {loadStats && (
+        <div className="stat-strip" style={{ marginTop: 12 }}>
+          <div className="stat-box">
+            <div className="stat-label">Placas carregadas</div>
+            <div className="stat-value">{loadStats.total}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">Intervenção</div>
+            <div className="stat-value danger">{loadStats.comIntervencao}</div>
+            <div className="stat-sub">Bocejo · Olho fechado</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">Reportar</div>
+            <div className="stat-value warning">{loadStats.soReportar}</div>
+            <div className="stat-sub">Outros eventos</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">Só técnico</div>
+            <div className="stat-value">{loadStats.soTecnico}</div>
+            <div className="stat-sub">Câmera / obstrução</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">Falsos positivos</div>
+            <div className="stat-value" style={{ color: 'var(--text-muted)' }}>{loadStats.falsosPositivos}</div>
+            <div className="stat-sub">removidos</div>
+          </div>
+        </div>
+      )}
+
+      {/* Config */}
+      <div className="config-bar" style={{ marginTop: 12 }}>
+        <div className="config-row">
+          <div>
+            <div className="config-text">Ocultar motoristas apenas com técnicos</div>
+            <div className="config-hint">
+              Esconde placas com apenas Obstrução de Câmera (sem intervenção ou reportável). <em>Use com atenção</em>
+            </div>
+          </div>
+          <label className="toggle-wrap">
+            <input type="checkbox" checked={excluirTecnicos} onChange={e => setExcluirTecnicos(e.target.checked)} />
+            <span className="toggle-track"><span className="toggle-thumb"></span></span>
+          </label>
+        </div>
+      </div>
+
+      {/* Operador — agora vem do auth */}
+      <div className="operator-bar">
+        <label><i className="ti ti-user"></i> Operador:</label>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+          {profile?.nome}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          {profile?.cargo} · {profile?.email}
+        </span>
+      </div>
+
+      {/* Filtros */}
+      <div className="filter-bar">
+        <div className="filter-group"><label><i className="ti ti-filter"></i> Filtros:</label></div>
+        <div className="filter-group">
+          <label>Turno</label>
+          <select value={filters.turno} onChange={e => setFilters({ ...filters, turno: e.target.value })}>
+            <option value="">Ambos</option>
+            <option value="diurno">Diurno (06–18h)</option>
+            <option value="noturno">Noturno (18–06h)</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Severidade</label>
+          <select value={filters.prioridade} onChange={e => setFilters({ ...filters, prioridade: e.target.value })}>
+            <option value="">Todas</option>
+            <option value="gravissimo">Gravíssimo</option>
+            <option value="grave">Grave</option>
+            <option value="normal">Normal</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Transportadora</label>
+          <select value={filters.empresa} onChange={e => setFilters({ ...filters, empresa: e.target.value })}>
+            <option value="">Todas</option>
+            {transps.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Evento</label>
+          <select value={filters.comportamento} onChange={e => setFilters({ ...filters, comportamento: e.target.value })}>
+            <option value="">Todos</option>
+            <optgroup label="— Intervenção —">
+              <option value="Bocejo">Bocejo</option>
+              <option value="Olho fechado">Olho fechado</option>
+            </optgroup>
+            <optgroup label="— Reportar —">
+              <option value="Distração">Distração genérica</option>
+              <option value="Uso de celular">Uso de celular</option>
+              <option value="Fumando">Fumando</option>
+              <option value="Câmera coberta">Câmera coberta</option>
+            </optgroup>
+          </select>
+        </div>
+        <button className="filter-reset" onClick={resetFilters}><i className="ti ti-x"></i> Limpar</button>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs">
+        {[
+          ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
+          ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
+          ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
+          ['historico',   'ti-history',     'Histórico',         history.length,          null],
+        ].map(([id, icon, lbl, cnt, color]) => (
+          <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
+            <i className={`ti ${icon}`} style={color ? { color } : {}}></i> {lbl}
+            <span className="tab-count">{cnt}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Tab: Intervenção */}
+      {activeTab === 'intervencao' && (
+        intervencaoList.length === 0
+          ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista requer intervenção" sub="Bocejo ou Olho fechado" />
+          : <div className="driver-list">
+              {intervencaoList.map(d => {
+                const sev = sevClass(d);
+                return (
+                  <div className="driver-item" key={d.placa}>
+                    <div className={`d-avatar ${sev}`}>{iniciais(d.nome)}</div>
+                    <div className="d-info">
+                      <div className="d-name">
+                        <span>{d.nome}</span>
+                        <span className={`badge badge-${sev}`}>{d.alertas} {d.alertas === 1 ? 'evento' : 'eventos'}</span>
+                        <span className={`badge badge-${sev}`} style={{ fontSize: 9.5 }}>{d.severidade}</span>
+                      </div>
+                      <div className="d-detail">
+                        <span><i className="ti ti-license"></i> {d.placa}</span>
+                        <span className="sep">·</span>
+                        <span><i className="ti ti-building"></i> {d.transportadora}</span>
+                        <span className="sep">·</span>
+                        <span><i className="ti ti-sun" style={{ color: d.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-400)' }}></i> {d.turno === 'diurno' ? 'Diurno' : 'Noturno'}</span>
+                      </div>
+                      <TiposBadge tipos={d.tipos} />
+                      {/* Mostra eventos reportáveis adicionais caso existam */}
+                      {d.reportaveis > 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          + {d.reportaveis} evento(s) reportável(is): {d.tiposReportar.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="d-actions">
+                      <button className="btn btn-sm" onClick={() => setActivePanel('templates')}>
+                        <i className="ti ti-message-2"></i> Template
+                      </button>
+                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}>
+                        <i className="ti ti-headset"></i> Atender
+                      </button>
+                      <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}>
+                        <i className="ti ti-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+      )}
+
+      {/* Tab: Reportar à empresa */}
+      {activeTab === 'reportar' && (
+        reportarList.length === 0
+          ? <EmptyState icon="ti-building-off" msg="Nenhum evento para reportar" sub="Distração, Fumando, Uso de celular…" />
+          : <div className="driver-list">
+              {reportarList.map(d => {
+                const sev = sevClass(d);
+                return (
+                  <div className="driver-item" key={d.placa}>
+                    <div className={`d-avatar ${sev}`}>{iniciais(d.nome)}</div>
+                    <div className="d-info">
+                      <div className="d-name">
+                        <span>{d.nome}</span>
+                        <span className={`badge badge-${sev}`}>{d.reportaveis} {d.reportaveis === 1 ? 'evento' : 'eventos'}</span>
+                      </div>
+                      <div className="d-detail">
+                        <span><i className="ti ti-license"></i> {d.placa}</span>
+                        <span className="sep">·</span>
+                        <span><i className="ti ti-building"></i> {d.transportadora}</span>
+                        <span className="sep">·</span>
+                        <span><i className="ti ti-sun" style={{ color: d.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-400)' }}></i> {d.turno === 'diurno' ? 'Diurno' : 'Noturno'}</span>
+                      </div>
+                      <TiposBadge tipos={d.tiposReportar} />
+                    </div>
+                    <div className="d-actions">
+                      <button className="btn btn-sm btn-primary" onClick={() => reportar(d)}>
+                        <i className="ti ti-send"></i> Registrar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+      )}
+
+      {/* Tab: Só técnico */}
+      {activeTab === 'tecnicos' && (
+        tecList.length === 0
+          ? <EmptyState icon="ti-camera" msg="Nenhuma obstrução técnica" />
+          : <div className="driver-list">
+              {tecList.map(d => (
+                <div className="driver-item" key={d.placa}>
+                  <div className="d-avatar tech">{iniciais(d.nome)}</div>
+                  <div className="d-info">
+                    <div className="d-name">{d.nome}</div>
+                    <div className="d-detail">
+                      <span>{d.placa} · {d.transportadora}</span>
+                      <span className="sep">·</span>
+                      <span>{d.tecnicos} {d.tecnicos === 1 ? 'evento técnico' : 'eventos técnicos'}</span>
+                    </div>
+                  </div>
+                  <span className="badge badge-info">Obstrução de câmera</span>
+                </div>
+              ))}
+            </div>
+      )}
+
+      {/* Tab: Histórico */}
+      {activeTab === 'historico' && (
+        histLoading
+          ? <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando histórico…</div>
+          : histError
+            ? <div className="empty-state" style={{ color: 'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {histError}</div>
+            : history.length === 0
+              ? <EmptyState icon="ti-history" msg="Nenhum atendimento registrado ainda" />
+              : <div className="driver-list">
+                  {history.map((item) => (
+                    <div className="history-item" key={item.id} style={{ opacity: item._pending ? 0.6 : 1 }}>
+                      <div className="h-avatar">
+                        <i className={`ti ${histIcon[item.tipo] || 'ti-check'}`} style={{ fontSize: 13 }}></i>
+                      </div>
+                      <div className="h-info">
+                        <div className="h-name">
+                          {item.motorista}
+                          {item.placa && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{item.placa}</span>}
+                        </div>
+                        <div className="h-meta">{item.operador} · {item.obs}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                        <div className="h-time">{item.hora}</div>
+                        {item.tipo && (
+                          <span className={`badge badge-${tipoBadge[item.tipo] || 'info'}`} style={{ fontSize: 9.5 }}>
+                            {tipoLabel[item.tipo] || item.tipo}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ icon, msg, sub }) {
+  return (
+    <div className="empty-state">
+      <i className={`ti ${icon}`}></i>
+      {msg}
+      {sub && <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>{sub}</div>}
+    </div>
+  );
+}
