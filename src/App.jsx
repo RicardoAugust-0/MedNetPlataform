@@ -3,6 +3,7 @@ import { useApp } from './context';
 import { useAuth } from './auth/AuthContext';
 import { applyAccent } from './utils';
 import LoginPage from './auth/LoginPage';
+import SetPasswordPage from './auth/SetPasswordPage';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import TweaksPanel from './components/TweaksPanel';
@@ -58,10 +59,11 @@ function AppShell() {
 }
 
 export default function App() {
-  const { session, loading } = useAuth();
+  const { session, loading, authType } = useAuth();
 
-  // Enquanto verifica sessão, mostra tela em branco (evita flash)
   if (loading) return null;
+
+  if (session && (authType === 'invite' || authType === 'recovery')) return <SetPasswordPage />;
 
   if (!session) return <LoginPage />;
 

@@ -3,23 +3,35 @@ import { supabase, isSupabaseConfigured } from '../supabase';
 
 const AuthCtx = createContext(null);
 
+function parseAuthType() {
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  return params.get('type'); // 'invite' | 'recovery' | null
+}
+
 export function AuthProvider({ children }) {
-  const [session, setSession]   = useState(undefined); // undefined = loading
+  const [session, setSession]   = useState(undefined);
   const [profile, setProfile]   = useState(null);
+  const [authType, setAuthType] = useState(null); // 'invite' | 'recovery' | null
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setSession(null); // pula loading, mostra tela de login com aviso
+      setSession(null);
       return;
     }
+
+    const type = parseAuthType();
+    if (type === 'invite' || type === 'recovery') {
+      setAuthType(type);
+    }
+
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  // Carrega perfil (nome) sempre que a sessão mudar
   useEffect(() => {
     if (!session?.user) { setProfile(null); return; }
     const meta = session.user.user_metadata;
@@ -39,8 +51,17 @@ export function AuthProvider({ children }) {
   const updateProfile = (nome, cargo) =>
     supabase.auth.updateUser({ data: { nome, cargo } });
 
+  const setPassword = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) {
+      setAuthType(null);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    return { error };
+  };
+
   return (
-    <AuthCtx.Provider value={{ session, profile, signIn, signOut, updateProfile, loading: session === undefined }}>
+    <AuthCtx.Provider value={{ session, profile, authType, signIn, signOut, updateProfile, setPassword, loading: session === undefined }}>
       {children}
     </AuthCtx.Provider>
   );
