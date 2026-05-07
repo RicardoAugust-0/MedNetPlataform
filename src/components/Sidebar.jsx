@@ -1,8 +1,11 @@
 import { useApp } from '../context';
+import { useAuth } from '../auth/AuthContext';
 import { NAV_ITEMS, APP_CONFIG } from '../data';
+import { iniciais } from '../utils';
 
 export default function Sidebar() {
   const { activePanel, setActivePanel } = useApp();
+  const { profile, signOut } = useAuth();
 
   let curGroup = '';
   const navRows = [];
@@ -46,11 +49,22 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <div className="user-card">
-          <div className="user-avatar">{APP_CONFIG.usuario.iniciais}</div>
+          <div className="user-avatar">{profile ? iniciais(profile.nome) : '?'}</div>
           <div className="user-meta">
-            <div className="user-name">{APP_CONFIG.usuario.nome}</div>
-            <div className="user-role">{APP_CONFIG.usuario.cargo}</div>
+            <div className="user-name">{profile?.nome || '—'}</div>
+            <div className="user-role">{profile?.cargo || 'Operador'}</div>
           </div>
+          <button
+            title="Sair"
+            onClick={signOut}
+            style={{
+              marginLeft: 'auto', background: 'none', border: 'none',
+              cursor: 'pointer', color: 'var(--text-muted)', padding: '4px',
+              borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center',
+            }}
+          >
+            <i className="ti ti-logout" style={{ fontSize: 16 }}></i>
+          </button>
         </div>
       </div>
     </aside>

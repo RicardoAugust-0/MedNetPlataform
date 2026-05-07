@@ -1,20 +1,32 @@
 import { useApp } from '../context';
-import { APP_CONFIG } from '../data';
+import { useAuth } from '../auth/AuthContext';
+import { useAtendimentos } from '../hooks/useAtendimentos';
 import { iniciais, fmtDate } from '../utils';
 
 export default function Dashboard() {
-  const { drivers, reminders, hourly, setActivePanel } = useApp();
+  const { drivers, reminders, setActivePanel } = useApp();
+  const { profile } = useAuth();
+  const { history: atHistory } = useAtendimentos();
 
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const firstName = profile?.nome?.split(' ')[0] || 'Operador';
 
-  const alertas   = drivers.filter(d => d.alertas > 0);
-  const criticos  = drivers.filter(d => d.alertas >= 5);
-  const intervencoes = drivers.reduce((s, d) => s + d.intervencoes, 0);
-  const tecCount  = drivers.filter(d => d.tecnicos > 0).length;
-  const transp    = new Set(drivers.map(d => d.transportadora)).size;
-  const top       = criticos[0];
-  const max       = Math.max(...hourly);
+  const alertas      = drivers.filter(d => d.alertas > 0);
+  const criticos     = drivers.filter(d => d.alertas >= 5);
+  const intervencoes = drivers.reduce((s, d) => s + (d.intervencoes || 0), 0);
+  const tecCount     = drivers.filter(d => d.tecnicos > 0).length;
+  const transp       = new Set(drivers.map(d => d.transportadora).filter(Boolean)).size;
+  const top          = criticos[0];
+
+  // Gráfico de atividade real baseado nos atendimentos de hoje
+  const today = new Date().toDateString();
+  const hourly = Array(24).fill(0);
+  atHistory.forEach(a => {
+    const d = new Date(a.created_at);
+    if (d.toDateString() === today) hourly[d.getHours()]++;
+  });
+  const maxVal = Math.max(...hourly, 1);
 
   const sortedRem = [...reminders].sort((a, b) => a.time.localeCompare(b.time)).slice(0, 4);
 
@@ -22,7 +34,7 @@ export default function Dashboard() {
     <div>
       <div className="dash-greet">
         <div>
-          <div className="dash-greet-title">{greet}, {APP_CONFIG.usuario.nome.split(' ')[0]} 👋</div>
+          <div className="dash-greet-title">{greet}, {firstName} 👋</div>
           <div className="dash-greet-sub">{fmtDate()} · turno ativo</div>
         </div>
         <div className="dash-greet-actions">
@@ -36,17 +48,17 @@ export default function Dashboard() {
         <div className="stat-box">
           <div className="stat-label">Alertas ativos</div>
           <div className="stat-value danger">{alertas.length}</div>
-          <div className="stat-sub up"><i className="ti ti-arrow-up"></i> +3 vs ontem</div>
+          <div className="stat-sub">{alertas.length === 0 ? 'Nenhum no momento' : 'na planilha atual'}</div>
         </div>
         <div className="stat-box">
           <div className="stat-label">Críticos (≥5)</div>
           <div className="stat-value warning">{criticos.length}</div>
-          <div className="stat-sub">{criticos[0]?.nome.split(' ')[0] || '—'} no topo</div>
+          <div className="stat-sub">{criticos[0]?.nome.split(' ')[0] || '—'}{criticos.length > 0 ? ' no topo' : ''}</div>
         </div>
         <div className="stat-box">
           <div className="stat-label">Intervenções hoje</div>
-          <div className="stat-value success">{intervencoes}</div>
-          <div className="stat-sub down"><i className="ti ti-arrow-down"></i> -2 vs ontem</div>
+          <div className="stat-value success">{atHistory.filter(a => a.tipo === 'intervencao' && new Date(a.created_at).toDateString() === today).length}</div>
+          <div className="stat-sub">registradas no turno</div>
         </div>
         <div className="stat-box">
           <div className="stat-label">Apenas técnicos</div>
@@ -56,7 +68,7 @@ export default function Dashboard() {
         <div className="stat-box">
           <div className="stat-label">Transportadoras</div>
           <div className="stat-value">{transp}</div>
-          <div className="stat-sub">no monitoramento</div>
+          <div className="stat-sub">{transp === 0 ? 'carregue uma planilha' : 'no monitoramento'}</div>
         </div>
       </div>
 
@@ -90,14 +102,19 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="crit-list">
-              {criticos.slice(0, 4).map(d => {
+              {criticos.length === 0 ? (
+                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <i className="ti ti-mood-happy" style={{ fontSize: 24, display: 'block', marginBottom: 6 }}></i>
+                  Nenhum motorista em situação crítica
+                </div>
+              ) : criticos.slice(0, 4).map(d => {
                 const sev = d.alertas >= 7 ? 'danger' : 'warning';
                 return (
                   <div className="crit-item" key={d.placa}>
                     <div className={`crit-avatar ${sev}`}>{iniciais(d.nome)}</div>
                     <div className="crit-info">
                       <div className="crit-name">{d.nome}</div>
-                      <div className="crit-meta">{d.placa} · {d.transportadora} · {d.tipos[0] || '—'}</div>
+                      <div className="crit-meta">{d.placa} · {d.transportadora} · {d.tipos?.[0] || '—'}</div>
                     </div>
                     <span className={`badge badge-${sev}`}>{d.alertas}</span>
                     <button className="btn btn-sm btn-primary" onClick={() => setActivePanel('monitor')}>Atender</button>
@@ -111,17 +128,25 @@ export default function Dashboard() {
             <div className="card-header">
               <div className="card-title">
                 <i className="ti ti-chart-line" style={{ color: 'var(--accent-500)' }}></i>
-                Atividade do dia
+                Atividade do turno
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Alertas por hora · últimas 24h</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atendimentos por hora · hoje</span>
             </div>
-            <div className="spark-row">
-              {hourly.map((v, i) => {
-                const h = Math.max(8, (v / max) * 100);
-                return <div key={i} className={`spark-bar ${v === max ? 'peak' : ''}`} style={{ height: `${h}%` }} title={`${i}h: ${v} alertas`} />;
-              })}
-            </div>
-            <div className="spark-axis"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>
+            {atHistory.length === 0 ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                Nenhum atendimento registrado hoje
+              </div>
+            ) : (
+              <>
+                <div className="spark-row">
+                  {hourly.map((v, i) => {
+                    const h = Math.max(8, (v / maxVal) * 100);
+                    return <div key={i} className={`spark-bar ${v === maxVal && v > 0 ? 'peak' : ''}`} style={{ height: `${h}%` }} title={`${i}h: ${v} atendimentos`} />;
+                  })}
+                </div>
+                <div className="spark-axis"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>
+              </>
+            )}
           </div>
         </div>
 
@@ -132,7 +157,11 @@ export default function Dashboard() {
               <button className="btn btn-sm btn-ghost" onClick={() => setActivePanel('agenda')}>Agenda</button>
             </div>
             <div className="mini-rem-list">
-              {sortedRem.map(r => (
+              {sortedRem.length === 0 ? (
+                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  Nenhum lembrete cadastrado
+                </div>
+              ) : sortedRem.map(r => (
                 <div key={r.id} className={`mini-rem ${r.urgent ? 'urgent' : ''} ${r.done ? 'done' : ''}`}>
                   <div className="mini-rem-time">{r.time}</div>
                   <div>
