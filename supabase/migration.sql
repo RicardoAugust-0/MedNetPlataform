@@ -39,3 +39,7 @@ create index if not exists atendimentos_created_at_idx  on public.atendimentos (
 create index if not exists atendimentos_operador_id_idx on public.atendimentos (operador_id);
 create index if not exists atendimentos_tipo_idx        on public.atendimentos (tipo);
 create index if not exists atendimentos_placa_idx       on public.atendimentos (placa);
+
+-- ── Configuração do Realtime ────────────────────────────────
+-- Habilita a replicação para a tabela atendimentos
+alter publication supabase_realtime add table public.atendimentos;
