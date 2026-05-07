@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
+import { isSupabaseConfigured } from '../supabase';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
@@ -74,6 +75,13 @@ export default function LoginPage() {
             {loading ? <><i className="ti ti-loader-2" style={styles.spin}></i> Entrando…</> : 'Entrar'}
           </button>
         </form>
+
+        {!isSupabaseConfigured && (
+          <div style={{ ...styles.errorBox, marginTop: 16, marginBottom: 0 }}>
+            <i className="ti ti-settings-exclamation"></i>
+            Supabase não configurado — defina as variáveis de ambiente na Vercel.
+          </div>
+        )}
 
         <div style={styles.hint}>
           <i className="ti ti-info-circle"></i>

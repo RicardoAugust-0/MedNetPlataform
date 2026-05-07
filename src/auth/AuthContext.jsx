@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../supabase';
+import { supabase, isSupabaseConfigured } from '../supabase';
 
 const AuthCtx = createContext(null);
 
@@ -8,6 +8,10 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]   = useState(null);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setSession(null); // pula loading, mostra tela de login com aviso
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
