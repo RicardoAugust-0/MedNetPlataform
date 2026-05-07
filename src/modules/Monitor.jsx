@@ -170,7 +170,7 @@ export default function Monitor() {
           <div className="stat-box"><div className="stat-label">Placas carregadas</div><div className="stat-value">{loadStats.total}</div></div>
           <div className="stat-box"><div className="stat-label">Intervenção</div><div className="stat-value danger">{loadStats.comIntervencao}</div><div className="stat-sub">Bocejo · Olho fechado</div></div>
           <div className="stat-box"><div className="stat-label">Reportar</div><div className="stat-value warning">{loadStats.soReportar}</div><div className="stat-sub">Outros eventos</div></div>
-          <div className="stat-box"><div className="stat-label">Só técnico</div><div className="stat-value">{loadStats.soTecnico}</div><div className="stat-sub">Câmera / obstrução</div></div>
+          <div className="stat-box"><div className="stat-label">Só técnico</div><div className="stat-value">{loadStats.soTecnico}</div><div className="stat-sub">Obstrução / perda de vídeo</div></div>
           <div className="stat-box"><div className="stat-label">Falsos positivos</div><div className="stat-value" style={{ color: 'var(--text-muted)' }}>{loadStats.falsosPositivos}</div><div className="stat-sub">removidos</div></div>
         </div>
       )}
@@ -180,7 +180,7 @@ export default function Monitor() {
         <div className="config-row">
           <div>
             <div className="config-text">Ocultar motoristas apenas com técnicos</div>
-            <div className="config-hint">Esconde placas com apenas Obstrução de Câmera (sem intervenção ou reportável). <em>Use com atenção</em></div>
+            <div className="config-hint">Esconde placas com apenas eventos técnicos (Obstrução de Câmera / Perda de vídeo). <em>Use com atenção</em></div>
           </div>
           <label className="toggle-wrap">
             <input type="checkbox" checked={excluirTecnicos} onChange={e => setExcluirTecnicos(e.target.checked)} />
@@ -329,7 +329,7 @@ export default function Monitor() {
       {/* Tab: Só técnico */}
       {activeTab === 'tecnicos' && (
         tecList.length === 0
-          ? <EmptyState icon="ti-camera" msg="Nenhuma obstrução técnica" />
+          ? <EmptyState icon="ti-camera" msg="Nenhum alerta técnico" />
           : <div className="driver-list">
               {tecList.map(d => (
                 <div className="driver-item" key={d.placa}>
@@ -338,7 +338,7 @@ export default function Monitor() {
                     <div className="d-name">{d.nome}</div>
                     <div className="d-detail"><span>{d.placa} · {d.transportadora}</span><span className="sep">·</span><span>{d.tecnicos} {d.tecnicos === 1 ? 'evento técnico' : 'eventos técnicos'}</span></div>
                   </div>
-                  <span className="badge badge-info">Obstrução de câmera</span>
+                  <span className="badge badge-info">Técnico (câmera / vídeo)</span>
                 </div>
               ))}
             </div>

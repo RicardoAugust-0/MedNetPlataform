@@ -1,5 +1,13 @@
 const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado'];
-const TECNICO_CAT         = 'Obstrução de Câmera';
+const TECNICO_CATS        = ['Obstrução de Câmera'];
+const TECNICO_EVENTOS     = ['Perda de vídeo', 'Perda de video'];
+
+const normalize = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 
 function parseTurno(horaStr) {
   if (!horaStr) return 'diurno';
@@ -56,7 +64,13 @@ export async function parseSheetFile(file) {
         // Montar objetos de motorista
         const drivers = Object.values(byPlaca).map(d => {
           const isIntervencao = e => INTERVENCAO_EVENTOS.includes(e['Evento']);
-          const isTecnico     = e => e['Categoria'] === TECNICO_CAT;
+          const isTecnico     = e => {
+            const categoria = normalize(e['Categoria']);
+            const evento = normalize(e['Evento']);
+            const byCategoria = TECNICO_CATS.some(cat => categoria === normalize(cat));
+            const byEvento = TECNICO_EVENTOS.some(ev => evento.includes(normalize(ev)));
+            return byCategoria || byEvento;
+          };
           const isReportar    = e => !isIntervencao(e) && !isTecnico(e);
 
           const evIntervencao = d.eventos.filter(isIntervencao);
@@ -86,7 +100,7 @@ export async function parseSheetFile(file) {
             // Reportar à empresa
             reportaveis:     evReportar.length,
             tiposReportar,
-            // Técnicos (Obstrução de Câmera)
+            // Técnicos (Obstrução de Câmera + Perda de vídeo)
             tecnicos:        evTecnico.length,
             severidade:      severidadeMax,
             intervencoes:    0,
