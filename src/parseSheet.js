@@ -1,6 +1,6 @@
 const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado'];
 const TECNICO_CATS        = ['Obstrução de Câmera'];
-const TECNICO_EVENTOS     = ['Perda de vídeo', 'Perda de video'];
+const TECNICO_EVENTOS     = ['Perda de vídeo'];
 
 const normalize = (value) =>
   String(value || '')
@@ -8,6 +8,10 @@ const normalize = (value) =>
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase();
+
+const TECNICO_CATS_NORM = TECNICO_CATS.map(normalize);
+const TECNICO_EVENTOS_NORM = TECNICO_EVENTOS.map(normalize);
+const INTERVENCAO_EVENTOS_NORM = INTERVENCAO_EVENTOS.map(normalize);
 
 function parseTurno(horaStr) {
   if (!horaStr) return 'diurno';
@@ -57,18 +61,20 @@ export async function parseSheetFile(file) {
           if (entry.nome === '' && r['Motorista'] && r['Motorista'] !== '-') {
             entry.nome = r['Motorista'];
           }
-          entry.eventos.push(r);
+          entry.eventos.push({
+            ...r,
+            _eventoNorm: normalize(r['Evento']),
+            _categoriaNorm: normalize(r['Categoria']),
+          });
           entry.turnos.push(parseTurno(r['Hora do evento']));
         });
 
         // Montar objetos de motorista
         const drivers = Object.values(byPlaca).map(d => {
-          const isIntervencao = e => INTERVENCAO_EVENTOS.includes(e['Evento']);
+          const isIntervencao = e => INTERVENCAO_EVENTOS_NORM.includes(e._eventoNorm);
           const isTecnico     = e => {
-            const categoria = normalize(e['Categoria']);
-            const evento = normalize(e['Evento']);
-            const byCategoria = TECNICO_CATS.some(cat => categoria === normalize(cat));
-            const byEvento = TECNICO_EVENTOS.some(ev => evento.includes(normalize(ev)));
+            const byCategoria = TECNICO_CATS_NORM.includes(e._categoriaNorm);
+            const byEvento = TECNICO_EVENTOS_NORM.includes(e._eventoNorm);
             return byCategoria || byEvento;
           };
           const isReportar    = e => !isIntervencao(e) && !isTecnico(e);
