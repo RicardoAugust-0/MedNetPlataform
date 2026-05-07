@@ -29,8 +29,12 @@ export function useAtendimentos() {
   // Realtime — atendimentos de outros operadores aparecem automaticamente
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    
+    // Gerando um nome de canal único para evitar conflitos de inscrição múltipla
+    // quando o hook é usado em múltiplos componentes simultaneamente.
+    const channelName = `atendimentos-live-${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('atendimentos-live')
+      .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'atendimentos' }, ({ new: row }) => {
         setHistory(prev => {
           if (prev.some(h => h.id === row.id)) return prev; // já existe via optimistic
@@ -38,7 +42,10 @@ export function useAtendimentos() {
         });
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, obs }) => {
