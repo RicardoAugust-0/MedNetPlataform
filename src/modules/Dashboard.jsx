@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
@@ -16,21 +17,30 @@ export default function Dashboard() {
 
   const alertas      = drivers.filter(d => d.alertas > 0);
   const criticos     = drivers.filter(d => d.alertas >= 5);
-  const intervencoes = drivers.reduce((s, d) => s + (d.intervencoes || 0), 0);
   const tecCount     = drivers.filter(d => d.tecnicos > 0).length;
   const transp       = new Set(drivers.map(d => d.transportadora).filter(Boolean)).size;
   const top          = criticos[0];
+  const todayStr     = new Date().toDateString();
 
-  // Gráfico de atividade real baseado nos atendimentos de hoje
-  const today = new Date().toDateString();
-  const hourly = Array(24).fill(0);
-  atHistory.forEach(a => {
-    const d = new Date(a.created_at);
-    if (d.toDateString() === today) hourly[d.getHours()]++;
-  });
-  const maxVal = Math.max(...hourly, 1);
+  const intervHoje = atHistory.filter(a => a.tipo === 'intervencao' && new Date(a.created_at).toDateString() === todayStr).length;
 
-  const sortedRem = [...reminders].sort((a, b) => a.time.localeCompare(b.time)).slice(0, 4);
+  // Gráfico 7 dias
+  const { days7, labels7, maxVal } = useMemo(() => {
+    const days7  = Array(7).fill(0);
+    const labels7 = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
+      labels7.push(i === 0 ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'short' }));
+      atHistory.forEach(a => { if (new Date(a.created_at).toDateString() === d.toDateString()) days7[6-i]++; });
+    }
+    return { days7, labels7, maxVal: Math.max(...days7, 1) };
+  }, [atHistory]);
+
+  const todayStr2 = new Date().toISOString().slice(0, 10);
+  const sortedRem = [...reminders]
+    .filter(r => r.date === todayStr2 && !r.done)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .slice(0, 4);
 
   return (
     <div>
@@ -59,7 +69,7 @@ export default function Dashboard() {
         </div>
         <div className="stat-box">
           <div className="stat-label">Intervenções hoje</div>
-          <div className="stat-value success">{atHistory.filter(a => a.tipo === 'intervencao' && new Date(a.created_at).toDateString() === today).length}</div>
+          <div className="stat-value success">{intervHoje}</div>
           <div className="stat-sub">registradas no turno</div>
         </div>
         <div className="stat-box">
@@ -99,9 +109,7 @@ export default function Dashboard() {
                 Motoristas em alerta crítico
                 <span className="pill-count">{criticos.length}</span>
               </div>
-              <button className="btn btn-sm btn-ghost" onClick={() => setActivePanel('monitor')}>
-                Ver todos <i className="ti ti-arrow-right"></i>
-              </button>
+              <button className="btn btn-sm btn-ghost" onClick={() => setActivePanel('monitor')}>Ver todos <i className="ti ti-arrow-right"></i></button>
             </div>
             <div className="crit-list">
               {criticos.length === 0 ? (
@@ -129,24 +137,22 @@ export default function Dashboard() {
           <div className="card">
             <div className="card-header">
               <div className="card-title">
-                <i className="ti ti-chart-line" style={{ color: 'var(--accent-500)' }}></i>
-                Atividade do turno
+                <i className="ti ti-chart-bar" style={{ color: 'var(--accent-500)' }}></i>
+                Atendimentos — últimos 7 dias
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atendimentos por hora · hoje</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{atHistory.length} total</span>
             </div>
             {atHistory.length === 0 ? (
-              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                Nenhum atendimento registrado hoje
-              </div>
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Nenhum atendimento registrado ainda</div>
             ) : (
               <>
                 <div className="spark-row">
-                  {hourly.map((v, i) => {
+                  {days7.map((v, i) => {
                     const h = Math.max(8, (v / maxVal) * 100);
-                    return <div key={i} className={`spark-bar ${v === maxVal && v > 0 ? 'peak' : ''}`} style={{ height: `${h}%` }} title={`${i}h: ${v} atendimentos`} />;
+                    return <div key={i} className={`spark-bar ${v === maxVal && v > 0 ? 'peak' : ''}`} style={{ height: `${h}%` }} title={`${labels7[i]}: ${v} atendimento${v !== 1 ? 's' : ''}`} />;
                   })}
                 </div>
-                <div className="spark-axis"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>
+                <div className="spark-axis">{labels7.filter((_, i) => i % 2 === 0 || i === 6).map((l, i) => <span key={i}>{l}</span>)}</div>
               </>
             )}
           </div>
@@ -160,11 +166,9 @@ export default function Dashboard() {
             </div>
             <div className="mini-rem-list">
               {sortedRem.length === 0 ? (
-                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                  Nenhum lembrete cadastrado
-                </div>
+                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Nenhum lembrete para hoje</div>
               ) : sortedRem.map(r => (
-                <div key={r.id} className={`mini-rem ${r.urgent ? 'urgent' : ''} ${r.done ? 'done' : ''}`}>
+                <div key={r.id} className={`mini-rem ${r.urgent ? 'urgent' : ''}`}>
                   <div className="mini-rem-time">{r.time}</div>
                   <div>
                     <div className="mini-rem-title">{r.title}</div>
@@ -176,9 +180,7 @@ export default function Dashboard() {
           </div>
 
           <div className="card">
-            <div className="card-header">
-              <div className="card-title"><i className="ti ti-bolt" style={{ color: 'var(--accent-500)' }}></i> Atalhos</div>
-            </div>
+            <div className="card-header"><div className="card-title"><i className="ti ti-bolt" style={{ color: 'var(--accent-500)' }}></i> Atalhos</div></div>
             <div className="quick-grid">
               {[
                 { id:'templates', icon:'ti-message-2',  bg:'var(--tag-contato-bg)',      ic:'var(--tag-contato-color)',      name:'Templates',  desc:'Scripts prontos' },
@@ -188,10 +190,7 @@ export default function Dashboard() {
               ].map(q => (
                 <div key={q.id} className="quick-card" onClick={() => setActivePanel(q.id)}>
                   <div className="quick-card-icon" style={{ background: q.bg, color: q.ic }}><i className={`ti ${q.icon}`}></i></div>
-                  <div>
-                    <div className="quick-card-name">{q.name}</div>
-                    <div className="quick-card-desc">{q.desc}</div>
-                  </div>
+                  <div><div className="quick-card-name">{q.name}</div><div className="quick-card-desc">{q.desc}</div></div>
                 </div>
               ))}
             </div>

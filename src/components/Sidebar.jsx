@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { NAV_ITEMS, APP_CONFIG } from '../data';
@@ -6,8 +7,44 @@ import { iniciais } from '../utils';
 export default function Sidebar() {
   const { activePanel, setActivePanel, drivers } = useApp();
   const { profile, signOut } = useAuth();
+  const [query, setQuery]   = useState('');
+  const [open,  setOpen]    = useState(false);
+  const searchRef = useRef(null);
+  const paletteRef = useRef(null);
 
   const alertCount = drivers.filter(d => d.alertas > 0).length;
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    const handler = (e) => {
+      if (!searchRef.current?.contains(e.target) && !paletteRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // ⌘K / Ctrl+K
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus(); setOpen(true); }
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const navResults = query.length > 0
+    ? NAV_ITEMS.filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
+    : [];
+
+  const driverResults = query.length >= 2
+    ? drivers.filter(d =>
+        d.nome.toLowerCase().includes(query.toLowerCase()) ||
+        (d.placa || '').toLowerCase().includes(query.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const hasResults = navResults.length > 0 || driverResults.length > 0;
 
   let curGroup = '';
   const navRows = [];
@@ -18,11 +55,7 @@ export default function Sidebar() {
     }
     const badge = item.id === 'monitor' ? (alertCount > 0 ? alertCount : null) : (item.badge || null);
     navRows.push(
-      <div
-        key={item.id}
-        className={'nav-item' + (activePanel === item.id ? ' active' : '')}
-        onClick={() => setActivePanel(item.id)}
-      >
+      <div key={item.id} className={'nav-item' + (activePanel === item.id ? ' active' : '')} onClick={() => setActivePanel(item.id)}>
         <i className={`ti ${item.icon} nav-icon`}></i>
         <span className="nav-label">{item.label}</span>
         {badge ? <span className="nav-badge">{badge}</span> : null}
@@ -40,12 +73,69 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="sidebar-search">
+      {/* Search */}
+      <div className="sidebar-search" style={{ position: 'relative' }}>
         <div className="sidebar-search-wrap">
           <i className="ti ti-search"></i>
-          <input placeholder="Buscar..." />
+          <input
+            ref={searchRef}
+            placeholder="Buscar…"
+            value={query}
+            onFocus={() => setOpen(true)}
+            onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          />
           <span className="sidebar-search-kbd">⌘K</span>
         </div>
+
+        {open && query.length > 0 && (
+          <div ref={paletteRef} style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+            background: 'var(--surface-0)', border: '1px solid var(--border-md)',
+            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)',
+            marginTop: 4, overflow: 'hidden',
+          }}>
+            {!hasResults ? (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>Nenhum resultado para "{query}"</div>
+            ) : (
+              <>
+                {navResults.length > 0 && (
+                  <>
+                    <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Páginas</div>
+                    {navResults.map(item => (
+                      <div key={item.id}
+                        style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = ''}
+                        onClick={() => { setActivePanel(item.id); setOpen(false); setQuery(''); }}
+                      >
+                        <i className={`ti ${item.icon}`} style={{ color: 'var(--accent-500)', fontSize: 15 }}></i>
+                        {item.label}
+                      </div>
+                    ))}
+                  </>
+                )}
+                {driverResults.length > 0 && (
+                  <>
+                    <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: navResults.length > 0 ? '1px solid var(--border)' : 'none', marginTop: navResults.length > 0 ? 4 : 0 }}>Motoristas</div>
+                    {driverResults.map(d => (
+                      <div key={d.placa}
+                        style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = ''}
+                        onClick={() => { setActivePanel('monitor'); setOpen(false); setQuery(''); }}
+                      >
+                        <i className="ti ti-truck" style={{ color: 'var(--text-muted)', fontSize: 14 }}></i>
+                        <span style={{ color: 'var(--text-primary)' }}>{d.nome}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{d.placa}</span>
+                        {d.alertas > 0 && <span className="badge badge-danger" style={{ marginLeft: 'auto', fontSize: 9.5 }}>{d.alertas}</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <nav className="sidebar-nav">{navRows}</nav>
@@ -57,15 +147,8 @@ export default function Sidebar() {
             <div className="user-name">{profile?.nome || '—'}</div>
             <div className="user-role">{profile?.cargo || 'Operador'}</div>
           </div>
-          <button
-            title="Sair"
-            onClick={e => { e.stopPropagation(); signOut(); }}
-            style={{
-              marginLeft: 'auto', background: 'none', border: 'none',
-              cursor: 'pointer', color: 'var(--text-muted)', padding: '4px',
-              borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center',
-            }}
-          >
+          <button title="Sair" onClick={e => { e.stopPropagation(); signOut(); }}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center' }}>
             <i className="ti ti-logout" style={{ fontSize: 16 }}></i>
           </button>
         </div>

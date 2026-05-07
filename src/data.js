@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
   { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
   { id: 'links',     label: 'Links Rápidos',  icon: 'ti-link',             group: 'Conhecimento' },
   { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
+  { id: 'admin',    label: 'Administração',  icon: 'ti-shield',           group: 'Conta' },
 ];
 
 export const PANEL_TITLES = {
@@ -24,6 +25,7 @@ export const PANEL_TITLES = {
   notas:     { t: 'Bloco de Notas',         s: 'Anotações pessoais e operacionais' },
   links:     { t: 'Links Rápidos',          s: 'Acessos a sistemas e ferramentas' },
   perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
+  admin:     { t: 'Administração',          s: 'Gerenciamento da equipe' },
 };
 
 export const MOCK_DRIVERS = [

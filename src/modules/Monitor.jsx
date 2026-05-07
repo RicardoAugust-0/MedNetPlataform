@@ -1,27 +1,47 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { iniciais } from '../utils';
 import { parseSheetFile } from '../parseSheet';
 
+/* ── CSV export ── */
+function exportCSV(rows) {
+  const header = ['Data', 'Hora', 'Motorista', 'Placa', 'Transportadora', 'Tipo', 'Operador', 'Observação'];
+  const lines = rows.map(r => [
+    new Date(r.created_at).toLocaleDateString('pt-BR'),
+    r.hora || '',
+    r.motorista || '',
+    r.placa || '',
+    r.transportadora || '',
+    { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' }[r.tipo] || r.tipo,
+    r.operador || '',
+    (r.obs || '').replace(/,/g, ';'),
+  ].map(v => `"${v}"`).join(','));
+  const csv = [header.join(','), ...lines].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `atendimentos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
 export default function Monitor() {
-  const {
-    drivers, setDrivers,
-    filters, setFilters,
-    excluirTecnicos, setExcluirTecnicos,
-    setActivePanel,
-  } = useApp();
+  const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
   const { profile } = useAuth();
   const { history, loading: histLoading, error: histError, registrar } = useAtendimentos();
 
-  const [activeTab, setActiveTab]   = useState('intervencao');
-  const [statusMsg, setStatusMsg]   = useState('Aguardando carga da planilha (.xlsx ou .csv)');
-  const [statusKind, setStatusKind] = useState('idle');
-  const [loadStats, setLoadStats]   = useState(null);
-  const [loading, setLoading]       = useState(false);
+  const [activeTab,  setActiveTab]  = useState('intervencao');
+  const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
+  const [statusKind, setStatusKind] = useState(drivers.length > 0 ? 'active' : 'idle');
+  const [loadStats,  setLoadStats]  = useState(null);
+  const [loading,    setLoading]    = useState(false);
 
-  /* ── Filtros ── */
+  // Filtros do histórico
+  const [histPeriod,  setHistPeriod]  = useState('hoje');
+  const [histTipo,    setHistTipo]    = useState('');
+  const [histSearch,  setHistSearch]  = useState('');
+
+  /* ── Filtros fila ── */
   const filtered = drivers.filter(d => {
     const f = filters;
     if (excluirTecnicos && d.alertas === 0 && d.reportaveis === 0) return false;
@@ -42,32 +62,41 @@ export default function Monitor() {
   const tecList         = filtered.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0);
   const transps         = [...new Set(drivers.map(d => d.transportadora))].sort();
 
+  /* ── Filtros histórico ── */
+  const histFiltered = useMemo(() => {
+    const now = new Date();
+    return history.filter(item => {
+      const d = new Date(item.created_at);
+      if (histPeriod === 'hoje'   && d.toDateString() !== now.toDateString()) return false;
+      if (histPeriod === 'semana' && (now - d) > 7 * 86400000)                return false;
+      if (histPeriod === 'mes'    && (now - d) > 30 * 86400000)               return false;
+      if (histTipo && item.tipo !== histTipo) return false;
+      if (histSearch) {
+        const q = histSearch.toLowerCase();
+        if (!item.motorista?.toLowerCase().includes(q) && !item.operador?.toLowerCase().includes(q) && !item.placa?.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [history, histPeriod, histTipo, histSearch]);
+
   /* ── Upload ── */
   const handleFile = async (file) => {
-    setLoading(true);
-    setStatusKind('idle');
-    setStatusMsg(`Processando ${file.name}…`);
+    setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
       const { drivers: newDrivers, stats } = await parseSheetFile(file);
       setDrivers(newDrivers);
       setLoadStats(stats);
       setStatusKind('active');
-      setStatusMsg(
-        `${file.name} · ${stats.comIntervencao} para intervenção · ` +
-        `${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`
-      );
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
       setActiveTab('intervencao');
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleDrop = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
+    e.preventDefault(); e.currentTarget.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   };
@@ -75,70 +104,39 @@ export default function Monitor() {
   /* ── Ações ── */
   const attend = async (d) => {
     if (!confirm(`Iniciar atendimento: ${d.nome}?`)) return;
-    await registrar({
-      motorista:      d.nome,
-      placa:          d.placa,
-      transportadora: d.transportadora,
-      tipo:           'intervencao',
-      obs:            `Atendimento · ${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`,
-    });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs: `Atendimento · ${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})` });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
   };
 
   const reportar = async (d) => {
     if (!confirm(`Registrar notificação para a empresa: ${d.nome}?`)) return;
-    await registrar({
-      motorista:      d.nome,
-      placa:          d.placa,
-      transportadora: d.transportadora,
-      tipo:           'reportar',
-      obs:            `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})`,
-    });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
   const deleteAlert = async (d) => {
     if (!confirm(`Descartar alerta de intervenção de ${d.nome}?`)) return;
-    await registrar({
-      motorista:      d.nome,
-      placa:          d.placa,
-      transportadora: d.transportadora,
-      tipo:           'descarte',
-      obs:            `Alerta descartado · ${d.alertas} evento(s) removidos`,
-    });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'descarte', obs: `Alerta descartado · ${d.alertas} evento(s) removidos` });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
   };
 
-  const clearAll = async () => {
-    const ativos = drivers.filter(x => x.alertas > 0).length;
-    if (!ativos) { alert('Não há intervenções ativas.'); return; }
-    if (!confirm(`Limpar todas as ${ativos} intervenções da fila?`)) return;
-    await registrar({
-      motorista:  `${ativos} motoristas`,
-      tipo:       'limpeza',
-      obs:        `Limpeza em massa · ${ativos} intervenções descartadas`,
-    });
-    setDrivers(drivers.map(d => ({ ...d, alertas: 0, tipos: [] })));
+  const clearQueue = () => {
+    if (!confirm('Limpar toda a fila de motoristas?')) return;
+    setDrivers([]);
+    setLoadStats(null);
+    setStatusKind('idle');
+    setStatusMsg('Fila limpa. Aguardando nova planilha.');
   };
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
 
-  /* ── Lookup maps ── */
   const histIcon  = { intervencao: 'ti-headset', reportar: 'ti-building', descarte: 'ti-trash', limpeza: 'ti-trash' };
   const tipoLabel = { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' };
   const tipoBadge = { intervencao: 'danger', reportar: 'warning', descarte: 'info', limpeza: 'info' };
+  const sevClass  = (d) => d.severidade === 'Gravíssimo' ? 'danger' : d.severidade === 'Grave' ? 'warning' : 'ok';
 
-  /* ── Helpers ── */
-  const sevClass = (d) => {
-    if (d.severidade === 'Gravíssimo') return 'danger';
-    if (d.severidade === 'Grave')      return 'warning';
-    return 'ok';
-  };
-
-  const TiposBadge = ({ tipos, variant = 'warning' }) =>
-    tipos?.length > 0
-      ? <div className="d-tags">{tipos.map((t, i) => <span key={i} className="d-tag">{t}</span>)}</div>
-      : null;
+  const TiposBadge = ({ tipos }) =>
+    tipos?.length > 0 ? <div className="d-tags">{tipos.map((t, i) => <span key={i} className="d-tag">{t}</span>)}</div> : null;
 
   return (
     <div className="monitor-grid">
@@ -147,58 +145,33 @@ export default function Monitor() {
       <div className="status-bar" style={{ marginBottom: 12 }}>
         <div className={`dot ${statusKind === 'active' ? 'active' : statusKind === 'error' ? 'error' : ''}`}></div>
         <div className="status-text">{statusMsg}{loading && ' — a processar…'}</div>
-        <button className="btn btn-sm btn-danger" onClick={clearAll}><i className="ti ti-trash"></i> Limpar fila</button>
+        <button className="btn btn-sm btn-danger" onClick={clearQueue}><i className="ti ti-trash"></i> Limpar fila</button>
         <a href="https://www.sascar.com.br/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: 'none' }}>
           <i className="ti ti-external-link"></i> Abrir Sascar
         </a>
       </div>
 
       {/* Upload */}
-      <label
-        className="upload-area"
-        style={{ cursor: 'pointer' }}
+      <label className="upload-area" style={{ cursor: 'pointer' }}
         onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
         onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
-        onDrop={handleDrop}
-      >
+        onDrop={handleDrop}>
         <div className="upload-icon"><i className="ti ti-cloud-upload"></i></div>
         <div className="upload-text">
           <div className="upload-title">Solte aqui o relatório de detalhes de evento do Sascar</div>
-          <div className="upload-hint">
-            .xlsx · .xls · .csv &nbsp;·&nbsp; Falsos positivos removidos automaticamente
-          </div>
+          <div className="upload-hint">.xlsx · .xls · .csv &nbsp;·&nbsp; Falsos positivos removidos automaticamente</div>
         </div>
-        <input type="file" accept=".xlsx,.xls,.csv" hidden
-          onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
+        <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
       </label>
 
-      {/* KPIs pós-carga */}
+      {/* KPIs */}
       {loadStats && (
         <div className="stat-strip" style={{ marginTop: 12 }}>
-          <div className="stat-box">
-            <div className="stat-label">Placas carregadas</div>
-            <div className="stat-value">{loadStats.total}</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-label">Intervenção</div>
-            <div className="stat-value danger">{loadStats.comIntervencao}</div>
-            <div className="stat-sub">Bocejo · Olho fechado</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-label">Reportar</div>
-            <div className="stat-value warning">{loadStats.soReportar}</div>
-            <div className="stat-sub">Outros eventos</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-label">Só técnico</div>
-            <div className="stat-value">{loadStats.soTecnico}</div>
-            <div className="stat-sub">Câmera / obstrução</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-label">Falsos positivos</div>
-            <div className="stat-value" style={{ color: 'var(--text-muted)' }}>{loadStats.falsosPositivos}</div>
-            <div className="stat-sub">removidos</div>
-          </div>
+          <div className="stat-box"><div className="stat-label">Placas carregadas</div><div className="stat-value">{loadStats.total}</div></div>
+          <div className="stat-box"><div className="stat-label">Intervenção</div><div className="stat-value danger">{loadStats.comIntervencao}</div><div className="stat-sub">Bocejo · Olho fechado</div></div>
+          <div className="stat-box"><div className="stat-label">Reportar</div><div className="stat-value warning">{loadStats.soReportar}</div><div className="stat-sub">Outros eventos</div></div>
+          <div className="stat-box"><div className="stat-label">Só técnico</div><div className="stat-value">{loadStats.soTecnico}</div><div className="stat-sub">Câmera / obstrução</div></div>
+          <div className="stat-box"><div className="stat-label">Falsos positivos</div><div className="stat-value" style={{ color: 'var(--text-muted)' }}>{loadStats.falsosPositivos}</div><div className="stat-sub">removidos</div></div>
         </div>
       )}
 
@@ -207,9 +180,7 @@ export default function Monitor() {
         <div className="config-row">
           <div>
             <div className="config-text">Ocultar motoristas apenas com técnicos</div>
-            <div className="config-hint">
-              Esconde placas com apenas Obstrução de Câmera (sem intervenção ou reportável). <em>Use com atenção</em>
-            </div>
+            <div className="config-hint">Esconde placas com apenas Obstrução de Câmera (sem intervenção ou reportável). <em>Use com atenção</em></div>
           </div>
           <label className="toggle-wrap">
             <input type="checkbox" checked={excluirTecnicos} onChange={e => setExcluirTecnicos(e.target.checked)} />
@@ -218,18 +189,14 @@ export default function Monitor() {
         </div>
       </div>
 
-      {/* Operador — agora vem do auth */}
+      {/* Operador */}
       <div className="operator-bar">
         <label><i className="ti ti-user"></i> Operador:</label>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-          {profile?.nome}
-        </span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {profile?.cargo} · {profile?.email}
-        </span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{profile?.nome}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{profile?.cargo} · {profile?.email}</span>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros fila */}
       <div className="filter-bar">
         <div className="filter-group"><label><i className="ti ti-filter"></i> Filtros:</label></div>
         <div className="filter-group">
@@ -268,7 +235,6 @@ export default function Monitor() {
               <option value="Distração">Distração genérica</option>
               <option value="Uso de celular">Uso de celular</option>
               <option value="Fumando">Fumando</option>
-              <option value="Câmera coberta">Câmera coberta</option>
             </optgroup>
           </select>
         </div>
@@ -281,7 +247,7 @@ export default function Monitor() {
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
           ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
-          ['historico',   'ti-history',     'Histórico',         history.length,          null],
+          ['historico',   'ti-history',     'Histórico',         histFiltered.length,     null],
         ].map(([id, icon, lbl, cnt, color]) => (
           <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
             <i className={`ti ${icon}`} style={color ? { color } : {}}></i> {lbl}
@@ -314,23 +280,12 @@ export default function Monitor() {
                         <span><i className="ti ti-sun" style={{ color: d.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-400)' }}></i> {d.turno === 'diurno' ? 'Diurno' : 'Noturno'}</span>
                       </div>
                       <TiposBadge tipos={d.tipos} />
-                      {/* Mostra eventos reportáveis adicionais caso existam */}
-                      {d.reportaveis > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                          + {d.reportaveis} evento(s) reportável(is): {d.tiposReportar.join(', ')}
-                        </div>
-                      )}
+                      {d.reportaveis > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>+ {d.reportaveis} evento(s) reportável(is): {d.tiposReportar.join(', ')}</div>}
                     </div>
                     <div className="d-actions">
-                      <button className="btn btn-sm" onClick={() => setActivePanel('templates')}>
-                        <i className="ti ti-message-2"></i> Template
-                      </button>
-                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}>
-                        <i className="ti ti-headset"></i> Atender
-                      </button>
-                      <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}>
-                        <i className="ti ti-trash"></i>
-                      </button>
+                      <button className="btn btn-sm" onClick={() => setActivePanel('templates')}><i className="ti ti-message-2"></i> Template</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-headset"></i> Atender</button>
+                      <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}><i className="ti ti-trash"></i></button>
                     </div>
                   </div>
                 );
@@ -338,7 +293,7 @@ export default function Monitor() {
             </div>
       )}
 
-      {/* Tab: Reportar à empresa */}
+      {/* Tab: Reportar */}
       {activeTab === 'reportar' && (
         reportarList.length === 0
           ? <EmptyState icon="ti-building-off" msg="Nenhum evento para reportar" sub="Distração, Fumando, Uso de celular…" />
@@ -363,9 +318,7 @@ export default function Monitor() {
                       <TiposBadge tipos={d.tiposReportar} />
                     </div>
                     <div className="d-actions">
-                      <button className="btn btn-sm btn-primary" onClick={() => reportar(d)}>
-                        <i className="ti ti-send"></i> Registrar
-                      </button>
+                      <button className="btn btn-sm btn-primary" onClick={() => reportar(d)}><i className="ti ti-send"></i> Registrar</button>
                     </div>
                   </div>
                 );
@@ -383,11 +336,7 @@ export default function Monitor() {
                   <div className="d-avatar tech">{iniciais(d.nome)}</div>
                   <div className="d-info">
                     <div className="d-name">{d.nome}</div>
-                    <div className="d-detail">
-                      <span>{d.placa} · {d.transportadora}</span>
-                      <span className="sep">·</span>
-                      <span>{d.tecnicos} {d.tecnicos === 1 ? 'evento técnico' : 'eventos técnicos'}</span>
-                    </div>
+                    <div className="d-detail"><span>{d.placa} · {d.transportadora}</span><span className="sep">·</span><span>{d.tecnicos} {d.tecnicos === 1 ? 'evento técnico' : 'eventos técnicos'}</span></div>
                   </div>
                   <span className="badge badge-info">Obstrução de câmera</span>
                 </div>
@@ -397,36 +346,68 @@ export default function Monitor() {
 
       {/* Tab: Histórico */}
       {activeTab === 'historico' && (
-        histLoading
-          ? <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando histórico…</div>
-          : histError
-            ? <div className="empty-state" style={{ color: 'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {histError}</div>
-            : history.length === 0
-              ? <EmptyState icon="ti-history" msg="Nenhum atendimento registrado ainda" />
-              : <div className="driver-list">
-                  {history.map((item) => (
-                    <div className="history-item" key={item.id} style={{ opacity: item._pending ? 0.6 : 1 }}>
-                      <div className="h-avatar">
-                        <i className={`ti ${histIcon[item.tipo] || 'ti-check'}`} style={{ fontSize: 13 }}></i>
-                      </div>
-                      <div className="h-info">
-                        <div className="h-name">
-                          {item.motorista}
-                          {item.placa && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{item.placa}</span>}
+        <div>
+          {/* Filtros histórico */}
+          <div className="filter-bar" style={{ marginBottom: 8 }}>
+            <div className="filter-group">
+              <label>Período</label>
+              <select value={histPeriod} onChange={e => setHistPeriod(e.target.value)}>
+                <option value="hoje">Hoje</option>
+                <option value="semana">7 dias</option>
+                <option value="mes">30 dias</option>
+                <option value="todos">Todos</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Tipo</label>
+              <select value={histTipo} onChange={e => setHistTipo(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="intervencao">Intervenção</option>
+                <option value="reportar">Reportar</option>
+                <option value="descarte">Descarte</option>
+                <option value="limpeza">Limpeza</option>
+              </select>
+            </div>
+            <div className="filter-group" style={{ flex: 1 }}>
+              <label>Busca</label>
+              <input
+                style={{ padding: '4px 8px', fontSize: 12, border: '1px solid var(--border-md)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-0)', color: 'var(--text-primary)', width: '100%' }}
+                placeholder="Motorista, placa ou operador…"
+                value={histSearch}
+                onChange={e => setHistSearch(e.target.value)}
+              />
+            </div>
+            <button className="btn btn-sm" onClick={() => exportCSV(histFiltered)}>
+              <i className="ti ti-download"></i> Exportar CSV
+            </button>
+          </div>
+
+          {histLoading
+            ? <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando histórico…</div>
+            : histError
+              ? <div className="empty-state" style={{ color: 'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {histError}</div>
+              : histFiltered.length === 0
+                ? <EmptyState icon="ti-history" msg="Nenhum registro encontrado" />
+                : <div className="driver-list">
+                    {histFiltered.map(item => (
+                      <div className="history-item" key={item.id} style={{ opacity: item._pending ? 0.6 : 1 }}>
+                        <div className="h-avatar"><i className={`ti ${histIcon[item.tipo] || 'ti-check'}`} style={{ fontSize: 13 }}></i></div>
+                        <div className="h-info">
+                          <div className="h-name">
+                            {item.motorista}
+                            {item.placa && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{item.placa}</span>}
+                          </div>
+                          <div className="h-meta">{item.operador} · {item.obs}</div>
                         </div>
-                        <div className="h-meta">{item.operador} · {item.obs}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                          <div className="h-time">{new Date(item.created_at).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })} {item.hora}</div>
+                          <span className={`badge badge-${tipoBadge[item.tipo] || 'info'}`} style={{ fontSize: 9.5 }}>{tipoLabel[item.tipo] || item.tipo}</span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-                        <div className="h-time">{item.hora}</div>
-                        {item.tipo && (
-                          <span className={`badge badge-${tipoBadge[item.tipo] || 'info'}`} style={{ fontSize: 9.5 }}>
-                            {tipoLabel[item.tipo] || item.tipo}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+          }
+        </div>
       )}
     </div>
   );
@@ -435,8 +416,7 @@ export default function Monitor() {
 function EmptyState({ icon, msg, sub }) {
   return (
     <div className="empty-state">
-      <i className={`ti ${icon}`}></i>
-      {msg}
+      <i className={`ti ${icon}`}></i>{msg}
       {sub && <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>{sub}</div>}
     </div>
   );

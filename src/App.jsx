@@ -15,6 +15,7 @@ import Links from './modules/Links';
 import Workspace from './modules/Workspace';
 import Notes from './modules/Notes';
 import Agenda from './modules/Agenda';
+import Admin from './modules/Admin';
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
@@ -53,6 +54,7 @@ function AppShell() {
           <Panel id="notas"><Notes /></Panel>
           <Panel id="links"><Links /></Panel>
           <Panel id="perfil"><Profile /></Panel>
+          <Panel id="admin"><Admin /></Panel>
         </div>
       </div>
       <TweaksPanel />

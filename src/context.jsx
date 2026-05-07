@@ -11,7 +11,8 @@ const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
   const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
-  const [drivers,     setDrivers]          = useState([]);
+  const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
+  const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'' });
   const [excluirTecnicos, setExcluirTecnicos] = useState(() => load('excluirTecnicos', false));
   const [theme,       setThemeState]       = useState(() => load('theme',    'light'));

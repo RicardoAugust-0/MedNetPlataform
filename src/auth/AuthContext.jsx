@@ -35,18 +35,22 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!session?.user) { setProfile(null); return; }
     const meta = session.user.user_metadata;
-    setProfile({
-      id:    session.user.id,
-      email: session.user.email,
-      nome:  meta?.nome || session.user.email.split('@')[0],
-      cargo: meta?.cargo || 'Operador',
-    });
+    const nome  = meta?.nome  || session.user.email.split('@')[0];
+    const cargo = meta?.cargo || 'Operador';
+    setProfile({ id: session.user.id, email: session.user.email, nome, cargo });
+    // Upsert no profiles para o painel de admin e last_seen
+    if (isSupabaseConfigured) {
+      supabase.from('profiles').upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' });
+    }
   }, [session]);
 
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });
 
   const signOut = () => supabase.auth.signOut();
+
+  const resetPassword = (email) =>
+    supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
 
   const updateProfile = (nome, cargo) =>
     supabase.auth.updateUser({ data: { nome, cargo } });
@@ -61,7 +65,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ session, profile, authType, signIn, signOut, updateProfile, setPassword, loading: session === undefined }}>
+    <AuthCtx.Provider value={{ session, profile, authType, signIn, signOut, resetPassword, updateProfile, setPassword, loading: session === undefined }}>
       {children}
     </AuthCtx.Provider>
   );
