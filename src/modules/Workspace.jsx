@@ -1,18 +1,17 @@
 import { useState, useRef } from 'react';
-import { useApp } from '../context';
+import { useWsPages } from '../hooks/useWsPages';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
 
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
 export default function Workspace() {
-  const { wsPages, setWsPages, wsNextId, setWsNextId } = useApp();
+  const { wsPages, loading, add, update, remove } = useWsPages();
   const [current, setCurrent] = useState(null);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState(0);
   const [newCat, setNewCat] = useState('protocolos');
-  const contentRef = useRef(null);
 
   const filt = wsPages.filter(p => !search || p.title.toLowerCase().includes(search));
   const favs = filt.filter(p => p.favorite);
@@ -20,16 +19,16 @@ export default function Workspace() {
   const recents = wsPages.slice(-3).reverse();
   const page = wsPages.find(p => p.id === current);
 
-  const updatePage = (id, patch) => setWsPages(wsPages.map(p => p.id === id ? { ...p, ...patch } : p));
-  const deletePage = (id) => { if (!confirm('Excluir esta página?')) return; setWsPages(wsPages.filter(p => p.id !== id)); setCurrent(null); };
-
-  const createPage = () => {
+  const createPage = async () => {
     if (!newName.trim()) return;
-    const id = wsNextId;
-    setWsPages([...wsPages, { id, title: newName.trim(), icon: newIcon, category: newCat, favorite: false, content: `<h2>${escapeHtml(newName.trim())}</h2><p>Comece a escrever...</p>` }]);
-    setWsNextId(id + 1);
     setModal(false);
-    setCurrent(id);
+    await add({
+      title: newName.trim(),
+      icon: newIcon,
+      category: newCat,
+      content: `<h2>${escapeHtml(newName.trim())}</h2><p>Comece a escrever...</p>`,
+    });
+    setNewName(''); setNewIcon(0); setNewCat('protocolos');
   };
 
   const openModal = () => { setNewName(''); setNewIcon(0); setNewCat('protocolos'); setModal(true); };
@@ -56,9 +55,10 @@ export default function Workspace() {
     );
   };
 
+  if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
+
   return (
     <div className="workspace-layout">
-      {/* Sidebar */}
       <div className="ws-sidebar">
         <div className="ws-sidebar-header">
           <div className="ws-search">
@@ -71,20 +71,12 @@ export default function Workspace() {
             ? <div className="empty-state" style={{ padding: '32px 12px', fontSize: 11.5 }}><i className="ti ti-file-off"></i>Nenhuma página</div>
             : <>
                 {favs.length > 0 && <>
-                  <div className="ws-group-label">
-                    <i className="ti ti-star-filled"></i>
-                    <span>Favoritos</span>
-                    <span className="ws-group-count">{favs.length}</span>
-                  </div>
+                  <div className="ws-group-label"><i className="ti ti-star-filled"></i><span>Favoritos</span><span className="ws-group-count">{favs.length}</span></div>
                   {favs.map(p => <PageItem key={p.id} p={p} />)}
                 </>}
                 {groups.map(g => g.pages.length > 0 && (
                   <div key={g.id}>
-                    <div className="ws-group-label">
-                      <i className={`ti ${g.icon}`}></i>
-                      <span>{g.label}</span>
-                      <span className="ws-group-count">{g.pages.length}</span>
-                    </div>
+                    <div className="ws-group-label"><i className={`ti ${g.icon}`}></i><span>{g.label}</span><span className="ws-group-count">{g.pages.length}</span></div>
                     {g.pages.map(p => <PageItem key={p.id} p={p} />)}
                   </div>
                 ))}
@@ -96,7 +88,6 @@ export default function Workspace() {
         </div>
       </div>
 
-      {/* Editor / Home */}
       <div className="ws-editor">
         {!page ? (
           <div className="ws-home">
@@ -141,7 +132,7 @@ export default function Workspace() {
             ))}
           </div>
         ) : (
-          <PageEditor page={page} onUpdate={updatePage} onDelete={deletePage} onBack={() => setCurrent(null)} contentRef={contentRef} />
+          <PageEditor page={page} onUpdate={update} onDelete={(id) => { remove(id); setCurrent(null); }} onBack={() => setCurrent(null)} />
         )}
       </div>
 
@@ -202,14 +193,10 @@ function PageEditor({ page, onUpdate, onDelete, onBack }) {
           {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
-        <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
+        <button className="btn btn-sm btn-danger" onClick={() => { if (confirm('Excluir esta página?')) onDelete(page.id); }}><i className="ti ti-trash"></i></button>
       </div>
       <div className="ws-editor-area">
-        <input
-          className="ws-page-title-input"
-          value={page.title}
-          onChange={e => onUpdate(page.id, { title: e.target.value })}
-        />
+        <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
         <hr className="ws-divider" />
         <div className="editor-toolbar">

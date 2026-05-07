@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApp } from '../context';
+import { useTemplates } from '../hooks/useTemplates';
 
 const TABS = ['todos','contato','questionario','alerta','encerramento'];
 const TAB_LABELS = { todos:'Todos', contato:'Contato', questionario:'Questionário', alerta:'Alerta', encerramento:'Encerramento' };
@@ -11,10 +11,10 @@ const TAG_OPTIONS = [
 ];
 
 export default function Templates() {
-  const { templates, setTemplates, tplNextId, setTplNextId } = useApp();
+  const { templates, loading, add, update, remove } = useTemplates();
   const [filter, setFilter] = useState('todos');
   const [search, setSearch] = useState('');
-  const [modal, setModal] = useState(null); // null | 'new' | tpl object
+  const [modal, setModal] = useState(null);
 
   const counts = { todos: templates.length };
   TABS.slice(1).forEach(t => { counts[t] = templates.filter(x => x.tag === t).length; });
@@ -33,20 +33,21 @@ export default function Templates() {
     setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1400);
   };
 
-  const remove = (id) => {
+  const handleRemove = (id) => {
     if (!confirm('Excluir template?')) return;
-    setTemplates(templates.filter(t => t.id !== id));
+    remove(id);
   };
 
   const save = (data) => {
     if (modal && modal !== 'new') {
-      setTemplates(templates.map(t => t.id === modal.id ? { ...t, ...data } : t));
+      update(modal.id, data);
     } else {
-      setTemplates([...templates, { id: tplNextId, ...data }]);
-      setTplNextId(tplNextId + 1);
+      add(data);
     }
     setModal(null);
   };
+
+  if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
 
   return (
     <div>
@@ -70,12 +71,12 @@ export default function Templates() {
         {list.length === 0
           ? <div className="empty-state" style={{ gridColumn: '1/-1' }}><i className="ti ti-file-off"></i>Nenhum template encontrado</div>
           : list.map(t => (
-            <div className="template-card" key={t.id}>
+            <div className={`template-card ${t._pending ? 'opacity-50' : ''}`} key={t.id}>
               <div className="template-card-header">
                 <span className={`tag tag-${t.tag}`}>{t.tagLabel}</span>
                 <div style={{ display: 'flex', gap: 2 }}>
                   <button className="btn-icon" onClick={() => setModal(t)}><i className="ti ti-pencil"></i></button>
-                  <button className="btn-icon" onClick={() => remove(t.id)}><i className="ti ti-trash"></i></button>
+                  <button className="btn-icon" onClick={() => handleRemove(t.id)}><i className="ti ti-trash"></i></button>
                 </div>
               </div>
               <div className="template-title">{t.title}</div>

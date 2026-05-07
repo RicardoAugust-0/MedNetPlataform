@@ -1,12 +1,14 @@
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
+import { useReminders } from '../hooks/useReminders';
 import { iniciais, fmtDate } from '../utils';
 
 export default function Dashboard() {
-  const { drivers, reminders, setActivePanel } = useApp();
+  const { drivers, setActivePanel } = useApp();
   const { profile } = useAuth();
   const { history: atHistory } = useAtendimentos();
+  const { reminders } = useReminders();
 
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';

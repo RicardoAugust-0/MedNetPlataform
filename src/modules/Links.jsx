@@ -1,30 +1,20 @@
 import { useState } from 'react';
-import { useApp } from '../context';
-
-const PALETTE = [
-  { bg:'#E6F1FB', ic:'#0C447C' }, { bg:'#EAF3DE', ic:'#27500A' },
-  { bg:'#FAECE7', ic:'#7D2E10' }, { bg:'#EEEDFE', ic:'#3C3489' },
-];
+import { useLinks } from '../hooks/useLinks';
 
 export default function Links() {
-  const { links, setLinks, lnkNextId, setLnkNextId } = useApp();
+  const { links, loading, add, remove } = useLinks();
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
 
-  const filt = links.filter(l => !search || l.name.toLowerCase().includes(search) || l.desc.toLowerCase().includes(search));
+  const filt = links.filter(l => !search || l.name.toLowerCase().includes(search) || (l.desc || '').toLowerCase().includes(search));
   const groups = [{ id:'interno', label:'Sistemas internos' }, { id:'externo', label:'Ferramentas externas' }];
 
-  const remove = (id) => {
+  const handleRemove = (id) => {
     if (!confirm('Excluir link?')) return;
-    setLinks(links.filter(l => l.id !== id));
+    remove(id);
   };
 
-  const addLink = ({ name, desc, url, section }) => {
-    const p = PALETTE[links.length % PALETTE.length];
-    setLinks([...links, { id: lnkNextId, name, desc: desc || 'Link rápido', section, url, icon:'ti-link', bg:p.bg, ic:p.ic }]);
-    setLnkNextId(lnkNextId + 1);
-    setModal(false);
-  };
+  if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
 
   return (
     <div>
@@ -47,13 +37,13 @@ export default function Links() {
             </div>
             <div className="links-grid">
               {list.map(l => (
-                <a key={l.id} className="link-card" href={l.url} target="_blank" rel="noreferrer">
+                <a key={l.id} className={`link-card ${l._pending ? 'opacity-50' : ''}`} href={l.url} target="_blank" rel="noreferrer">
                   <div className="link-icon" style={{ background: l.bg, color: l.ic }}><i className={`ti ${l.icon}`}></i></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="link-name">{l.name}</div>
                     <div className="link-desc">{l.desc}</div>
                   </div>
-                  <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); remove(l.id); }}>
+                  <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); handleRemove(l.id); }}>
                     <i className="ti ti-trash"></i>
                   </button>
                 </a>
@@ -65,7 +55,7 @@ export default function Links() {
 
       {!filt.length && <div className="empty-state"><i className="ti ti-link-off"></i>Nenhum link</div>}
 
-      {modal && <LinkModal onSave={addLink} onClose={() => setModal(false)} />}
+      {modal && <LinkModal onSave={(d) => { add(d); setModal(false); }} onClose={() => setModal(false)} />}
     </div>
   );
 }

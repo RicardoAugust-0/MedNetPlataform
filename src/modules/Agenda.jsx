@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useApp } from '../context';
+import { useReminders } from '../hooks/useReminders';
 import { fmtDate } from '../utils';
 
 export default function Agenda() {
-  const { reminders, setReminders, remNextId, setRemNextId } = useApp();
+  const { reminders, loading, add, toggle, remove } = useReminders();
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('10:00');
   const [prio, setPrio] = useState('');
@@ -14,22 +14,21 @@ export default function Agenda() {
     return a.time.localeCompare(b.time);
   });
 
-  const toggle = (id) => setReminders(reminders.map(r => r.id === id ? { ...r, done: !r.done } : r));
-
-  const remove = (id) => {
+  const handleRemove = (id) => {
     const r = reminders.find(x => x.id === id);
     if (!r || !confirm(`Excluir lembrete "${r.title}"?`)) return;
-    setReminders(reminders.filter(x => x.id !== id));
+    remove(id);
   };
 
-  const add = () => {
+  const handleAdd = () => {
     if (!title.trim()) return;
-    setReminders([...reminders, { id: remNextId, title: title.trim(), sub: sub.trim(), time: time || '10:00', urgent: prio === 'urgent', done: false }]);
-    setRemNextId(remNextId + 1);
+    add({ title: title.trim(), sub: sub.trim(), time: time || '10:00', urgent: prio === 'urgent' });
     setTitle(''); setSub(''); setTime('10:00'); setPrio('');
   };
 
   const done = reminders.filter(r => r.done).length;
+
+  if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
 
   return (
     <div className="agenda-layout">
@@ -51,7 +50,7 @@ export default function Agenda() {
                 <button className="reminder-check" onClick={() => toggle(r.id)} title={r.done ? 'Reabrir' : 'Concluir'}>
                   {r.done && <i className="ti ti-check"></i>}
                 </button>
-                <button className="btn-icon" style={{ color: 'var(--text-muted)' }} onClick={() => remove(r.id)} title="Excluir">
+                <button className="btn-icon" style={{ color: 'var(--text-muted)' }} onClick={() => handleRemove(r.id)} title="Excluir">
                   <i className="ti ti-trash"></i>
                 </button>
               </div>
@@ -64,7 +63,7 @@ export default function Agenda() {
         <div className="add-reminder-title"><i className="ti ti-plus"></i> Adicionar lembrete</div>
         <div className="form-group">
           <label className="form-label">Título</label>
-          <input className="form-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: retornar contato com motorista" />
+          <input className="form-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: retornar contato com motorista" onKeyDown={e => e.key === 'Enter' && handleAdd()} />
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -83,7 +82,7 @@ export default function Agenda() {
           <label className="form-label">Detalhe (opcional)</label>
           <input className="form-control" value={sub} onChange={e => setSub(e.target.value)} placeholder="Ex: motorista Carlos · BR-101" />
         </div>
-        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={add}>
+        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleAdd}>
           <i className="ti ti-plus"></i> Adicionar
         </button>
       </div>
