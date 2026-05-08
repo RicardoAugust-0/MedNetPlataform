@@ -82,6 +82,13 @@ export default function Monitor() {
   const { templates } = useTemplates();
   const [templateModal, setTemplateModal] = useState(null);
 
+  useEffect(() => {
+    if (!templateModal) return;
+    const onKey = (e) => { if (e.key === 'Escape') setTemplateModal(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [templateModal]);
+
   const [activeTab,  setActiveTab]  = useState('intervencao');
   const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
   const [statusKind, setStatusKind] = useState(drivers.length > 0 ? 'active' : 'idle');
@@ -210,9 +217,10 @@ export default function Monitor() {
     const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
     const contatos = templates.filter(t => t.tag === 'contato');
     if (contatos.length === 0) { setTemplateModal({ driver: d, text: null }); return; }
+    // First contato template by creation date; multiple contato templates not yet supported
     const text = contatos[0].text
       .replace(/\{\{saudacao\}\}/gi, saudacao)
-      .replace(/\{\{nome\}\}/gi, d.nome)
+      .replace(/\{\{nome\}\}/gi, d.nome || '—')
       .replace(/\{\{placa\}\}/gi, d.placa || '—')
       .replace(/\{\{transportadora\}\}/gi, d.transportadora || '—');
     setTemplateModal({ driver: d, text });
@@ -512,7 +520,7 @@ export default function Monitor() {
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
               <div style={{ fontWeight:600, fontSize:14 }}>
                 <i className="ti ti-message-2" style={{ marginRight:6 }}></i>
-                Template de contato — {templateModal.driver.nome.split(' ')[0]}
+                Template de contato — {(templateModal.driver.nome || '').split(' ')[0]}
               </div>
               <button className="btn btn-sm btn-ghost" onClick={() => setTemplateModal(null)}>
                 <i className="ti ti-x"></i>
