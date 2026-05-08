@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTemplates } from '../hooks/useTemplates';
 
@@ -108,11 +108,25 @@ function TemplateModal({ tpl, onSave, onClose }) {
   const [tag, setTag] = useState(tpl?.tag || 'contato');
   const [name, setName] = useState(tpl?.title || '');
   const [text, setText] = useState(tpl?.text || '');
+  const textareaRef = useRef(null);
 
   const handleSave = () => {
     if (!name.trim() || !text.trim()) return;
     const tagLabel = TAG_OPTIONS.find(o => o.value === tag)?.label || tag;
     onSave({ tag, tagLabel, title: name.trim(), text: text.trim() });
+  };
+
+  const insertVar = (v) => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const current = text;
+    const nextText = current.substring(0, start) + v + current.substring(end);
+    setText(nextText);
+    setTimeout(() => {
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(start + v.length, start + v.length);
+    }, 0);
   };
 
   return createPortal(
@@ -135,8 +149,23 @@ function TemplateModal({ tpl, onSave, onClose }) {
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Conteúdo</label>
-          <textarea className="form-control" value={text} onChange={e => setText(e.target.value)} placeholder="Use [NOME], [PLACA], [HORA] como variáveis..." />
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            Conteúdo
+          </label>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            {['[NOME]', '[PLACA]', '[HORA]', '[TRANSPORTADORA]', '[SAUDACAO]'].map(v => (
+              <button key={v} type="button" className="btn btn-sm btn-ghost" onClick={() => insertVar(v)} style={{ fontSize: 10, padding: '4px 8px', background: 'var(--surface-2)' }}>
+                <i className="ti ti-code"></i> {v}
+              </button>
+            ))}
+          </div>
+          <textarea 
+            ref={textareaRef}
+            className="form-control" 
+            value={text} 
+            onChange={e => setText(e.target.value)} 
+            placeholder="Use os botões acima para adicionar variáveis..." 
+          />
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
           <button className="btn" onClick={onClose}>Cancelar</button>
