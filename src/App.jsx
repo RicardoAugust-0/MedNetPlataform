@@ -18,6 +18,7 @@ import Workspace from './modules/Workspace';
 import Notes from './modules/Notes';
 import Agenda from './modules/Agenda';
 import Admin from './modules/Admin';
+import Analytics from './modules/Analytics';
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
@@ -103,7 +104,12 @@ function AppShell() {
           <Panel id="notas"><Notes /></Panel>
           <Panel id="links"><Links /></Panel>
           <Panel id="perfil"><Profile /></Panel>
-          {profile?.role === 'admin' && <Panel id="admin"><Admin /></Panel>}
+          {profile?.role === 'admin' && (
+            <>
+              <Panel id="admin"><Admin /></Panel>
+              <Panel id="analytics"><Analytics /></Panel>
+            </>
+          )}
         </div>
       </div>
       <TweaksPanel />

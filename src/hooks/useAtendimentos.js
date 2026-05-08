@@ -85,7 +85,19 @@ export function useAtendimentos() {
     return { data: data.map(toLocal), error: null };
   }, []);
 
-  return { history, loading, error, registrar, reload: load, loadByRange };
+  const loadDriverHistory = useCallback(async (motorista) => {
+    if (!isSupabaseConfigured) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('atendimentos')
+      .select('*')
+      .eq('motorista', motorista)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) return { data: [], error: error.message };
+    return { data: data.map(toLocal), error: null };
+  }, []);
+
+  return { history, loading, error, registrar, reload: load, loadByRange, loadDriverHistory };
 }
 
 function toLocal(row) {

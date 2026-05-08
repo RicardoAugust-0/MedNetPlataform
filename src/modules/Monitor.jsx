@@ -80,7 +80,7 @@ function exportCSV(rows) {
 export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar, loadByRange } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
   const [templateModal, setTemplateModal] = useState(null);
@@ -93,6 +93,8 @@ export default function Monitor() {
   }, [templateModal]);
 
   const [activeTab,  setActiveTab]  = useState('intervencao');
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => setCurrentPage(1), [activeTab]);
   const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
   const [statusKind, setStatusKind] = useState(drivers.length > 0 ? 'active' : 'idle');
   const [loadStats,  setLoadStats]  = useState(null);
@@ -246,6 +248,19 @@ export default function Monitor() {
   };
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
+
+  /* ── Dossiê Modal ── */
+  const [dossieDriver, setDossieDriver] = useState(null);
+  const [dossieData, setDossieData] = useState([]);
+  const [dossieLoading, setDossieLoading] = useState(false);
+
+  const openDossie = async (nome) => {
+    setDossieDriver(nome);
+    setDossieLoading(true);
+    const { data } = await loadDriverHistory(nome);
+    setDossieData(data || []);
+    setDossieLoading(false);
+  };
 
   const applyTemplate = (rawText, d) => {
     if (!rawText) return '';
@@ -417,7 +432,19 @@ export default function Monitor() {
         <button className="filter-reset" onClick={resetFilters}><i className="ti ti-x"></i> Limpar</button>
       </div>
 
-      {/* Tabs */}
+      {/* Pagination Logic */}
+      {(() => {
+        const ITEMS_PER_PAGE = 10;
+        const currentList = activeTab === 'intervencao' ? intervencaoList :
+                            activeTab === 'reportar' ? reportarList :
+                            activeTab === 'tecnicos' ? tecList :
+                            histFiltered;
+        const totalPages = Math.ceil(currentList.length / ITEMS_PER_PAGE) || 1;
+        const paginate = (list) => list.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+        return (
+          <>
+            {/* Tabs */}
       <div className="tabs">
         {[
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
@@ -437,7 +464,7 @@ export default function Monitor() {
         intervencaoList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista requer intervenção" sub="Bocejo ou Olho fechado" />
           : <div className="driver-list">
-              {intervencaoList.map(d => {
+              {paginate(intervencaoList).map(d => {
                 const sev = sevClass(d);
                 const isGravissimo = d.severidade === 'Gravíssimo';
                 return (
@@ -461,6 +488,7 @@ export default function Monitor() {
                       {d.reportaveis > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>+ {d.reportaveis} evento(s) reportável(is): {d.tiposReportar.join(', ')}</div>}
                     </div>
                     <div className="d-actions">
+                      <button className="btn btn-sm" onClick={() => openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
                       <button className="btn btn-sm" onClick={() => openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
                       <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
                       <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}><i className="ti ti-trash"></i></button>
@@ -474,9 +502,9 @@ export default function Monitor() {
       {/* Tab: Reportar */}
       {activeTab === 'reportar' && (
         reportarList.length === 0
-          ? <EmptyState icon="ti-building-off" msg="Nenhum evento para reportar" sub="Distração, Fumando, Uso de celular…" />
+          ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
-              {reportarList.map(d => {
+              {paginate(reportarList).map(d => {
                 const sev = sevClass(d);
                 return (
                   <div className="driver-item" key={d.placa}>
@@ -507,9 +535,9 @@ export default function Monitor() {
       {/* Tab: Só técnico */}
       {activeTab === 'tecnicos' && (
         tecList.length === 0
-          ? <EmptyState icon="ti-camera" msg="Nenhum alerta técnico" />
+          ? <EmptyState icon="ti-mood-smile" msg="Nenhum evento técnico isolado" />
           : <div className="driver-list">
-              {tecList.map(d => (
+              {paginate(tecList).map(d => (
                 <div className="driver-item" key={d.placa}>
                   <div className="d-avatar tech">{iniciais(d.nome)}</div>
                   <div className="d-info">
@@ -593,7 +621,7 @@ export default function Monitor() {
               : displayHistory.length === 0
                 ? <EmptyState icon="ti-history" msg="Nenhum registro encontrado" />
                 : <div className="driver-list">
-                    {displayHistory.map(item => (
+                    {paginate(displayHistory).map(item => (
                       <div className="history-item" key={item.id} style={{ opacity: item._pending ? 0.6 : 1 }}>
                         <div className="h-avatar"><i className={`ti ${histIcon[item.tipo] || 'ti-check'}`} style={{ fontSize: 13 }}></i></div>
                         <div className="h-info">
@@ -611,7 +639,23 @@ export default function Monitor() {
                     ))}
                   </div>
           }
+          }
         </div>
+
+        {totalPages > 1 && (
+          <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+            <button className="btn btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+              <i className="ti ti-chevron-left"></i>
+            </button>
+            <span style={{ fontSize: 13, alignSelf: 'center', color: 'var(--text-muted)' }}>Página {currentPage} de {totalPages}</span>
+            <button className="btn btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+              <i className="ti ti-chevron-right"></i>
+            </button>
+          </div>
+        )}
+      </>
+    );
+  })()}
       )}
 
       {templateModal && createPortal(
@@ -670,6 +714,53 @@ export default function Monitor() {
                     onClick={() => { setTemplateModal(null); setActivePanel('templates'); }}>
                     Criar um agora
                   </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {dossieDriver && createPortal(
+        <div className="modal-overlay" onClick={() => setDossieDriver(null)}>
+          <div className="modal" style={{ width: 500, padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <i className="ti ti-steering-wheel" style={{ marginRight: 8, color: 'var(--accent-500)' }}></i>
+                  Dossiê do Motorista
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{dossieDriver}</div>
+              </div>
+              <button className="btn-icon" onClick={() => setDossieDriver(null)}>
+                <i className="ti ti-x"></i>
+              </button>
+            </div>
+
+            {dossieLoading ? (
+              <div className="empty-state" style={{ minHeight: 200 }}><i className="ti ti-loader-2 ti-spin"></i> Buscando histórico...</div>
+            ) : dossieData.length === 0 ? (
+              <div className="empty-state" style={{ minHeight: 200 }}><i className="ti ti-history"></i> Nenhum evento encontrado para este motorista.</div>
+            ) : (
+              <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {dossieData.map(item => (
+                    <div key={item.id} style={{ display: 'flex', gap: 12, borderLeft: `2px solid var(--${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'border-md'})`, paddingLeft: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          <span className={`badge badge-${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'info'}`} style={{ marginRight: 8, fontSize: 9.5 }}>{item.tipo.toUpperCase()}</span>
+                          {new Date(item.created_at).toLocaleDateString('pt-BR')} às {item.hora}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {item.obs}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                          Operador: {item.operador}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
