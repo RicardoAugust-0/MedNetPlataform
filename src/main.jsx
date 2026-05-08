@@ -6,6 +6,7 @@ import { ToastProvider } from './hooks/useToast';
 import { ConfirmProvider } from './hooks/useConfirm';
 import ErrorBoundary from './components/ErrorBoundary';
 import App from './App';
+import 'virtual:pwa-register';
 import './styles/tokens.css';
 import './styles/layout.css';
 import './styles/modules.css';

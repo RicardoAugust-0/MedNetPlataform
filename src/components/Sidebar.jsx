@@ -3,6 +3,7 @@ import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { NAV_ITEMS, APP_CONFIG } from '../data';
 import { iniciais } from '../utils';
+import { usePWA } from '../hooks/usePWA';
 
 export default function Sidebar() {
   const { activePanel, setActivePanel, drivers } = useApp();
@@ -11,6 +12,7 @@ export default function Sidebar() {
   const [open,  setOpen]    = useState(false);
   const searchRef = useRef(null);
   const paletteRef = useRef(null);
+  const { isInstallable, install } = usePWA();
 
   const alertCount = drivers.filter(d => d.alertas > 0).length;
 
@@ -155,6 +157,13 @@ export default function Sidebar() {
       <nav className="sidebar-nav">{navRows}</nav>
 
       <div className="sidebar-footer">
+        {isInstallable && (
+          <div style={{ padding: '0 12px', marginBottom: 12 }}>
+            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: 13, gap: 6 }} onClick={install}>
+              <i className="ti ti-download"></i> Instalar App
+            </button>
+          </div>
+        )}
         <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => setActivePanel('perfil')} title="Abrir perfil">
           <div className="user-avatar">{profile ? iniciais(profile.nome) : '?'}</div>
           <div className="user-meta">
