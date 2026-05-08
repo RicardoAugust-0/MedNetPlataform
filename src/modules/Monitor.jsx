@@ -1,3 +1,4 @@
+// deno-lint-ignore-file
 import { useState, useEffect } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';

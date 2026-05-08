@@ -15,7 +15,7 @@ export default function MonitorModals({
     <>
       {/* Template Modal */}
       {templateModal && createPortal(
-        <div className="modal-overlay" onClick={() => setTemplateModal(null)}>
+        <div className="modal-overlay open" onClick={() => setTemplateModal(null)}>
           <div className="modal" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
               <div>
@@ -84,7 +84,7 @@ export default function MonitorModals({
 
       {/* Dossiê Modal */}
       {dossieDriver && createPortal(
-        <div className="modal-overlay" onClick={() => setDossieDriver(null)}>
+        <div className="modal-overlay open" onClick={() => setDossieDriver(null)}>
           <div className="modal" style={{ width: 500, padding: 24 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
