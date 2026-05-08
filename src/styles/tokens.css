@@ -49,8 +49,8 @@
   --shadow-lg: 0 12px 40px rgba(15, 25, 35, 0.14);
 
   /* ── Tipografia ── */
-  --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'DM Mono', monospace;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 
   /* ── Geometria ── */
   --sidebar-w: 232px;
@@ -123,6 +123,19 @@
   --tag-alerta-bg:       rgba(226, 95, 50, 0.18);  --tag-alerta-color:       #F0A88E;
   --tag-encerramento-bg: rgba(124, 92, 255, 0.18); --tag-encerramento-color: #B5A3FF;
   --tag-default-bg:      rgba(255, 255, 255, 0.06);--tag-default-color:      #9D98B5;
+}
+
+/* ── Pulse crítico — sempre ativo independente de vibe ── */
+@keyframes pulse-critical-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 75, 74, 0); }
+  50%       { box-shadow: 0 0 0 4px rgba(226, 75, 74, 0.22); }
+}
+.driver-item.is-gravissimo {
+  animation: pulse-critical-border 2.2s ease-in-out infinite;
+  border-left: 3px solid var(--danger-500) !important;
+}
+.driver-item.is-gravissimo .d-avatar {
+  animation: halo-pulse 2s ease-in-out infinite;
 }
 
 /* densidade compacta */

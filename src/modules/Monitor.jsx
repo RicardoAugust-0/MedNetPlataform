@@ -1,9 +1,54 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { iniciais } from '../utils';
 import { parseSheetFile } from '../parseSheet';
+
+/* ── Google Sheets webhook ── */
+async function postToSheets(payload) {
+  const url = import.meta.env.VITE_SHEETS_WEBHOOK_URL;
+  if (!url || url.includes('SEU_SCRIPT_ID')) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.warn('[Sheets] falha ao registrar na planilha:', e.message);
+  }
+}
+
+/* ── Push Notifications ── */
+async function notificarCriticos(criticos) {
+  if (!criticos.length || !('Notification' in window)) return;
+  if (Notification.permission === 'default') await Notification.requestPermission();
+  if (Notification.permission !== 'granted') return;
+  new Notification(`⚠️ ${criticos.length} motorista${criticos.length > 1 ? 's' : ''} em intervenção`, {
+    body: criticos.slice(0, 3).map(d => `${d.nome.split(' ')[0]} · ${d.alertas} evento${d.alertas > 1 ? 's' : ''}`).join('\n'),
+    icon: '/favicon.ico',
+    tag: 'alerta-intervencao',
+  });
+}
+
+/* ── Timer de fila ── */
+function ElapsedTimer({ since }) {
+  const [mins, setMins] = useState(() => since ? Math.floor((Date.now() - new Date(since)) / 60000) : 0);
+  useEffect(() => {
+    if (!since) return;
+    const id = setInterval(() => setMins(Math.floor((Date.now() - new Date(since)) / 60000)), 30000);
+    return () => clearInterval(id);
+  }, [since]);
+  if (!since || mins < 2) return null;
+  const color = mins >= 20 ? 'var(--danger-500)' : mins >= 8 ? 'var(--warning-500)' : 'var(--text-muted)';
+  const label = mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 > 0 ? ` ${mins % 60}min` : ''}` : `${mins}min`;
+  return (
+    <span style={{ fontSize: 10.5, color, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
+      <i className="ti ti-clock" style={{ fontSize: 9, marginRight: 2 }}></i>{label} na fila
+    </span>
+  );
+}
 
 /* ── CSV export ── */
 function exportCSV(rows) {
@@ -84,11 +129,14 @@ export default function Monitor() {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
       const { drivers: newDrivers, stats } = await parseSheetFile(file);
-      setDrivers(newDrivers);
+      const loadedAt = new Date().toISOString();
+      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
+      setDrivers(timestamped);
       setLoadStats(stats);
       setStatusKind('active');
       setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
       setActiveTab('intervencao');
+      notificarCriticos(timestamped.filter(d => d.alertas >= 5));
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);
@@ -103,9 +151,23 @@ export default function Monitor() {
 
   /* ── Ações ── */
   const attend = async (d) => {
-    if (!confirm(`Iniciar atendimento: ${d.nome}?`)) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs: `Atendimento · ${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})` });
+    if (!confirm(`Iniciar contato com ${d.nome}?`)) return;
+    const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+    const now = new Date();
+    postToSheets({
+      data:           now.toLocaleDateString('pt-BR'),
+      hora:           now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      motorista:      d.nome,
+      placa:          d.placa || '',
+      transportadora: d.transportadora || '',
+      eventos:        d.tipos.join(', ') || '—',
+      quantidade:     d.alertas,
+      severidade:     d.severidade || 'Normal',
+      operador:       profile?.nome || '',
+      obs,
+    });
   };
 
   const reportar = async (d) => {
@@ -263,14 +325,16 @@ export default function Monitor() {
           : <div className="driver-list">
               {intervencaoList.map(d => {
                 const sev = sevClass(d);
+                const isGravissimo = d.severidade === 'Gravíssimo';
                 return (
-                  <div className="driver-item" key={d.placa}>
+                  <div className={`driver-item${isGravissimo ? ' is-gravissimo' : ''}`} key={d.placa}>
                     <div className={`d-avatar ${sev}`}>{iniciais(d.nome)}</div>
                     <div className="d-info">
                       <div className="d-name">
                         <span>{d.nome}</span>
                         <span className={`badge badge-${sev}`}>{d.alertas} {d.alertas === 1 ? 'evento' : 'eventos'}</span>
                         <span className={`badge badge-${sev}`} style={{ fontSize: 9.5 }}>{d.severidade}</span>
+                        <ElapsedTimer since={d._loadedAt} />
                       </div>
                       <div className="d-detail">
                         <span><i className="ti ti-license"></i> {d.placa}</span>
@@ -284,7 +348,7 @@ export default function Monitor() {
                     </div>
                     <div className="d-actions">
                       <button className="btn btn-sm" onClick={() => setActivePanel('templates')}><i className="ti ti-message-2"></i> Template</button>
-                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-headset"></i> Atender</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-phone-call"></i> Iniciar contato</button>
                       <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}><i className="ti ti-trash"></i></button>
                     </div>
                   </div>

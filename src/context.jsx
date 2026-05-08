@@ -15,7 +15,7 @@ export function AppProvider({ children }) {
   const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'' });
   const [excluirTecnicos, setExcluirTecnicos] = useState(() => load('excluirTecnicos', false));
-  const [theme,       setThemeState]       = useState(() => load('theme',    'light'));
+  const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));
   const [accent,      setAccentState]      = useState(() => load('accent',   'roxo'));
   const [mode,        setModeState]        = useState(() => load('mode',     'pleno'));
