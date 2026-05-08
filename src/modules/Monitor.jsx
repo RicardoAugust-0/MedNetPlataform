@@ -95,6 +95,20 @@ export default function Monitor() {
   const [loadStats,  setLoadStats]  = useState(null);
   const [loading,    setLoading]    = useState(false);
 
+  const [sheetLoadedAt, setSheetLoadedAt] = useState(() => localStorage.getItem('mn_sheet_loaded_at'));
+  const [sheetAgeMin,   setSheetAgeMin]   = useState(() => {
+    const ts = localStorage.getItem('mn_sheet_loaded_at');
+    return ts ? Math.floor((Date.now() - new Date(ts)) / 60000) : null;
+  });
+
+  useEffect(() => {
+    if (!sheetLoadedAt) return;
+    const id = setInterval(() => {
+      setSheetAgeMin(Math.floor((Date.now() - new Date(sheetLoadedAt)) / 60000));
+    }, 60000);
+    return () => clearInterval(id);
+  }, [sheetLoadedAt]);
+
   // Filtros do histórico
   const [histPeriod,  setHistPeriod]  = useState('hoje');
   const [histTipo,    setHistTipo]    = useState('');
@@ -146,6 +160,10 @@ export default function Monitor() {
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
       setDrivers(timestamped);
+      const ts = new Date().toISOString();
+      localStorage.setItem('mn_sheet_loaded_at', ts);
+      setSheetLoadedAt(ts);
+      setSheetAgeMin(0);
       setLoadStats(stats);
       setStatusKind('active');
       setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
@@ -226,6 +244,16 @@ export default function Monitor() {
     setTemplateModal({ driver: d, text });
   };
 
+  const sheetAgeColor = sheetAgeMin === null ? null
+    : sheetAgeMin < 30  ? 'var(--success-500, #22c55e)'
+    : sheetAgeMin < 60  ? 'var(--warning-500)'
+    : 'var(--danger-500)';
+
+  const sheetAgeLabel = sheetAgeMin === null ? null
+    : sheetAgeMin === 0 ? 'agora'
+    : sheetAgeMin < 60  ? `${sheetAgeMin} min atrás`
+    : `${Math.floor(sheetAgeMin / 60)}h${sheetAgeMin % 60 > 0 ? ` ${sheetAgeMin % 60}min` : ''} atrás`;
+
   const histIcon  = { intervencao: 'ti-headset', reportar: 'ti-building', descarte: 'ti-trash', limpeza: 'ti-trash' };
   const tipoLabel = { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' };
   const tipoBadge = { intervencao: 'danger', reportar: 'warning', descarte: 'info', limpeza: 'info' };
@@ -241,6 +269,16 @@ export default function Monitor() {
       <div className="status-bar" style={{ marginBottom: 12 }}>
         <div className={`dot ${statusKind === 'active' ? 'active' : statusKind === 'error' ? 'error' : ''}`}></div>
         <div className="status-text">{statusMsg}{loading && ' — a processar…'}</div>
+        {sheetAgeMin !== null && (
+          <span style={{
+            display:'inline-flex', alignItems:'center', gap:4, fontSize:11,
+            padding:'2px 10px', borderRadius:99, fontWeight:600, flexShrink:0,
+            background: sheetAgeColor + '22', color: sheetAgeColor,
+          }}>
+            <i className="ti ti-clock" style={{ fontSize:10 }}></i>
+            {sheetAgeLabel}
+          </span>
+        )}
         <button className="btn btn-sm btn-danger" onClick={clearQueue}><i className="ti ti-trash"></i> Limpar fila</button>
         <a href="https://www.sascar.com.br/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: 'none' }}>
           <i className="ti ti-external-link"></i> Abrir Sascar
