@@ -12,6 +12,7 @@ async function postToSheets(payload) {
   try {
     await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
     });
@@ -156,17 +157,23 @@ export default function Monitor() {
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
     const now = new Date();
+    const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const data = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
+    const sev = d.severidade || 'Normal';
+    const criticidade = sev === 'Gravíssimo' ? 'GRAVÍSSIMO' : sev === 'Grave' ? 'GRAVE' : 'MÉDIO';
+    const classificacao = (sev === 'Gravíssimo' || sev === 'Grave') ? 'IMEDIATA' : 'PREVENTIVA';
     postToSheets({
-      data:           now.toLocaleDateString('pt-BR'),
-      hora:           now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      motorista:      d.nome,
+      data,
+      empresa:        d.transportadora || '',
+      sistema:        'SASCAR',
+      colaborador:    d.nome,
       placa:          d.placa || '',
-      transportadora: d.transportadora || '',
-      eventos:        d.tipos.join(', ') || '—',
-      quantidade:     d.alertas,
-      severidade:     d.severidade || 'Normal',
-      operador:       profile?.nome || '',
-      obs,
+      frota:          d.frota || '',
+      criticidade,
+      classificacao,
+      motivo:         'FADIGA',
+      solicitadoPor:  profile?.nome || '',
+      horaSolicitacao: hora,
     });
   };
 

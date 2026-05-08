@@ -53,6 +53,7 @@ export async function parseSheetFile(file) {
               nome:            '',
               placa,
               transportadora:  r['Transportadora'] || '—',
+              frota:           '',
               eventos:         [],
               turnos:          [],
             };
@@ -60,6 +61,9 @@ export async function parseSheetFile(file) {
           const entry = byPlaca[placa];
           if (entry.nome === '' && r['Motorista'] && r['Motorista'] !== '-') {
             entry.nome = r['Motorista'];
+          }
+          if (entry.frota === '' && r['Frota']) {
+            entry.frota = String(r['Frota']);
           }
           entry.eventos.push({
             ...r,
@@ -99,6 +103,7 @@ export async function parseSheetFile(file) {
             nome:            d.nome || d.placa,
             placa:           d.placa,
             transportadora:  d.transportadora,
+            frota:           d.frota,
             turno,
             // Intervenção (Bocejo + Olho fechado)
             alertas:         evIntervencao.length,
