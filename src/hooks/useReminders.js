@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
-import { useToast } from './useToast';
+import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { useToast } from './useToast.jsx';
 
 const today = () => new Date().toISOString().slice(0, 10);
 

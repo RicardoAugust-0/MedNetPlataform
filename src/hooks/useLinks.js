@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
-import { useToast } from './useToast';
+import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { useToast } from './useToast.jsx';
 
 const PALETTE = [
   { bg:'#E6F1FB', ic:'#0C447C' }, { bg:'#EAF3DE', ic:'#27500A' },

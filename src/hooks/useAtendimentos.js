@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
-import { useAuth } from '../auth/AuthContext';
-import { useToast } from './useToast';
+import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { useToast } from './useToast.jsx';
 
 const PAGE_SIZE = 300;
 

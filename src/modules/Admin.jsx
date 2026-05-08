@@ -1,9 +1,10 @@
+// deno-lint-ignore-file
 import { useState } from 'react';
-import { useProfiles } from '../hooks/useProfiles';
-import { useAuth } from '../auth/AuthContext';
-import { useToast } from '../hooks/useToast';
-import { supabase } from '../supabase';
-import { iniciais } from '../utils';
+import { useProfiles } from '../hooks/useProfiles.jsx';
+import { useAuth } from "../auth/AuthContext.jsx";
+import { useToast } from '../hooks/useToast.jsx';
+import { supabase } from '../supabase.js';
+import { iniciais } from '../utils.js';
 
 export default function Admin() {
   const { profiles, loading, updateRole, updateInfo } = useProfiles();

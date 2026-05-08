@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
-import { useToast } from './useToast';
+import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { useToast } from './useToast.jsx';
 
 export function useTemplates() {
   const toast = useToast();

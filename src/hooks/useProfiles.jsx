@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase } from "../supabase.js";
 
 export function useProfiles() {
   const [profiles, setProfiles] = useState([]);
