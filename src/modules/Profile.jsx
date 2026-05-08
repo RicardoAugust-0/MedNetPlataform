@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
 function Section({ title, children }) {
@@ -47,6 +47,12 @@ export default function Profile() {
   const [infoLoading, setInfoLoading] = useState(false);
   const [infoMsg, setInfoMsg] = useState(null); // { type, text }
 
+  // Sincroniza campos quando o perfil carrega (profile vem null no primeiro render)
+  useEffect(() => {
+    if (profile?.nome  && !nome)  setNome(profile.nome);
+    if (profile?.cargo && !cargo) setCargo(profile.cargo);
+  }, [profile]);
+
   // Seção: senha
   const [novaSenha,    setNovaSenha]    = useState('');
   const [confirmSenha, setConfirmSenha] = useState('');
@@ -55,7 +61,14 @@ export default function Profile() {
 
   const handleInfo = async (e) => {
     e.preventDefault();
-    if (!nome.trim()) return;
+    if (!nome.trim()) {
+      setInfoMsg({ type: 'error', text: 'O nome não pode ficar em branco.' });
+      return;
+    }
+    if (nome.trim().length < 3) {
+      setInfoMsg({ type: 'error', text: 'O nome deve ter pelo menos 3 caracteres.' });
+      return;
+    }
     setInfoLoading(true);
     setInfoMsg(null);
     const { error } = await updateProfile(nome.trim(), cargo.trim());
