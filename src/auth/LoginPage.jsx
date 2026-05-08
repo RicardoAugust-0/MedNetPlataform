@@ -12,8 +12,8 @@ const LogoSVG = ({ size = 44 }) => (
     </defs>
     <rect width="32" height="32" rx="7" fill="url(#login-logo-bg)"/>
     <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
-    <rect x="23" y="5" width="2" height="8" rx="1" fill="#E04010"/>
-    <rect x="20" y="8" width="8" height="2" rx="1" fill="#E04010"/>
+    <rect x="23" y="5" width="2" height="8" rx="1" fill="#F26931"/>
+    <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
   </svg>
 );
 
@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div>
             <div style={s.brandGrupo}>GRUPO</div>
             <div style={s.brandName}>
-              Med<span style={{ color: '#E04010' }}>Net</span>
+              Med<span style={{ color: '#F26931' }}>Net</span>
             </div>
             <div style={s.brandTagline}>Medicina e Segurança do Trabalho</div>
           </div>

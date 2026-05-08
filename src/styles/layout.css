@@ -268,8 +268,8 @@ body {
 .btn i { font-size: 14px; }
 .btn:hover { background: var(--surface-1); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--accent-600); color: #fff; border-color: transparent; }
-.btn-primary:hover { background: var(--accent-500); }
+.btn-primary { background: var(--mednet-orange); color: #fff; border-color: transparent; }
+.btn-primary:hover { background: #d85c29; }
 .btn-danger { color: var(--danger-600); }
 .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger-500); color: var(--danger-600); }
 .btn-ghost { background: transparent; border-color: transparent; }
