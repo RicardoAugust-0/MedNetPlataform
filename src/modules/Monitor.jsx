@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
+import { useTemplates } from '../hooks/useTemplates';
 import { iniciais } from '../utils';
 import { parseSheetFile } from '../parseSheet';
 
@@ -78,6 +79,8 @@ export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
   const { profile, session } = useAuth();
   const { history, loading: histLoading, error: histError, registrar } = useAtendimentos();
+  const { templates } = useTemplates();
+  const [templateModal, setTemplateModal] = useState(null);
 
   const [activeTab,  setActiveTab]  = useState('intervencao');
   const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
@@ -201,6 +204,19 @@ export default function Monitor() {
   };
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
+
+  const openTemplate = (d) => {
+    const hour = new Date().getHours();
+    const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+    const contatos = templates.filter(t => t.tag === 'contato');
+    if (contatos.length === 0) { setTemplateModal({ driver: d, text: null }); return; }
+    const text = contatos[0].text
+      .replace(/\{\{saudacao\}\}/gi, saudacao)
+      .replace(/\{\{nome\}\}/gi, d.nome)
+      .replace(/\{\{placa\}\}/gi, d.placa || '—')
+      .replace(/\{\{transportadora\}\}/gi, d.transportadora || '—');
+    setTemplateModal({ driver: d, text });
+  };
 
   const histIcon  = { intervencao: 'ti-headset', reportar: 'ti-building', descarte: 'ti-trash', limpeza: 'ti-trash' };
   const tipoLabel = { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' };
@@ -357,8 +373,8 @@ export default function Monitor() {
                       {d.reportaveis > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>+ {d.reportaveis} evento(s) reportável(is): {d.tiposReportar.join(', ')}</div>}
                     </div>
                     <div className="d-actions">
-                      <button className="btn btn-sm" onClick={() => setActivePanel('templates')}><i className="ti ti-message-2"></i> Template</button>
-                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-phone-call"></i> Iniciar contato</button>
+                      <button className="btn btn-sm" onClick={() => openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
                       <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => deleteAlert(d)}><i className="ti ti-trash"></i></button>
                     </div>
                   </div>
@@ -481,6 +497,52 @@ export default function Monitor() {
                     ))}
                   </div>
           }
+        </div>
+      )}
+
+      {templateModal && (
+        <div
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={() => setTemplateModal(null)}
+        >
+          <div
+            style={{ background:'var(--surface-1)', borderRadius:'var(--radius-lg)', padding:24, maxWidth:520, width:'100%', boxShadow:'var(--shadow-xl)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <div style={{ fontWeight:600, fontSize:14 }}>
+                <i className="ti ti-message-2" style={{ marginRight:6 }}></i>
+                Template de contato — {templateModal.driver.nome.split(' ')[0]}
+              </div>
+              <button className="btn btn-sm btn-ghost" onClick={() => setTemplateModal(null)}>
+                <i className="ti ti-x"></i>
+              </button>
+            </div>
+            {templateModal.text ? (
+              <>
+                <textarea
+                  readOnly
+                  value={templateModal.text}
+                  style={{ width:'100%', minHeight:160, padding:'10px 12px', background:'var(--surface-0)', border:'1px solid var(--border-md)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', fontSize:13, resize:'vertical', fontFamily:'inherit', lineHeight:1.5 }}
+                />
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:12 }}>
+                  <button className="btn btn-sm btn-ghost" onClick={() => setTemplateModal(null)}>Fechar</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => { navigator.clipboard?.writeText(templateModal.text); setTemplateModal(null); }}>
+                    <i className="ti ti-copy"></i> Copiar e fechar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-muted)' }}>
+                <i className="ti ti-message-off" style={{ fontSize:32, display:'block', marginBottom:8 }}></i>
+                Nenhum template de contato cadastrado.{' '}
+                <button className="btn btn-sm btn-ghost" style={{ display:'inline', padding:0, textDecoration:'underline' }}
+                  onClick={() => { setTemplateModal(null); setActivePanel('templates'); }}>
+                  Criar um agora
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
