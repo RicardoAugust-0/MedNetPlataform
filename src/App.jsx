@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useApp } from './context';
 import { useAuth } from './auth/AuthContext';
+import { useReminders } from './hooks/useReminders';
+import { useToast } from './hooks/useToast';
 import { applyAccent } from './utils';
 import LoginPage from './auth/LoginPage';
 import SetPasswordPage from './auth/SetPasswordPage';
@@ -26,6 +28,47 @@ function Panel({ id, children }) {
   );
 }
 
+function ReminderNotifier() {
+  const { reminders, toggle } = useReminders();
+  const toast = useToast();
+  const notified = useRef(new Set());
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const hhmm = now.toTimeString().slice(0, 5);
+      reminders.forEach(r => {
+        if (r.done || r.date !== todayStr || r.time !== hhmm || notified.current.has(r.id)) return;
+        notified.current.add(r.id);
+        toast(
+          r.title + (r.sub ? ` — ${r.sub}` : ''),
+          'info',
+          { label: 'Marcar como feito', fn: () => toggle(r.id) }
+        );
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('⏰ ' + r.title, {
+            body: r.sub || 'Lembrete da agenda',
+            icon: '/favicon.svg',
+            tag: 'reminder-' + r.id,
+          });
+        }
+      });
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [reminders, toggle, toast]);
+
+  return null;
+}
+
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
@@ -43,6 +86,7 @@ function AppShell() {
 
   return (
     <div id="app">
+      <ReminderNotifier />
       <Sidebar />
       <div className="main-area">
         <Topbar />

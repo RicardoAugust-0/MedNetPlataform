@@ -9,10 +9,10 @@ export function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const toast = useCallback((msg, kind = 'info') => {
+  const toast = useCallback((msg, kind = 'info', action = null) => {
     const id = crypto.randomUUID();
-    setToasts(prev => [...prev, { id, msg, kind }]);
-    setTimeout(() => dismiss(id), 4500);
+    setToasts(prev => [...prev, { id, msg, kind, action }]);
+    setTimeout(() => dismiss(id), action ? 8000 : 4500);
   }, [dismiss]);
 
   return (
@@ -26,12 +26,12 @@ export function ToastProvider({ children }) {
         {toasts.map(t => (
           <div
             key={t.id}
-            onClick={() => dismiss(t.id)}
+            onClick={() => { if (!t.action) dismiss(t.id); }}
             style={{
               padding: '10px 14px',
               borderRadius: 'var(--radius-md)',
               fontSize: 13,
-              cursor: 'pointer',
+              cursor: t.action ? 'default' : 'pointer',
               display: 'flex',
               gap: 8,
               alignItems: 'center',
@@ -48,7 +48,20 @@ export function ToastProvider({ children }) {
               t.kind === 'success' ? 'ti-circle-check' :
               'ti-info-circle'
             }`} style={{ flexShrink: 0 }} />
-            <span>{t.msg}</span>
+            <span style={{ flex: 1 }}>{t.msg}</span>
+            {t.action && (
+              <button
+                onClick={() => { t.action.fn(); dismiss(t.id); }}
+                style={{ padding:'2px 10px', fontSize:11, borderRadius:4, background:'rgba(128,128,128,0.2)', border:'none', color:'inherit', cursor:'pointer', whiteSpace:'nowrap' }}
+              >
+                {t.action.label}
+              </button>
+            )}
+            {t.action && (
+              <button onClick={() => dismiss(t.id)} style={{ padding:'2px 6px', fontSize:12, background:'transparent', border:'none', color:'inherit', cursor:'pointer', opacity:0.6 }}>
+                <i className="ti ti-x"></i>
+              </button>
+            )}
           </div>
         ))}
       </div>
