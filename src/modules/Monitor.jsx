@@ -5,17 +5,20 @@ import { useAtendimentos } from '../hooks/useAtendimentos';
 import { iniciais } from '../utils';
 import { parseSheetFile } from '../parseSheet';
 
-/* ── Google Sheets webhook ── */
-async function postToSheets(payload) {
-  const url = import.meta.env.VITE_SHEETS_WEBHOOK_URL;
-  if (!url || url.includes('SEU_SCRIPT_ID')) return;
+/* ── Google Sheets via Supabase Edge Function ── */
+async function postToSheets(payload, accessToken) {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/append-sheet`;
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(payload),
     });
+    const data = await res.json();
+    if (!data.ok) console.warn('[Sheets]', data.error);
   } catch (e) {
     console.warn('[Sheets] falha ao registrar na planilha:', e.message);
   }
@@ -73,7 +76,7 @@ function exportCSV(rows) {
 
 export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const { history, loading: histLoading, error: histError, registrar } = useAtendimentos();
 
   const [activeTab,  setActiveTab]  = useState('intervencao');
@@ -164,17 +167,17 @@ export default function Monitor() {
     const classificacao = (sev === 'Gravíssimo' || sev === 'Grave') ? 'IMEDIATA' : 'PREVENTIVA';
     postToSheets({
       data,
-      empresa:        d.transportadora || '',
-      sistema:        'SASCAR',
-      colaborador:    d.nome,
-      placa:          d.placa || '',
-      frota:          d.frota || '',
+      empresa:         d.transportadora || '',
+      sistema:         'SASCAR',
+      colaborador:     d.nome,
+      placa:           d.placa || '',
+      frota:           d.frota || '',
       criticidade,
       classificacao,
-      motivo:         'FADIGA',
-      solicitadoPor:  profile?.nome || '',
+      motivo:          'FADIGA',
+      solicitadoPor:   profile?.nome || '',
       horaSolicitacao: hora,
-    });
+    }, session?.access_token);
   };
 
   const reportar = async (d) => {
