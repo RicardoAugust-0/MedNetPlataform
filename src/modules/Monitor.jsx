@@ -78,7 +78,7 @@ function exportCSV(rows) {
 export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, registrar, loadByRange } = useAtendimentos();
   const { templates } = useTemplates();
   const [templateModal, setTemplateModal] = useState(null);
 
@@ -113,6 +113,10 @@ export default function Monitor() {
   const [histPeriod,  setHistPeriod]  = useState('hoje');
   const [histTipo,    setHistTipo]    = useState('');
   const [histSearch,  setHistSearch]  = useState('');
+  const [histFrom,     setHistFrom]     = useState('');
+  const [histTo,       setHistTo]       = useState('');
+  const [rangeHistory, setRangeHistory] = useState([]);
+  const [rangeLoading, setRangeLoading] = useState(false);
 
   /* ── Filtros fila ── */
   const filtered = drivers.filter(d => {
@@ -245,6 +249,18 @@ export default function Monitor() {
       .replace(/\{\{transportadora\}\}/gi, d.transportadora || '—');
     setTemplateModal({ driver: d, text });
   };
+
+  const handleRangeSearch = async () => {
+    if (!histFrom || !histTo) return;
+    setRangeLoading(true);
+    const { data } = await loadByRange(histFrom, histTo);
+    setRangeHistory(data);
+    setRangeLoading(false);
+  };
+
+  const displayHistory = histPeriod === 'intervalo' ? rangeHistory : histFiltered;
+  const displayLoading = histPeriod === 'intervalo' ? rangeLoading : histLoading;
+  const displayError   = histPeriod === 'intervalo' ? null         : histError;
 
   const sheetAgeColor = sheetAgeMin === null ? null
     : sheetAgeMin < 30  ? 'var(--success-500, #22c55e)'
@@ -494,8 +510,34 @@ export default function Monitor() {
                 <option value="semana">7 dias</option>
                 <option value="mes">30 dias</option>
                 <option value="todos">Todos</option>
+                <option value="intervalo">Intervalo personalizado</option>
               </select>
             </div>
+            {histPeriod === 'intervalo' && (
+              <>
+                <div className="filter-group">
+                  <label>De</label>
+                  <input
+                    type="date"
+                    value={histFrom}
+                    onChange={e => setHistFrom(e.target.value)}
+                    style={{ padding:'4px 8px', fontSize:12, border:'1px solid var(--border-md)', borderRadius:'var(--radius-sm)', background:'var(--surface-0)', color:'var(--text-primary)' }}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Até</label>
+                  <input
+                    type="date"
+                    value={histTo}
+                    onChange={e => setHistTo(e.target.value)}
+                    style={{ padding:'4px 8px', fontSize:12, border:'1px solid var(--border-md)', borderRadius:'var(--radius-sm)', background:'var(--surface-0)', color:'var(--text-primary)' }}
+                  />
+                </div>
+                <button className="btn btn-sm btn-primary" onClick={handleRangeSearch} disabled={!histFrom || !histTo}>
+                  <i className="ti ti-search"></i> Buscar
+                </button>
+              </>
+            )}
             <div className="filter-group">
               <label>Tipo</label>
               <select value={histTipo} onChange={e => setHistTipo(e.target.value)}>
@@ -515,19 +557,19 @@ export default function Monitor() {
                 onChange={e => setHistSearch(e.target.value)}
               />
             </div>
-            <button className="btn btn-sm" onClick={() => exportCSV(histFiltered)}>
+            <button className="btn btn-sm" onClick={() => exportCSV(displayHistory)}>
               <i className="ti ti-download"></i> Exportar CSV
             </button>
           </div>
 
-          {histLoading
+          {displayLoading
             ? <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando histórico…</div>
-            : histError
-              ? <div className="empty-state" style={{ color: 'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {histError}</div>
-              : histFiltered.length === 0
+            : displayError
+              ? <div className="empty-state" style={{ color: 'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {displayError}</div>
+              : displayHistory.length === 0
                 ? <EmptyState icon="ti-history" msg="Nenhum registro encontrado" />
                 : <div className="driver-list">
-                    {histFiltered.map(item => (
+                    {displayHistory.map(item => (
                       <div className="history-item" key={item.id} style={{ opacity: item._pending ? 0.6 : 1 }}>
                         <div className="h-avatar"><i className={`ti ${histIcon[item.tipo] || 'ti-check'}`} style={{ fontSize: 13 }}></i></div>
                         <div className="h-info">

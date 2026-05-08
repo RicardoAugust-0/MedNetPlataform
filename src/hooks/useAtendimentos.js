@@ -70,7 +70,19 @@ export function useAtendimentos() {
     return { data };
   }, [profile]);
 
-  return { history, loading, error, registrar, reload: load };
+  const loadByRange = useCallback(async (start, end) => {
+    if (!isSupabaseConfigured) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('atendimentos')
+      .select('*')
+      .gte('created_at', start + 'T00:00:00.000Z')
+      .lte('created_at', end   + 'T23:59:59.999Z')
+      .order('created_at', { ascending: false });
+    if (error) return { data: [], error: error.message };
+    return { data: data.map(toLocal), error: null };
+  }, []);
+
+  return { history, loading, error, registrar, reload: load, loadByRange };
 }
 
 function toLocal(row) {
