@@ -31,7 +31,7 @@ export default function Dashboard() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
       labels7.push(i === 0 ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'short' }));
-      atHistory.forEach(a => { if (new Date(a.created_at).toDateString() === d.toDateString()) days7[6-i]++; });
+      atHistory.forEach(a => { if (a.tipo !== 'descarte' && new Date(a.created_at).toDateString() === d.toDateString()) days7[6-i]++; });
     }
     return { days7, labels7, maxVal: Math.max(...days7, 1) };
   }, [atHistory]);
@@ -140,7 +140,7 @@ export default function Dashboard() {
                 <i className="ti ti-chart-bar" style={{ color: 'var(--accent-500)' }}></i>
                 Atendimentos — últimos 7 dias
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{atHistory.length} total</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{atHistory.filter(a => a.tipo !== 'descarte').length} total</span>
             </div>
             {atHistory.length === 0 ? (
               <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Nenhum atendimento registrado ainda</div>
