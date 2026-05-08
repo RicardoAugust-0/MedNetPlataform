@@ -62,8 +62,15 @@ export function AuthProvider({ children }) {
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
 
-  const updateProfile = (nome, cargo) =>
-    supabase.auth.updateUser({ data: { nome, cargo } });
+  const updateProfile = async (nome, cargo) => {
+    const { error } = await supabase.auth.updateUser({ data: { nome, cargo } });
+    if (error) return { error };
+    if (isSupabaseConfigured && session?.user) {
+      await supabase.from('profiles').update({ nome, cargo }).eq('id', session.user.id);
+    }
+    setProfile(prev => prev ? { ...prev, nome, cargo } : prev);
+    return { error: null };
+  };
 
   const setPassword = async (password) => {
     const { error } = await supabase.auth.updateUser({ password });
