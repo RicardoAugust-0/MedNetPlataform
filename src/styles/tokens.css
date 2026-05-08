@@ -14,6 +14,10 @@
   --brand-100: #DCEBFA;
   --brand-50:  #EEF6FD;
 
+  /* ── MedNet brand orange (cruz médica) ── */
+  --mednet-orange: #E04010;
+  --mednet-orange-glow: rgba(224, 64, 16, 0.22);
+
   /* ── Accent (MedNet — vinho/bordeaux) ── */
   --accent-900: #1A0308;
   --accent-800: #350A16;
