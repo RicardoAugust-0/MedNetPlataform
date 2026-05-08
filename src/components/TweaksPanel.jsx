@@ -3,6 +3,7 @@ import { useApp } from '../context';
 import { applyAccent } from '../utils';
 
 const ACCENTS = [
+  { id:'vinho', color:'#9E1A45', label:'MedNet' },
   { id:'roxo',  color:'#7C5CFF', label:'Roxo' },
   { id:'azul',  color:'#3F76C2', label:'Azul' },
   { id:'verde', color:'#2DA75A', label:'Verde' },

@@ -68,7 +68,18 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-mark">M</div>
+        <svg className="logo-mark" width="34" height="34" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="mn-logo-bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#9E1A45"/>
+              <stop offset="100%" stopColor="#5A0F25"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="7" fill="url(#mn-logo-bg)"/>
+          <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
+          <rect x="23" y="5" width="2" height="8" rx="1" fill="#E04010"/>
+          <rect x="20" y="8" width="8" height="2" rx="1" fill="#E04010"/>
+        </svg>
         <div className="logo-text">
           <div className="logo-name">{APP_CONFIG.empresa}</div>
           <div className="logo-sub">{APP_CONFIG.setor}</div>

@@ -17,7 +17,7 @@ export function AppProvider({ children }) {
   const [excluirTecnicos, setExcluirTecnicos] = useState(() => load('excluirTecnicos', false));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));
-  const [accent,      setAccentState]      = useState(() => load('accent',   'roxo'));
+  const [accent,      setAccentState]      = useState(() => load('accent',   'vinho'));
   const [mode,        setModeState]        = useState(() => load('mode',     'pleno'));
   const [vibe,        setVibeState]        = useState(() => load('vibe',     'sobrio'));
   const [rhythm,      setRhythmState]      = useState(() => load('rhythm',   'operacional'));
