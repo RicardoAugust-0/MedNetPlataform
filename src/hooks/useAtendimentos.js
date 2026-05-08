@@ -72,11 +72,14 @@ export function useAtendimentos() {
 
   const loadByRange = useCallback(async (start, end) => {
     if (!isSupabaseConfigured) return { data: [], error: null };
+    // Parse dates as local time so range matches what the operator sees on their clock
+    const startUTC = new Date(start + 'T00:00:00').toISOString();
+    const endUTC   = new Date(end   + 'T23:59:59.999').toISOString();
     const { data, error } = await supabase
       .from('atendimentos')
       .select('*')
-      .gte('created_at', start + 'T00:00:00.000Z')
-      .lte('created_at', end   + 'T23:59:59.999Z')
+      .gte('created_at', startUTC)
+      .lte('created_at', endUTC)
       .order('created_at', { ascending: false });
     if (error) return { data: [], error: error.message };
     return { data: data.map(toLocal), error: null };

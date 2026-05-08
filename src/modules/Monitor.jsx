@@ -117,6 +117,7 @@ export default function Monitor() {
   const [histTo,       setHistTo]       = useState('');
   const [rangeHistory, setRangeHistory] = useState([]);
   const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeError, setRangeError] = useState(null);
 
   /* ── Filtros fila ── */
   const filtered = drivers.filter(d => {
@@ -155,6 +156,13 @@ export default function Monitor() {
       return true;
     });
   }, [history, histPeriod, histTipo, histSearch]);
+
+  useEffect(() => {
+    if (histPeriod !== 'intervalo') {
+      setRangeHistory([]);
+      setRangeError(null);
+    }
+  }, [histPeriod]);
 
   /* ── Upload ── */
   const handleFile = async (file) => {
@@ -253,14 +261,16 @@ export default function Monitor() {
   const handleRangeSearch = async () => {
     if (!histFrom || !histTo) return;
     setRangeLoading(true);
-    const { data } = await loadByRange(histFrom, histTo);
+    setRangeError(null);
+    const { data, error } = await loadByRange(histFrom, histTo);
     setRangeHistory(data);
+    if (error) setRangeError(error);
     setRangeLoading(false);
   };
 
   const displayHistory = histPeriod === 'intervalo' ? rangeHistory : histFiltered;
   const displayLoading = histPeriod === 'intervalo' ? rangeLoading : histLoading;
-  const displayError   = histPeriod === 'intervalo' ? null         : histError;
+  const displayError   = histPeriod === 'intervalo' ? rangeError   : histError;
 
   const sheetAgeColor = sheetAgeMin === null ? null
     : sheetAgeMin < 30  ? 'var(--success-500, #22c55e)'
