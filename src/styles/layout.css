@@ -54,9 +54,11 @@ body {
   box-shadow: 0 4px 14px var(--accent-glow);
   border-radius: 9px;
 }
-.logo-text { line-height: 1.15; min-width: 0; }
-.logo-name { font-size: 14.5px; font-weight: 600; color: #fff; letter-spacing: -0.2px; }
-.logo-sub  { font-size: 10.5px; color: var(--accent-400); margin-top: 1px; font-weight: 400; }
+.logo-text { line-height: 1.2; min-width: 0; }
+.logo-grupo { font-size: 8px; letter-spacing: 2.2px; text-transform: uppercase; color: rgba(255,255,255,0.32); font-weight: 700; }
+.logo-name { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -0.4px; line-height: 1.15; }
+.logo-name .net { color: var(--mednet-orange); }
+.logo-sub  { font-size: 9.5px; color: rgba(255,255,255,0.38); margin-top: 2px; font-weight: 400; }
 
 .sidebar-search {
   padding: 10px 14px 6px;
@@ -266,8 +268,8 @@ body {
 .btn i { font-size: 14px; }
 .btn:hover { background: var(--surface-1); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--accent-600); color: #fff; border-color: transparent; }
-.btn-primary:hover { background: var(--accent-500); }
+.btn-primary { background: var(--mednet-orange); color: #fff; border-color: transparent; }
+.btn-primary:hover { background: #d85c29; }
 .btn-danger { color: var(--danger-600); }
 .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger-500); color: var(--danger-600); }
 .btn-ghost { background: transparent; border-color: transparent; }

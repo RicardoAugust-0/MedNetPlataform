@@ -77,12 +77,13 @@ export default function Sidebar() {
           </defs>
           <rect width="32" height="32" rx="7" fill="url(#mn-logo-bg)"/>
           <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
-          <rect x="23" y="5" width="2" height="8" rx="1" fill="#E04010"/>
-          <rect x="20" y="8" width="8" height="2" rx="1" fill="#E04010"/>
+          <rect x="23" y="5" width="2" height="8" rx="1" fill="#F26931"/>
+          <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
         </svg>
         <div className="logo-text">
-          <div className="logo-name">{APP_CONFIG.empresa}</div>
-          <div className="logo-sub">{APP_CONFIG.setor}</div>
+          <div className="logo-grupo">GRUPO</div>
+          <div className="logo-name">Med<span className="net">Net</span></div>
+          <div className="logo-sub">Medicina e Seg. do Trabalho</div>
         </div>
       </div>
 
