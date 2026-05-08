@@ -14,17 +14,17 @@
   --brand-100: #DCEBFA;
   --brand-50:  #EEF6FD;
 
-  /* ── Accent (variante roxa escolhida) ── */
-  --accent-900: #1A1530;
-  --accent-800: #251D48;
-  --accent-700: #3A2E70;
-  --accent-600: #5B47B8;
-  --accent-500: #7C5CFF;
-  --accent-400: #9B82FF;
-  --accent-300: #C0B0FF;
-  --accent-100: #EDE7FF;
-  --accent-50:  #F6F3FF;
-  --accent-glow: rgba(124, 92, 255, 0.25);
+  /* ── Accent (MedNet — vinho/bordeaux) ── */
+  --accent-900: #1A0308;
+  --accent-800: #350A16;
+  --accent-700: #5A0F25;
+  --accent-600: #7A1235;
+  --accent-500: #9E1A45;
+  --accent-400: #C24A6A;
+  --accent-300: #E09AB5;
+  --accent-100: #FAE8EE;
+  --accent-50:  #FDF3F7;
+  --accent-glow: rgba(158, 26, 69, 0.28);
 
   /* ── Status ── */
   --danger-600: #C62F2F;
@@ -63,7 +63,7 @@
 [data-theme="light"] {
   --bg-app:        #F4F5F8;
   --bg-sidebar:    var(--accent-900);
-  --bg-sidebar-active: rgba(124, 92, 255, 0.18);
+  --bg-sidebar-active: rgba(158, 26, 69, 0.22);
   --bg-sidebar-hover:  rgba(255, 255, 255, 0.05);
   --surface-0:     #FFFFFF;
   --surface-1:     #F4F5F8;
@@ -91,8 +91,8 @@
 /* ─── TEMA ESCURO ─── */
 [data-theme="dark"] {
   --bg-app:        #0E0B1C;
-  --bg-sidebar:    #0A0717;
-  --bg-sidebar-active: rgba(124, 92, 255, 0.22);
+  --bg-sidebar:    #0F0205;
+  --bg-sidebar-active: rgba(158, 26, 69, 0.25);
   --bg-sidebar-hover:  rgba(255, 255, 255, 0.05);
   --surface-0:     #16122A;
   --surface-1:     #1B1730;
@@ -121,7 +121,7 @@
   --tag-contato-bg:      rgba(42, 141, 217, 0.18); --tag-contato-color:      #80BCEC;
   --tag-questionario-bg: rgba(45, 167, 90, 0.18);  --tag-questionario-color: #7DD79C;
   --tag-alerta-bg:       rgba(226, 95, 50, 0.18);  --tag-alerta-color:       #F0A88E;
-  --tag-encerramento-bg: rgba(124, 92, 255, 0.18); --tag-encerramento-color: #B5A3FF;
+  --tag-encerramento-bg: rgba(158, 26, 69, 0.18); --tag-encerramento-color: #E09AB5;
   --tag-default-bg:      rgba(255, 255, 255, 0.06);--tag-default-color:      #9D98B5;
 }
 
@@ -341,7 +341,7 @@
   background-image: radial-gradient(circle at 100% 0%, var(--accent-50), transparent 60%);
 }
 [data-theme="dark"][data-vibe="pulse"] .stat-box {
-  background-image: radial-gradient(circle at 100% 0%, rgba(124, 92, 255, 0.10), transparent 60%);
+  background-image: radial-gradient(circle at 100% 0%, rgba(158, 26, 69, 0.10), transparent 60%);
 }
 [data-vibe="pulse"] .btn-primary { box-shadow: 0 6px 20px var(--accent-glow); }
 [data-vibe="pulse"] .crit-avatar.danger,

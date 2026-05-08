@@ -422,7 +422,7 @@ textarea.form-control { resize: vertical; min-height: 100px; line-height: 1.6; }
   color: var(--accent-600);
 }
 [data-theme="dark"] .tab.active .tab-count {
-  background: rgba(124, 92, 255, 0.18);
+  background: rgba(158, 26, 69, 0.18);
   color: var(--accent-400);
 }
 
