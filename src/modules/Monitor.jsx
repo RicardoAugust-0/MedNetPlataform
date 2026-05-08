@@ -245,19 +245,26 @@ export default function Monitor() {
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
 
-  const openTemplate = (d) => {
+  const applyTemplate = (rawText, d) => {
+    if (!rawText) return '';
     const hour = new Date().getHours();
     const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
-    const contatos = templates.filter(t => t.tag === 'contato');
-    if (contatos.length === 0) { setTemplateModal({ driver: d, text: null }); return; }
-    // First contato template by creation date; multiple contato templates not yet supported
-    const text = contatos[0].text
+    return rawText
       .replace(/(?:\{\{saudacao\}\}|\[SAUDACAO\]|\[SAUDAÇÃO\])/gi, saudacao)
       .replace(/(?:\{\{nome\}\}|\[NOME\])/gi, d.nome || '—')
       .replace(/(?:\{\{placa\}\}|\[PLACA\])/gi, d.placa || '—')
       .replace(/(?:\{\{transportadora\}\}|\[TRANSPORTADORA\]|\[EMPRESA\])/gi, d.transportadora || '—')
       .replace(/\[HORA\]/gi, new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-    setTemplateModal({ driver: d, text });
+  };
+
+  const openTemplate = (d) => {
+    if (templates.length === 0) { setTemplateModal({ driver: d, templateId: null, text: null }); return; }
+    
+    // Prioritize 'contato' templates for the default selection, otherwise use the first available
+    let defaultTemplate = templates.find(t => t.tag === 'contato') || templates[0];
+    
+    const text = applyTemplate(defaultTemplate.text, d);
+    setTemplateModal({ driver: d, templateId: defaultTemplate.id, text });
   };
 
   const handleRangeSearch = async () => {
@@ -614,14 +621,34 @@ export default function Monitor() {
                 <i className="ti ti-x"></i>
               </button>
             </div>
-            {templateModal.text ? (
+            {templates.length > 0 ? (
               <>
-                <textarea
-                  readOnly
-                  value={templateModal.text}
-                  className="form-control"
-                  style={{ minHeight: 160 }}
-                />
+                <div className="form-group">
+                  <label className="form-label">Selecionar Template</label>
+                  <select 
+                    className="form-control"
+                    value={templateModal.templateId || ''}
+                    onChange={e => {
+                      const t = templates.find(x => x.id === e.target.value);
+                      if (t) {
+                        setTemplateModal(prev => ({ ...prev, templateId: t.id, text: applyTemplate(t.text, prev.driver) }));
+                      }
+                    }}
+                  >
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.title} ({t.tagLabel || t.tag || 'Sem categoria'})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginTop: 12 }}>
+                  <label className="form-label">Mensagem (Editável)</label>
+                  <textarea
+                    value={templateModal.text || ''}
+                    onChange={e => setTemplateModal(prev => ({ ...prev, text: e.target.value }))}
+                    className="form-control"
+                    style={{ minHeight: 160 }}
+                  />
+                </div>
                 <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:16 }}>
                   <button className="btn" onClick={() => setTemplateModal(null)}>Fechar</button>
                   <button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(templateModal.text); setTemplateModal(null); }}>
