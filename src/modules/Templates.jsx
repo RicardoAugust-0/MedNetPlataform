@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTemplates } from '../hooks/useTemplates';
 
 const TABS = ['todos','contato','questionario','alerta','encerramento'];
@@ -114,7 +115,7 @@ function TemplateModal({ tpl, onSave, onClose }) {
     onSave({ tag, tagLabel, title: name.trim(), text: text.trim() });
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay open">
       <div className="modal">
         <div className="modal-header">
@@ -142,6 +143,7 @@ function TemplateModal({ tpl, onSave, onClose }) {
           <button className="btn btn-primary" onClick={handleSave}><i className="ti ti-check"></i> Salvar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

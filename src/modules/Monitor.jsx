@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
@@ -251,10 +252,11 @@ export default function Monitor() {
     if (contatos.length === 0) { setTemplateModal({ driver: d, text: null }); return; }
     // First contato template by creation date; multiple contato templates not yet supported
     const text = contatos[0].text
-      .replace(/\{\{saudacao\}\}/gi, saudacao)
-      .replace(/\{\{nome\}\}/gi, d.nome || '—')
-      .replace(/\{\{placa\}\}/gi, d.placa || '—')
-      .replace(/\{\{transportadora\}\}/gi, d.transportadora || '—');
+      .replace(/(?:\{\{saudacao\}\}|\[SAUDACAO\]|\[SAUDAÇÃO\])/gi, saudacao)
+      .replace(/(?:\{\{nome\}\}|\[NOME\])/gi, d.nome || '—')
+      .replace(/(?:\{\{placa\}\}|\[PLACA\])/gi, d.placa || '—')
+      .replace(/(?:\{\{transportadora\}\}|\[TRANSPORTADORA\]|\[EMPRESA\])/gi, d.transportadora || '—')
+      .replace(/\[HORA\]/gi, new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     setTemplateModal({ driver: d, text });
   };
 
@@ -600,21 +602,15 @@ export default function Monitor() {
         </div>
       )}
 
-      {templateModal && (
-        <div
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={() => setTemplateModal(null)}
-        >
-          <div
-            style={{ background:'var(--surface-1)', borderRadius:'var(--radius-lg)', padding:24, maxWidth:520, width:'100%', boxShadow:'var(--shadow-xl)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-              <div style={{ fontWeight:600, fontSize:14 }}>
-                <i className="ti ti-message-2" style={{ marginRight:6 }}></i>
+      {templateModal && createPortal(
+        <div className="modal-overlay open" onClick={() => setTemplateModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <i className="ti ti-message-2"></i>
                 Template de contato — {(templateModal.driver.nome || '').split(' ')[0]}
               </div>
-              <button className="btn btn-sm btn-ghost" onClick={() => setTemplateModal(null)}>
+              <button className="btn-icon" onClick={() => setTemplateModal(null)}>
                 <i className="ti ti-x"></i>
               </button>
             </div>
@@ -623,27 +619,31 @@ export default function Monitor() {
                 <textarea
                   readOnly
                   value={templateModal.text}
-                  style={{ width:'100%', minHeight:160, padding:'10px 12px', background:'var(--surface-0)', border:'1px solid var(--border-md)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', fontSize:13, resize:'vertical', fontFamily:'inherit', lineHeight:1.5 }}
+                  className="form-control"
+                  style={{ minHeight: 160 }}
                 />
-                <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:12 }}>
-                  <button className="btn btn-sm btn-ghost" onClick={() => setTemplateModal(null)}>Fechar</button>
-                  <button className="btn btn-sm btn-primary" onClick={() => { navigator.clipboard?.writeText(templateModal.text); setTemplateModal(null); }}>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:16 }}>
+                  <button className="btn" onClick={() => setTemplateModal(null)}>Fechar</button>
+                  <button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(templateModal.text); setTemplateModal(null); }}>
                     <i className="ti ti-copy"></i> Copiar e fechar
                   </button>
                 </div>
               </>
             ) : (
-              <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-muted)' }}>
-                <i className="ti ti-message-off" style={{ fontSize:32, display:'block', marginBottom:8 }}></i>
-                Nenhum template de contato cadastrado.{' '}
-                <button className="btn btn-sm btn-ghost" style={{ display:'inline', padding:0, textDecoration:'underline' }}
-                  onClick={() => { setTemplateModal(null); setActivePanel('templates'); }}>
-                  Criar um agora
-                </button>
+              <div className="empty-state">
+                <i className="ti ti-message-off"></i>
+                Nenhum template de contato cadastrado.
+                <div style={{ marginTop: 8 }}>
+                  <button className="btn btn-sm btn-ghost" style={{ textDecoration:'underline' }}
+                    onClick={() => { setTemplateModal(null); setActivePanel('templates'); }}>
+                    Criar um agora
+                  </button>
+                </div>
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

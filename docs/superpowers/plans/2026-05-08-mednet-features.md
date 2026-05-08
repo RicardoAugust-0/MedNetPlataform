@@ -29,7 +29,7 @@
 **Files:**
 - Modify: `src/modules/Monitor.jsx`
 
-- [ ] **Step 1: Adicionar import de useTemplates**
+- [x] **Step 1: Adicionar import de useTemplates**
 
 No topo de `src/modules/Monitor.jsx`, após os imports existentes:
 
@@ -37,7 +37,7 @@ No topo de `src/modules/Monitor.jsx`, após os imports existentes:
 import { useTemplates } from '../hooks/useTemplates';
 ```
 
-- [ ] **Step 2: Instanciar hook e adicionar estado do modal**
+- [x] **Step 2: Instanciar hook e adicionar estado do modal**
 
 Dentro do componente `Monitor()`, após as linhas de `useAtendimentos` e `useAuth`:
 
@@ -46,7 +46,7 @@ const { templates } = useTemplates();
 const [templateModal, setTemplateModal] = useState(null);
 ```
 
-- [ ] **Step 3: Adicionar função openTemplate**
+- [x] **Step 3: Adicionar função openTemplate**
 
 Dentro do componente `Monitor()`, após a função `resetFilters`:
 
@@ -65,7 +65,7 @@ const openTemplate = (d) => {
 };
 ```
 
-- [ ] **Step 4: Adicionar JSX do modal**
+- [x] **Step 4: Adicionar JSX do modal**
 
 Dentro do `return`, antes do `</div>` final do `monitor-grid`:
 
@@ -117,7 +117,7 @@ Dentro do `return`, antes do `</div>` final do `monitor-grid`:
 )}
 ```
 
-- [ ] **Step 5: Trocar onClick do botão Template e renomear "Iniciar contato"**
+- [x] **Step 5: Trocar onClick do botão Template e renomear "Iniciar contato"**
 
 Localizar (linha ~360):
 ```jsx
@@ -131,7 +131,7 @@ Substituir por:
 <button className="btn btn-sm btn-primary" onClick={() => attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
 ```
 
-- [ ] **Step 6: Verificar no browser**
+- [x] **Step 6: Verificar no browser**
 
 ```bash
 npm run dev
@@ -143,7 +143,7 @@ npm run dev
 4. Botão "Copiar e fechar" deve copiar o texto e fechar o modal
 5. Botão agora diz "Inserir na planilha"
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/modules/Monitor.jsx
@@ -158,7 +158,7 @@ git commit -m "feat(monitor): template modal com variáveis de motorista e renam
 - Modify: `src/hooks/useToast.jsx`
 - Modify: `src/App.jsx`
 
-- [ ] **Step 1: Estender useToast para suportar action button**
+- [x] **Step 1: Estender useToast para suportar action button**
 
 Em `src/hooks/useToast.jsx`, substituir a função `toast` e o render dos toasts:
 
@@ -215,7 +215,7 @@ No render de cada toast, substituir o `<div key={t.id} ...>` pelo bloco abaixo (
 </div>
 ```
 
-- [ ] **Step 2: Adicionar componente ReminderNotifier em App.jsx**
+- [x] **Step 2: Adicionar componente ReminderNotifier em App.jsx**
 
 Em `src/App.jsx`, alterar o import existente de `react` para incluir `useRef`:
 ```js
@@ -273,7 +273,7 @@ function ReminderNotifier() {
 }
 ```
 
-- [ ] **Step 3: Renderizar ReminderNotifier dentro de AppShell**
+- [x] **Step 3: Renderizar ReminderNotifier dentro de AppShell**
 
 Dentro de `AppShell`, no `return`, logo após `<div id="app">`:
 
@@ -281,7 +281,7 @@ Dentro de `AppShell`, no `return`, logo após `<div id="app">`:
 <ReminderNotifier />
 ```
 
-- [ ] **Step 4: Verificar no browser**
+- [x] **Step 4: Verificar no browser**
 
 ```bash
 npm run dev
@@ -292,7 +292,7 @@ npm run dev
 3. Clicar "Marcar como feito" — lembrete deve ser marcado como concluído na Agenda
 4. Push notification deve aparecer se permissão concedida
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/hooks/useToast.jsx src/App.jsx
@@ -306,7 +306,7 @@ git commit -m "feat(agenda): notificações toast + push quando lembrete atinge 
 **Files:**
 - Modify: `src/modules/Monitor.jsx`
 
-- [ ] **Step 1: Adicionar estado de timestamp e idade**
+- [x] **Step 1: Adicionar estado de timestamp e idade**
 
 Dentro de `Monitor()`, após os estados existentes (`activeTab`, `statusMsg`, etc.):
 
@@ -318,7 +318,7 @@ const [sheetAgeMin,   setSheetAgeMin]   = useState(() => {
 });
 ```
 
-- [ ] **Step 2: Adicionar intervalo de atualização da idade**
+- [x] **Step 2: Adicionar intervalo de atualização da idade**
 
 Dentro de `Monitor()`, após os useEffects existentes:
 
@@ -332,7 +332,7 @@ useEffect(() => {
 }, [sheetLoadedAt]);
 ```
 
-- [ ] **Step 3: Persistir timestamp ao carregar planilha**
+- [x] **Step 3: Persistir timestamp ao carregar planilha**
 
 Dentro de `handleFile`, após a linha `setDrivers(timestamped)`:
 
@@ -343,7 +343,7 @@ setSheetLoadedAt(ts);
 setSheetAgeMin(0);
 ```
 
-- [ ] **Step 4: Adicionar variáveis de cor e label do badge**
+- [x] **Step 4: Adicionar variáveis de cor e label do badge**
 
 Dentro de `Monitor()`, antes do `return`:
 
@@ -359,7 +359,7 @@ const sheetAgeLabel = sheetAgeMin === null ? null
   : `${Math.floor(sheetAgeMin / 60)}h${sheetAgeMin % 60 > 0 ? ` ${sheetAgeMin % 60}min` : ''} atrás`;
 ```
 
-- [ ] **Step 5: Adicionar badge na status bar**
+- [x] **Step 5: Adicionar badge na status bar**
 
 No JSX da status bar (logo após `<div className="status-text">...`), adicionar o badge:
 
@@ -398,7 +398,7 @@ A status bar ficará:
 </div>
 ```
 
-- [ ] **Step 6: Verificar no browser**
+- [x] **Step 6: Verificar no browser**
 
 ```bash
 npm run dev
@@ -409,7 +409,7 @@ npm run dev
 3. Recarregar página — badge deve mostrar o tempo desde a última carga (persiste via localStorage)
 4. Badge muda para amarelo após 30min, vermelho após 60min
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/modules/Monitor.jsx
@@ -424,7 +424,7 @@ git commit -m "feat(monitor): badge de idade da planilha com persistência local
 - Modify: `src/hooks/useAtendimentos.js`
 - Modify: `src/modules/Monitor.jsx`
 
-- [ ] **Step 1: Adicionar loadByRange em useAtendimentos**
+- [x] **Step 1: Adicionar loadByRange em useAtendimentos**
 
 Em `src/hooks/useAtendimentos.js`, após a função `registrar`:
 
@@ -447,7 +447,7 @@ Na linha de `return` do hook, adicionar `loadByRange`:
 return { history, loading, error, registrar, reload: load, loadByRange };
 ```
 
-- [ ] **Step 2: Adicionar estados de intervalo em Monitor**
+- [x] **Step 2: Adicionar estados de intervalo em Monitor**
 
 Em `src/modules/Monitor.jsx`, após os estados `histPeriod`, `histTipo`, `histSearch`:
 
@@ -463,7 +463,7 @@ Atualizar o destructuring de `useAtendimentos`:
 const { history, loading: histLoading, error: histError, registrar, loadByRange } = useAtendimentos();
 ```
 
-- [ ] **Step 3: Adicionar função handleRangeSearch e displayHistory**
+- [x] **Step 3: Adicionar função handleRangeSearch e displayHistory**
 
 Em `Monitor()`, antes do `return`:
 
@@ -481,7 +481,7 @@ const displayLoading = histPeriod === 'intervalo' ? rangeLoading : histLoading;
 const displayError   = histPeriod === 'intervalo' ? null         : histError;
 ```
 
-- [ ] **Step 4: Adicionar opção "Intervalo personalizado" no select de período**
+- [x] **Step 4: Adicionar opção "Intervalo personalizado" no select de período**
 
 No JSX do filtro de histórico, substituir o `<select>` de período:
 
@@ -525,7 +525,7 @@ Logo após o `<select>`, adicionar os inputs de data (aparecem só quando 'inter
 )}
 ```
 
-- [ ] **Step 5: Atualizar exportCSV e renderização da lista para usar displayHistory**
+- [x] **Step 5: Atualizar exportCSV e renderização da lista para usar displayHistory**
 
 Substituir o botão de exportar:
 ```jsx
@@ -565,7 +565,7 @@ No bloco de renderização da lista do histórico, substituir `histLoading`, `hi
 }
 ```
 
-- [ ] **Step 6: Verificar no browser**
+- [x] **Step 6: Verificar no browser**
 
 ```bash
 npm run dev
@@ -577,7 +577,7 @@ npm run dev
 4. Clicar "Exportar CSV" — deve baixar arquivo com os registros filtrados
 5. Selecionar "Hoje" — volta ao comportamento client-side normal
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/hooks/useAtendimentos.js src/modules/Monitor.jsx
@@ -593,7 +593,7 @@ git commit -m "feat(monitor): filtro de histórico por intervalo de datas server
 - Create: `public/pwa-192.png`
 - Create: `public/pwa-512.png`
 
-- [ ] **Step 1: Instalar dependências**
+- [x] **Step 1: Instalar dependências**
 
 ```bash
 npm install -D vite-plugin-pwa @vite-pwa/assets-generator
@@ -601,7 +601,7 @@ npm install -D vite-plugin-pwa @vite-pwa/assets-generator
 
 Expected: packages added to `devDependencies` em `package.json`.
 
-- [ ] **Step 2: Gerar ícones PWA a partir do favicon SVG**
+- [x] **Step 2: Gerar ícones PWA a partir do favicon SVG**
 
 ```bash
 npx pwa-assets-generator --preset minimal public/favicon.svg
@@ -610,7 +610,7 @@ npx pwa-assets-generator --preset minimal public/favicon.svg
 Expected: arquivos `public/pwa-192.png` e `public/pwa-512.png` gerados.  
 Se o comando gerar nomes diferentes, verificar com `ls public/` e ajustar os paths no Step 3.
 
-- [ ] **Step 3: Atualizar vite.config.js**
+- [x] **Step 3: Atualizar vite.config.js**
 
 Substituir todo o conteúdo de `vite.config.js`:
 
@@ -654,7 +654,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Testar build de produção**
+- [x] **Step 4: Testar build de produção**
 
 ```bash
 npm run build && npm run preview
@@ -662,7 +662,7 @@ npm run build && npm run preview
 
 Expected: build sem erros. Abrir `http://localhost:4173` no Chrome → na barra de endereço deve aparecer ícone de instalação (computador com seta para baixo). Instalar e verificar que abre como app standalone.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add vite.config.js public/pwa-192.png public/pwa-512.png package.json package-lock.json
