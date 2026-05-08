@@ -160,9 +160,8 @@ export default function Monitor() {
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
       setDrivers(timestamped);
-      const ts = new Date().toISOString();
-      localStorage.setItem('mn_sheet_loaded_at', ts);
-      setSheetLoadedAt(ts);
+      localStorage.setItem('mn_sheet_loaded_at', loadedAt);
+      setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats(stats);
       setStatusKind('active');
@@ -226,6 +225,9 @@ export default function Monitor() {
     setLoadStats(null);
     setStatusKind('idle');
     setStatusMsg('Fila limpa. Aguardando nova planilha.');
+    localStorage.removeItem('mn_sheet_loaded_at');
+    setSheetLoadedAt(null);
+    setSheetAgeMin(null);
   };
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
