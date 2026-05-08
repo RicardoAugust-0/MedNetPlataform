@@ -249,9 +249,12 @@ export default function Monitor() {
     if (!rawText) return '';
     const hour = new Date().getHours();
     const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+    
+    const nomeMotorista = (!d.nome || d.nome === d.placa || d.nome === '—') ? 'o condutor' : d.nome;
+    
     return rawText
       .replace(/(?:\{\{saudacao\}\}|\[SAUDACAO\]|\[SAUDAÇÃO\])/gi, saudacao)
-      .replace(/(?:\{\{nome\}\}|\[NOME\])/gi, d.nome || '—')
+      .replace(/(?:\{\{nome\}\}|\[NOME\])/gi, nomeMotorista)
       .replace(/(?:\{\{placa\}\}|\[PLACA\])/gi, d.placa || '—')
       .replace(/(?:\{\{transportadora\}\}|\[TRANSPORTADORA\]|\[EMPRESA\])/gi, d.transportadora || '—')
       .replace(/\[HORA\]/gi, new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
