@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useReminders } from '../hooks/useReminders';
+import { useConfirm } from '../hooks/useConfirm';
 import { fmtDate } from '../utils';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -16,6 +17,7 @@ const fmtDisplayDate = (iso) => {
 
 export default function Agenda() {
   const { reminders, loading, add, toggle, remove } = useReminders();
+  const confirm = useConfirm();
   const [title,  setTitle]  = useState('');
   const [time,   setTime]   = useState('10:00');
   const [date,   setDate]   = useState(today());
@@ -37,9 +39,9 @@ export default function Agenda() {
       return a.time.localeCompare(b.time);
     });
 
-  const handleRemove = (id) => {
+  const handleRemove = async (id) => {
     const r = reminders.find(x => x.id === id);
-    if (!r || !confirm(`Excluir lembrete "${r.title}"?`)) return;
+    if (!r || !(await confirm({ title: 'Excluir lembrete', message: `Excluir lembrete "${r.title}"?`, danger: true }))) return;
     remove(id);
   };
 

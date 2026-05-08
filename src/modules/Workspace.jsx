@@ -1,17 +1,25 @@
 import { useState, useRef } from 'react';
 import { useWsPages } from '../hooks/useWsPages';
+import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
 
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
 export default function Workspace() {
   const { wsPages, loading, add, update, remove } = useWsPages();
+  const confirm = useConfirm();
   const [current, setCurrent] = useState(null);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState(0);
   const [newCat, setNewCat] = useState('protocolos');
+
+  const handleDelete = async (id) => {
+    if (!(await confirm({ title: 'Excluir página', message: 'Tem certeza que deseja excluir esta página?', danger: true }))) return;
+    remove(id);
+    setCurrent(null);
+  };
 
   const filt = wsPages.filter(p => !search || p.title.toLowerCase().includes(search));
   const favs = filt.filter(p => p.favorite);
@@ -132,7 +140,7 @@ export default function Workspace() {
             ))}
           </div>
         ) : (
-          <PageEditor page={page} onUpdate={update} onDelete={(id) => { remove(id); setCurrent(null); }} onBack={() => setCurrent(null)} />
+          <PageEditor page={page} onUpdate={update} onDelete={handleDelete} onBack={() => setCurrent(null)} />
         )}
       </div>
 
@@ -193,7 +201,7 @@ function PageEditor({ page, onUpdate, onDelete, onBack }) {
           {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
-        <button className="btn btn-sm btn-danger" onClick={() => { if (confirm('Excluir esta página?')) onDelete(page.id); }}><i className="ti ti-trash"></i></button>
+        <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
       </div>
       <div className="ws-editor-area">
         <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} />

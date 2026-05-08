@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTemplates } from '../hooks/useTemplates';
+import { useConfirm } from '../hooks/useConfirm';
 
 const TABS = ['todos','contato','questionario','alerta','encerramento'];
 const TAB_LABELS = { todos:'Todos', contato:'Contato', questionario:'Questionário', alerta:'Alerta', encerramento:'Encerramento' };
@@ -13,6 +14,7 @@ const TAG_OPTIONS = [
 
 export default function Templates() {
   const { templates, loading, add, update, remove } = useTemplates();
+  const confirm = useConfirm();
   const [filter, setFilter] = useState('todos');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
@@ -34,8 +36,8 @@ export default function Templates() {
     setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1400);
   };
 
-  const handleRemove = (id) => {
-    if (!confirm('Excluir template?')) return;
+  const handleRemove = async (id) => {
+    if (!(await confirm({ title: 'Excluir template', message: 'Tem certeza que deseja excluir este template?', danger: true }))) return;
     remove(id);
   };
 

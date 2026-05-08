@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useLinks } from '../hooks/useLinks';
+import { useConfirm } from '../hooks/useConfirm';
 
 export default function Links() {
   const { links, loading, add, remove } = useLinks();
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
 
   const filt = links.filter(l => !search || l.name.toLowerCase().includes(search) || (l.desc || '').toLowerCase().includes(search));
   const groups = [{ id:'interno', label:'Sistemas internos' }, { id:'externo', label:'Ferramentas externas' }];
 
-  const handleRemove = (id) => {
-    if (!confirm('Excluir link?')) return;
+  const handleRemove = async (id) => {
+    if (!(await confirm({ title: 'Excluir', message: 'Excluir este link?', danger: true }))) return;
     remove(id);
   };
 

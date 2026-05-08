@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNotes } from '../hooks/useNotes';
 import { useAuth } from '../auth/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 
 export default function Notes() {
   const { notes, loading, add, update, remove } = useNotes();
   const { profile } = useAuth();
+  const confirm = useConfirm();
   const [current, setCurrent] = useState(null);
   const [search,  setSearch]  = useState('');
   const [scope,   setScope]   = useState('equipe'); // 'equipe' | 'pessoal'
@@ -23,8 +25,8 @@ export default function Notes() {
     if (result) { setCurrent(result.id); setTimeout(() => document.getElementById('nt-title')?.select(), 50); }
   };
 
-  const handleRemove = () => {
-    if (!note || !confirm('Excluir esta nota?')) return;
+  const handleRemove = async () => {
+    if (!note || !(await confirm({ title: 'Excluir nota', message: 'Tem certeza que deseja excluir esta nota?', danger: true }))) return;
     remove(note.id);
     setCurrent(visibleNotes.filter(n => n.id !== current)[0]?.id || null);
   };

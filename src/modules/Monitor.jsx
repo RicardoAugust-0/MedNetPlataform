@@ -4,6 +4,7 @@ import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
+import { useConfirm } from '../hooks/useConfirm';
 import { iniciais } from '../utils';
 import { parseSheetFile } from '../parseSheet';
 
@@ -81,6 +82,7 @@ export default function Monitor() {
   const { profile, session } = useAuth();
   const { history, loading: histLoading, error: histError, registrar, loadByRange } = useAtendimentos();
   const { templates } = useTemplates();
+  const confirm = useConfirm();
   const [templateModal, setTemplateModal] = useState(null);
 
   useEffect(() => {
@@ -195,7 +197,7 @@ export default function Monitor() {
 
   /* ── Ações ── */
   const attend = async (d) => {
-    if (!confirm(`Iniciar contato com ${d.nome}?`)) return;
+    if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
     const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
@@ -221,19 +223,19 @@ export default function Monitor() {
   };
 
   const reportar = async (d) => {
-    if (!confirm(`Registrar notificação para a empresa: ${d.nome}?`)) return;
+    if (!(await confirm({ title: 'Registrar notificação', message: `Registrar notificação para a empresa: ${d.nome}?` }))) return;
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
   const deleteAlert = async (d) => {
-    if (!confirm(`Descartar alerta de intervenção de ${d.nome}?`)) return;
+    if (!(await confirm({ title: 'Descartar alerta', message: `Descartar alerta de intervenção de ${d.nome}?`, danger: true }))) return;
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'descarte', obs: `Alerta descartado · ${d.alertas} evento(s) removidos` });
     setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
   };
 
-  const clearQueue = () => {
-    if (!confirm('Limpar toda a fila de motoristas?')) return;
+  const clearQueue = async () => {
+    if (!(await confirm({ title: 'Limpar fila', message: 'Tem certeza que deseja limpar toda a fila de motoristas?', danger: true }))) return;
     setDrivers([]);
     setLoadStats(null);
     setStatusKind('idle');
