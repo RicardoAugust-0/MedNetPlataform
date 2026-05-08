@@ -33,6 +33,9 @@ function ReminderNotifier() {
   const toast = useToast();
   const notified = useRef(new Set());
 
+  const remindersRef = useRef(reminders);
+  useEffect(() => { remindersRef.current = reminders; }, [reminders]);
+
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -42,9 +45,10 @@ function ReminderNotifier() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
-      const hhmm = now.toTimeString().slice(0, 5);
-      reminders.forEach(r => {
+      const pad = n => String(n).padStart(2, '0');
+      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      remindersRef.current.forEach(r => {
         if (r.done || r.date !== todayStr || r.time !== hhmm || notified.current.has(r.id)) return;
         notified.current.add(r.id);
         toast(
@@ -64,7 +68,7 @@ function ReminderNotifier() {
     check();
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
-  }, [reminders, toggle, toast]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
