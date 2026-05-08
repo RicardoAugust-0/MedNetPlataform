@@ -239,19 +239,18 @@ export default function Monitor() {
       />
 
       {/* Tabs */}
-      <div className="nav-tabs" style={{ marginTop: 16, marginBottom: 16 }}>
-        <button className={`nav-tab ${activeTab === 'intervencao' ? 'active' : ''}`} onClick={() => setActiveTab('intervencao')}>
-          <i className="ti ti-headset"></i> Intervenção {intervencaoList.length > 0 && <span className="tab-badge bg-danger">{intervencaoList.length}</span>}
-        </button>
-        <button className={`nav-tab ${activeTab === 'reportar' ? 'active' : ''}`} onClick={() => setActiveTab('reportar')}>
-          <i className="ti ti-building"></i> Reportar {reportarList.length > 0 && <span className="tab-badge bg-warning">{reportarList.length}</span>}
-        </button>
-        <button className={`nav-tab ${activeTab === 'tecnicos' ? 'active' : ''}`} onClick={() => setActiveTab('tecnicos')}>
-          <i className="ti ti-camera"></i> Só técnico {tecList.length > 0 && <span className="tab-badge">{tecList.length}</span>}
-        </button>
-        <button className={`nav-tab ${activeTab === 'historico' ? 'active' : ''}`} onClick={() => setActiveTab('historico')}>
-          <i className="ti ti-history"></i> Histórico
-        </button>
+      <div className="tabs">
+        {[
+          ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
+          ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
+          ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
+          ['historico',   'ti-history',     'Histórico',         history.length,     null],
+        ].map(([id, icon, lbl, cnt, color]) => (
+          <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
+            <i className={`ti ${icon}`} style={color ? { color } : {}}></i> {lbl}
+            <span className="tab-count">{cnt}</span>
+          </div>
+        ))}
       </div>
 
       {/* Tab: Intervenção */}
