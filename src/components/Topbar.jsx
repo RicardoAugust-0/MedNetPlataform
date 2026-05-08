@@ -22,7 +22,7 @@ export default function Topbar() {
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-actions">
-        <span className="status-pill"><span className="dot"></span> Sistemas operacionais</span>
+        <span className="status-pill"><span className="dot"></span> Fadiga Zero · Online</span>
         <span className="topbar-clock">{clock}</span>
         <button
           className="topbar-icon-btn"

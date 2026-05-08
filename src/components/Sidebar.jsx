@@ -81,7 +81,7 @@ export default function Sidebar() {
           <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
         </svg>
         <div className="logo-text">
-          <div className="logo-grupo">Grupo</div>
+          <div className="logo-grupo">GRUPO</div>
           <div className="logo-name">Med<span className="net">Net</span></div>
           <div className="logo-sub">Medicina e Seg. do Trabalho</div>
         </div>
