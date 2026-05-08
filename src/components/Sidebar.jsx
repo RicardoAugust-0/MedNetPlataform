@@ -46,9 +46,11 @@ export default function Sidebar() {
 
   const hasResults = navResults.length > 0 || driverResults.length > 0;
 
+  const isAdmin = profile?.role === 'admin';
+
   let curGroup = '';
   const navRows = [];
-  NAV_ITEMS.forEach(item => {
+  NAV_ITEMS.filter(item => item.id !== 'admin' || isAdmin).forEach(item => {
     if (item.group !== curGroup) {
       curGroup = item.group;
       navRows.push(<div className="nav-group-label" key={'g-' + item.group}>{item.group}</div>);

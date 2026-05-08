@@ -28,6 +28,7 @@ function Panel({ id, children }) {
 
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
+  const { profile } = useAuth();
 
   useEffect(() => {
     const r = document.documentElement;
@@ -54,7 +55,7 @@ function AppShell() {
           <Panel id="notas"><Notes /></Panel>
           <Panel id="links"><Links /></Panel>
           <Panel id="perfil"><Profile /></Panel>
-          <Panel id="admin"><Admin /></Panel>
+          {profile?.role === 'admin' && <Panel id="admin"><Admin /></Panel>}
         </div>
       </div>
       <TweaksPanel />

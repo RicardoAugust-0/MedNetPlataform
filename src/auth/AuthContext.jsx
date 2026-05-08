@@ -37,11 +37,21 @@ export function AuthProvider({ children }) {
     const meta = session.user.user_metadata;
     const nome  = meta?.nome  || session.user.email.split('@')[0];
     const cargo = meta?.cargo || 'Operador';
-    setProfile({ id: session.user.id, email: session.user.email, nome, cargo });
-    // Upsert no profiles para o painel de admin e last_seen
-    if (isSupabaseConfigured) {
-      supabase.from('profiles').upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' });
+
+    if (!isSupabaseConfigured) {
+      setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: 'operador' });
+      return;
     }
+
+    // Upsert atualiza last_seen e retorna a linha — incluindo role gerenciado pelo admin
+    supabase
+      .from('profiles')
+      .upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+      .select('role')
+      .single()
+      .then(({ data }) => {
+        setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: data?.role || 'operador' });
+      });
   }, [session]);
 
   const signIn = (email, password) =>

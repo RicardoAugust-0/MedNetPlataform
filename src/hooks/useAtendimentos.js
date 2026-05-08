@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, isSupabaseConfigured } from '../supabase';
 import { useAuth } from '../auth/AuthContext';
-import { isSupabaseConfigured } from '../supabase';
+import { useToast } from './useToast';
 
 const PAGE_SIZE = 300;
 
 export function useAtendimentos() {
   const { profile } = useAuth();
+  const toast = useToast();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
@@ -19,7 +20,7 @@ export function useAtendimentos() {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
-    if (error) setError(error.message);
+    if (error) { setError(error.message); toast('Erro ao carregar histórico', 'error'); }
     else setHistory(data.map(toLocal));
     setLoading(false);
   }, []);
@@ -62,6 +63,7 @@ export function useAtendimentos() {
     if (error) {
       setHistory(prev => prev.filter(h => h.id !== optimistic.id));
       setError(error.message);
+      toast('Erro ao registrar atendimento', 'error');
       return { error };
     }
     setHistory(prev => prev.map(h => h.id === optimistic.id ? toLocal(data) : h));
