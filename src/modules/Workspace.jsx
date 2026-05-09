@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useWsPages } from '../hooks/useWsPages';
 import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
+import PageEditor from './WorkspaceEditor.jsx';
 
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
@@ -141,7 +142,7 @@ export default function Workspace() {
             ))}
           </div>
         ) : (
-          <PageEditor page={page} onUpdate={update} onDelete={handleDelete} onBack={() => setCurrent(null)} />
+          <PageEditor key={page.id} page={page} onUpdate={update} onDelete={handleDelete} onBack={() => setCurrent(null)} />
         )}
       </div>
 
@@ -181,59 +182,5 @@ export default function Workspace() {
         document.body
       )}
     </div>
-  );
-}
-
-function PageEditor({ page, onUpdate, onDelete, onBack }) {
-  const ic = WS_ICONS[page.icon] || WS_ICONS[0];
-  const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
-
-  const execCmd = (cmd, val = null) => { document.getElementById('ws-content')?.focus(); document.execCommand(cmd, false, val); };
-
-  return (
-    <>
-      <div className="ws-editor-topbar">
-        <div className="ws-card-icon" style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic }}><i className={`ti ${ic.i}`}></i></div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cat?.label || 'Workspace'} · {page.title}</div>
-        <div style={{ flex: 1 }}></div>
-        <button className="btn btn-sm" title={page.favorite ? 'Desfavoritar' : 'Favoritar'} onClick={() => onUpdate(page.id, { favorite: !page.favorite })}>
-          <i className={`ti ${page.favorite ? 'ti-star-filled' : 'ti-star'}`} style={page.favorite ? { color: 'var(--warning-500)' } : {}}></i>
-        </button>
-        <select className="form-control" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })}>
-          {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
-        <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
-        <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
-      </div>
-      <div className="ws-editor-area">
-        <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} />
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
-        <hr className="ws-divider" />
-        <div className="editor-toolbar">
-          {[['bold','ti-bold','Negrito'],['italic','ti-italic','Itálico'],['underline','ti-underline','Sublinhado']].map(([cmd,icon,title]) => (
-            <button key={cmd} className="tb-btn" title={title} onMouseDown={e => { e.preventDefault(); execCmd(cmd); }}><i className={`ti ${icon}`}></i></button>
-          ))}
-          <span className="tb-sep"></span>
-          {[['h1','ti-h-1'],['h2','ti-h-2'],['h3','ti-h-3']].map(([tag,icon]) => (
-            <button key={tag} className="tb-btn" onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', tag); }}><i className={`ti ${icon}`}></i></button>
-          ))}
-          <span className="tb-sep"></span>
-          <button className="tb-btn" title="Lista" onMouseDown={e => { e.preventDefault(); execCmd('insertUnorderedList'); }}><i className="ti ti-list"></i></button>
-          <button className="tb-btn" title="Lista numerada" onMouseDown={e => { e.preventDefault(); execCmd('insertOrderedList'); }}><i className="ti ti-list-numbers"></i></button>
-          <button className="tb-btn" title="Citação" onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', 'blockquote'); }}><i className="ti ti-quote"></i></button>
-          <span className="tb-sep"></span>
-          <button className="tb-btn" title="Divisor" onMouseDown={e => { e.preventDefault(); execCmd('insertHorizontalRule'); }}><i className="ti ti-minus"></i></button>
-        </div>
-        <div
-          id="ws-content"
-          className="ws-content"
-          contentEditable
-          suppressContentEditableWarning
-          data-placeholder="Comece a escrever..."
-          dangerouslySetInnerHTML={{ __html: page.content || '' }}
-          onInput={e => onUpdate(page.id, { content: e.currentTarget.innerHTML })}
-        />
-      </div>
-    </>
   );
 }
