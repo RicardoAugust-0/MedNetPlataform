@@ -2,9 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
-const PALETTE = [
+export const PALETTE = [
   { bg:'#E6F1FB', ic:'#0C447C' }, { bg:'#EAF3DE', ic:'#27500A' },
   { bg:'#FAECE7', ic:'#7D2E10' }, { bg:'#EEEDFE', ic:'#3C3489' },
+  { bg:'#FFF9DB', ic:'#856404' }, { bg:'#F8F9FA', ic:'#343a40' },
+];
+
+export const AVAILABLE_ICONS = [
+  'ti-link', 'ti-activity', 'ti-users', 'ti-chart-bar', 'ti-calendar',
+  'ti-brand-whatsapp', 'ti-mail', 'ti-map-pin', 'ti-file-text', 'ti-settings',
+  'ti-device-laptop', 'ti-database', 'ti-layout-dashboard', 'ti-message-circle'
 ];
 
 export function useLinks() {
@@ -13,11 +20,11 @@ export function useLinks() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('links').select('*').order('created_at');
+    const { data, error } = await supabase.from('links').select('*').order('position', { ascending: true });
     if (error) toast('Erro ao carregar links', 'error');
     else if (data) setLinks(data.map(toLocal));
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -25,39 +32,76 @@ export function useLinks() {
     if (!isSupabaseConfigured) return;
     const channel = supabase
       .channel('links-live-' + crypto.randomUUID())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'links' }, ({ new: row }) => {
-        setLinks(prev => prev.some(l => l.id === row.id) ? prev : [...prev, toLocal(row)]);
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'links' }, ({ old: row }) => {
-        setLinks(prev => prev.filter(l => l.id !== row.id));
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'links' }, () => {
+        load();
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, []);
+  }, [load]);
 
-  const add = useCallback(async ({ name, desc, url, section }) => {
+  const add = useCallback(async ({ name, desc, url, section, icon, bg, ic }) => {
     const p = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-    const opt = { id: crypto.randomUUID(), section, name, desc: desc || 'Link rápido', url, icon: 'ti-link', bg: p.bg, ic: p.ic, _pending: true };
-    setLinks(prev => [...prev, opt]);
-    const { data, error } = await supabase
-      .from('links')
-      .insert({ section, name, description: desc || 'Link rápido', url, icon: 'ti-link', bg: p.bg, ic: p.ic })
-      .select().single();
+    const pos = links.length > 0 ? Math.max(...links.map(l => l.position || 0)) + 1 : 0;
+    
+    const newLink = {
+      section, name, description: desc || 'Link rápido', url,
+      icon: icon || 'ti-link', bg: bg || p.bg, ic: ic || p.ic,
+      position: pos
+    };
+
+    const { data, error } = await supabase.from('links').insert(newLink).select().single();
     if (error) {
-      setLinks(prev => prev.filter(l => l.id !== opt.id));
       toast('Erro ao criar link', 'error');
       return;
     }
-    setLinks(prev => prev.map(l => l.id === opt.id ? toLocal(data) : l));
-  }, []);
+    setLinks(prev => [...prev, toLocal(data)]);
+  }, [links, toast]);
+
+  const update = useCallback(async (id, updates) => {
+    const { data, error } = await supabase
+      .from('links')
+      .update({
+        name: updates.name,
+        description: updates.desc,
+        url: updates.url,
+        section: updates.section,
+        icon: updates.icon,
+        bg: updates.bg,
+        ic: updates.ic,
+        position: updates.position
+      })
+      .eq('id', id)
+      .select().single();
+
+    if (error) {
+      toast('Erro ao atualizar link', 'error');
+      return;
+    }
+    setLinks(prev => prev.map(l => l.id === id ? toLocal(data) : l));
+  }, [toast]);
+
+  const reorder = useCallback(async (newLinks) => {
+    setLinks(newLinks);
+    const updates = newLinks.map((l, i) => ({ id: l.id, position: i }));
+    
+    // Perform individual updates for now as Supabase doesn't support bulk updates with different values easily in a single call without a RPC
+    // But we can do it in parallel
+    const promises = updates.map(u => supabase.from('links').update({ position: u.position }).eq('id', u.id));
+    const results = await Promise.all(promises);
+    
+    if (results.some(r => r.error)) {
+      toast('Erro ao reordenar links', 'error');
+      load();
+    }
+  }, [load, toast]);
 
   const remove = useCallback(async (id) => {
     setLinks(prev => prev.filter(l => l.id !== id));
     const { error } = await supabase.from('links').delete().eq('id', id);
     if (error) { load(); toast('Erro ao excluir link', 'error'); }
-  }, [load]);
+  }, [load, toast]);
 
-  return { links, loading, add, remove };
+  return { links, loading, add, update, remove, reorder };
 }
 
 function toLocal(row) {
@@ -65,5 +109,6 @@ function toLocal(row) {
     id: row.id, section: row.section, name: row.name,
     desc: row.description, url: row.url,
     icon: row.icon || 'ti-link', bg: row.bg, ic: row.ic,
+    position: row.position || 0
   };
 }
