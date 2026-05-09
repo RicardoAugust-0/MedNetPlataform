@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -9,7 +9,9 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
 
   const onUpdateRef = useRef(null);
-  onUpdateRef.current = (html) => onUpdate(page.id, { content: html });
+  useLayoutEffect(() => {
+    onUpdateRef.current = (html) => onUpdate(page.id, { content: html });
+  });
 
   const editor = useEditor({
     extensions: [
@@ -20,7 +22,6 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     onUpdate: ({ editor }) => onUpdateRef.current?.(editor.getHTML()),
   });
 
-  useEffect(() => () => editor?.destroy(), []);
 
   return (
     <>

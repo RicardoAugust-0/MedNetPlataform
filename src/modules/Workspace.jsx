@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useWsPages } from '../hooks/useWsPages';
 import { useConfirm } from '../hooks/useConfirm';
