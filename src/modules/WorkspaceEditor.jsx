@@ -5,10 +5,8 @@ import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
 
-function Toolbar({ editor }) {
-  if (!editor) return null;
-
-  const btn = (active, action, icon, title) => (
+function ToolbarBtn({ active, action, icon, title }) {
+  return (
     <button
       className={`tb-btn${active ? ' active' : ''}`}
       title={title}
@@ -17,21 +15,25 @@ function Toolbar({ editor }) {
       <i className={`ti ${icon}`}></i>
     </button>
   );
+}
+
+function Toolbar({ editor }) {
+  if (!editor) return null;
 
   return (
     <div className="editor-toolbar">
-      {btn(editor.isActive('bold'),      () => editor.chain().focus().toggleBold().run(),      'ti-bold',         'Negrito (Ctrl+B)')}
-      {btn(editor.isActive('italic'),    () => editor.chain().focus().toggleItalic().run(),    'ti-italic',       'Itálico (Ctrl+I)')}
-      {btn(editor.isActive('underline'), () => editor.chain().focus().toggleUnderline().run(), 'ti-underline',    'Sublinhado (Ctrl+U)')}
+      <ToolbarBtn active={editor.isActive('bold')}      action={() => editor.chain().focus().toggleBold().run()}                              icon="ti-bold"         title="Negrito (Ctrl+B)" />
+      <ToolbarBtn active={editor.isActive('italic')}    action={() => editor.chain().focus().toggleItalic().run()}                            icon="ti-italic"       title="Itálico (Ctrl+I)" />
+      <ToolbarBtn active={editor.isActive('underline')} action={() => editor.chain().focus().toggleUnderline().run()}                         icon="ti-underline"    title="Sublinhado (Ctrl+U)" />
       <span className="tb-sep"></span>
-      {btn(editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run(), 'ti-h-1', 'Título 1')}
-      {btn(editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), 'ti-h-2', 'Título 2')}
-      {btn(editor.isActive('heading', { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), 'ti-h-3', 'Título 3')}
+      <ToolbarBtn active={editor.isActive('heading', { level: 1 })} action={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} icon="ti-h-1" title="Título 1" />
+      <ToolbarBtn active={editor.isActive('heading', { level: 2 })} action={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} icon="ti-h-2" title="Título 2" />
+      <ToolbarBtn active={editor.isActive('heading', { level: 3 })} action={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} icon="ti-h-3" title="Título 3" />
       <span className="tb-sep"></span>
-      {btn(editor.isActive('bulletList'),  () => editor.chain().focus().toggleBulletList().run(),  'ti-list',         'Lista com marcadores')}
-      {btn(editor.isActive('orderedList'), () => editor.chain().focus().toggleOrderedList().run(), 'ti-list-numbers', 'Lista numerada')}
-      {btn(editor.isActive('blockquote'),  () => editor.chain().focus().toggleBlockquote().run(),  'ti-quote',        'Citação')}
-      {btn(false, () => editor.chain().focus().setHorizontalRule().run(), 'ti-minus', 'Divisor')}
+      <ToolbarBtn active={editor.isActive('bulletList')}  action={() => editor.chain().focus().toggleBulletList().run()}  icon="ti-list"         title="Lista com marcadores" />
+      <ToolbarBtn active={editor.isActive('orderedList')} action={() => editor.chain().focus().toggleOrderedList().run()} icon="ti-list-numbers" title="Lista numerada" />
+      <ToolbarBtn active={editor.isActive('blockquote')}  action={() => editor.chain().focus().toggleBlockquote().run()}  icon="ti-quote"        title="Citação" />
+      <ToolbarBtn active={false}                          action={() => editor.chain().focus().setHorizontalRule().run()} icon="ti-minus"        title="Divisor" />
     </div>
   );
 }
