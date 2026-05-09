@@ -752,6 +752,7 @@
   transition: all 0.1s;
 }
 .tb-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+.tb-btn.active { background: var(--surface-2); color: var(--text-primary); }
 .tb-sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
 
 .ws-content .ProseMirror {
