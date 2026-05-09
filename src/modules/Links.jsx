@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLinks, PALETTE, AVAILABLE_ICONS } from '../hooks/useLinks';
 import { useConfirm } from "../hooks/useConfirm.jsx";
 
@@ -126,9 +127,9 @@ function LinkModal({ initialData, onSave, onClose }) {
   const [bg, setBg] = useState(initialData?.bg || PALETTE[0].bg);
   const [ic, setIc] = useState(initialData?.ic || PALETTE[0].ic);
 
-  return (
-    <div className="modal-overlay open">
-      <div className="modal" style={{ maxWidth: 500 }}>
+  return createPortal(
+    <div className="modal-overlay open" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title"><i className="ti ti-link"></i> {initialData ? 'Editar link' : 'Novo link'}</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
@@ -212,6 +213,7 @@ function LinkModal({ initialData, onSave, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
