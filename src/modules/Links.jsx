@@ -134,12 +134,12 @@ function LinkModal({ initialData, onSave, onClose }) {
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
         </div>
         <div className="modal-body">
-          <div className="form-row">
-            <div className="form-group" style={{ flex: 2 }}>
+          <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr' }}>
+            <div className="form-group">
               <label className="form-label">Nome</label>
               <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Sistema Fadiga" />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label className="form-label">Categoria</label>
               <select className="form-control" value={section} onChange={e => setSection(e.target.value)}>
                 <option value="interno">Interno</option>
@@ -205,7 +205,7 @@ function LinkModal({ initialData, onSave, onClose }) {
              </div>
           </div>
         </div>
-        <div className="modal-footer" style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:20 }}>
+        <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={() => { if (name && url) onSave({name,desc,url,section,icon,bg,ic}); }}>
             <i className="ti ti-check"></i> {initialData ? 'Salvar' : 'Adicionar'}
