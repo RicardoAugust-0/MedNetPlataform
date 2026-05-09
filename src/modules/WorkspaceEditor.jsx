@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
 
 const COLORS = [
@@ -46,63 +47,86 @@ function Toolbar({ editor }) {
   if (!editor) return null;
 
   return (
-    <div className="editor-toolbar">
-      <ToolbarBtn active={editor.isActive('bold')}      action={() => editor.chain().focus().toggleBold().run()}                              icon="ti-bold"         title="Negrito (Ctrl+B)" />
-      <ToolbarBtn active={editor.isActive('italic')}    action={() => editor.chain().focus().toggleItalic().run()}                            icon="ti-italic"       title="Itálico (Ctrl+I)" />
-      <ToolbarBtn active={editor.isActive('underline')} action={() => editor.chain().focus().toggleUnderline().run()}                         icon="ti-underline"    title="Sublinhado (Ctrl+U)" />
-      <span className="tb-sep"></span>
-      <ToolbarBtn active={editor.isActive('heading', { level: 1 })} action={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} icon="ti-h-1" title="Título 1" />
-      <ToolbarBtn active={editor.isActive('heading', { level: 2 })} action={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} icon="ti-h-2" title="Título 2" />
-      <ToolbarBtn active={editor.isActive('heading', { level: 3 })} action={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} icon="ti-h-3" title="Título 3" />
-      <span className="tb-sep"></span>
-      <ToolbarBtn active={editor.isActive('bulletList')}  action={() => editor.chain().focus().toggleBulletList().run()}  icon="ti-list"         title="Lista com marcadores" />
-      <ToolbarBtn active={editor.isActive('orderedList')} action={() => editor.chain().focus().toggleOrderedList().run()} icon="ti-list-numbers" title="Lista numerada" />
-      <ToolbarBtn active={editor.isActive('blockquote')}  action={() => editor.chain().focus().toggleBlockquote().run()}  icon="ti-quote"        title="Citação" />
-      <ToolbarBtn active={false}                          action={() => editor.chain().focus().setHorizontalRule().run()} icon="ti-minus"        title="Divisor" />
-      <span className="tb-sep"></span>
-      <div style={{ position: 'relative' }}>
-        <button
-          className="tb-btn"
-          title="Cor do texto"
-          onMouseDown={e => { e.preventDefault(); setColorOpen(v => !v); }}
-        >
-          <i className="ti ti-palette"></i>
-        </button>
-        {colorOpen && (
-          <div className="ws-color-popover" onMouseDown={e => e.preventDefault()}>
-            {COLORS.map(c => (
+    <>
+      <div className="editor-toolbar">
+        <ToolbarBtn active={editor.isActive('bold')}      action={() => editor.chain().focus().toggleBold().run()}                              icon="ti-bold"         title="Negrito (Ctrl+B)" />
+        <ToolbarBtn active={editor.isActive('italic')}    action={() => editor.chain().focus().toggleItalic().run()}                            icon="ti-italic"       title="Itálico (Ctrl+I)" />
+        <ToolbarBtn active={editor.isActive('underline')} action={() => editor.chain().focus().toggleUnderline().run()}                         icon="ti-underline"    title="Sublinhado (Ctrl+U)" />
+        <span className="tb-sep"></span>
+        <ToolbarBtn active={editor.isActive('heading', { level: 1 })} action={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} icon="ti-h-1" title="Título 1" />
+        <ToolbarBtn active={editor.isActive('heading', { level: 2 })} action={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} icon="ti-h-2" title="Título 2" />
+        <ToolbarBtn active={editor.isActive('heading', { level: 3 })} action={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} icon="ti-h-3" title="Título 3" />
+        <span className="tb-sep"></span>
+        <ToolbarBtn active={editor.isActive('bulletList')}  action={() => editor.chain().focus().toggleBulletList().run()}  icon="ti-list"         title="Lista com marcadores" />
+        <ToolbarBtn active={editor.isActive('orderedList')} action={() => editor.chain().focus().toggleOrderedList().run()} icon="ti-list-numbers" title="Lista numerada" />
+        <ToolbarBtn active={editor.isActive('blockquote')}  action={() => editor.chain().focus().toggleBlockquote().run()}  icon="ti-quote"        title="Citação" />
+        <ToolbarBtn active={false}                          action={() => editor.chain().focus().setHorizontalRule().run()} icon="ti-minus"        title="Divisor" />
+        <span className="tb-sep"></span>
+        <div style={{ position: 'relative' }}>
+          <button
+            className="tb-btn"
+            title="Cor do texto"
+            onMouseDown={e => { e.preventDefault(); setColorOpen(v => !v); }}
+          >
+            <i className="ti ti-palette"></i>
+          </button>
+          {colorOpen && (
+            <div className="ws-color-popover" onMouseDown={e => e.preventDefault()}>
+              {COLORS.map(c => (
+                <div
+                  key={c.value}
+                  className="ws-color-dot"
+                  title={c.label}
+                  style={{ background: c.value }}
+                  onClick={() => {
+                    editor.chain().focus().setColor(c.value).run();
+                    setColorOpen(false);
+                  }}
+                />
+              ))}
               <div
-                key={c.value}
-                className="ws-color-dot"
-                title={c.label}
-                style={{ background: c.value }}
-                onClick={() => {
-                  editor.chain().focus().setColor(c.value).run();
-                  setColorOpen(false);
-                }}
-              />
-            ))}
-            <div
-              className="ws-color-dot ws-color-dot--reset"
-              title="Remover cor"
-              onClick={() => { editor.chain().focus().unsetColor().run(); setColorOpen(false); }}
-            >
-              <i className="ti ti-x" style={{ fontSize: 10 }}></i>
+                className="ws-color-dot ws-color-dot--reset"
+                title="Remover cor"
+                onClick={() => { editor.chain().focus().unsetColor().run(); setColorOpen(false); }}
+              >
+                <i className="ti ti-x" style={{ fontSize: 10 }}></i>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        <span className="tb-sep"></span>
+        <select
+          className="tb-font-size"
+          title="Tamanho da fonte"
+          value={editor.getAttributes('textStyle').fontSize || '14px'}
+          onChange={e => editor.chain().focus().setFontSize(e.target.value).run()}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="tb-sep"></span>
+        <ToolbarBtn
+          active={editor.isActive('table')}
+          action={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          icon="ti-table"
+          title="Inserir tabela"
+        />
       </div>
-      <span className="tb-sep"></span>
-      <select
-        className="tb-font-size"
-        title="Tamanho da fonte"
-        value={editor.getAttributes('textStyle').fontSize || '14px'}
-        onChange={e => editor.chain().focus().setFontSize(e.target.value).run()}
-        onMouseDown={e => e.stopPropagation()}
-      >
-        {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-    </div>
+      {editor.isActive('table') && (
+        <div className="ws-table-toolbar">
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>Tabela:</span>
+          <button className="tb-btn" title="Inserir coluna antes"  onMouseDown={e => { e.preventDefault(); editor.chain().focus().addColumnBefore().run(); }}><i className="ti ti-column-insert-left"></i></button>
+          <button className="tb-btn" title="Inserir coluna depois" onMouseDown={e => { e.preventDefault(); editor.chain().focus().addColumnAfter().run(); }}><i className="ti ti-column-insert-right"></i></button>
+          <button className="tb-btn" title="Remover coluna"        onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteColumn().run(); }}><i className="ti ti-column-remove"></i></button>
+          <span className="tb-sep"></span>
+          <button className="tb-btn" title="Inserir linha antes"   onMouseDown={e => { e.preventDefault(); editor.chain().focus().addRowBefore().run(); }}><i className="ti ti-row-insert-top"></i></button>
+          <button className="tb-btn" title="Inserir linha depois"  onMouseDown={e => { e.preventDefault(); editor.chain().focus().addRowAfter().run(); }}><i className="ti ti-row-insert-bottom"></i></button>
+          <button className="tb-btn" title="Remover linha"         onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteRow().run(); }}><i className="ti ti-row-remove"></i></button>
+          <span className="tb-sep"></span>
+          <button className="tb-btn" title="Excluir tabela" style={{ color: 'var(--danger-500)' }} onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteTable().run(); }}><i className="ti ti-trash"></i></button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -132,6 +156,10 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
       TextStyle,
       Color,
       FontSize,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
       Placeholder.configure({ placeholder: 'Comece a escrever...' }),
     ],
     content: page.content || '',

@@ -796,6 +796,34 @@
   height: 28px;
 }
 
+.ws-table-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  gap: 1px;
+}
+.ws-content .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.ws-content .ProseMirror th,
+.ws-content .ProseMirror td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  font-size: 13.5px;
+  text-align: left;
+}
+.ws-content .ProseMirror th {
+  background: var(--surface-1);
+  font-weight: 600;
+}
+.ws-content .ProseMirror .selectedCell {
+  background: var(--accent-50);
+}
+
 .ws-content .ProseMirror {
   outline: none;
   min-height: 320px;
