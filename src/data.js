@@ -13,8 +13,8 @@ export const NAV_ITEMS = [
   { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
   { id: 'links',     label: 'Links Rápidos',  icon: 'ti-link',             group: 'Conhecimento' },
   { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
-  { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta' },
-  { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta' },
+  { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
+  { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
 ];
 
 export const PANEL_TITLES = {

@@ -36,7 +36,7 @@ export default function Sidebar() {
   }, []);
 
   const navResults = query.length > 0
-    ? NAV_ITEMS.filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
+    ? NAV_ITEMS.filter(i => (!i.adminOnly || isAdmin) && i.label.toLowerCase().includes(query.toLowerCase()))
     : [];
 
   const driverResults = query.length >= 2
@@ -52,7 +52,7 @@ export default function Sidebar() {
 
   let curGroup = '';
   const navRows = [];
-  NAV_ITEMS.filter(item => item.id !== 'admin' || isAdmin).forEach(item => {
+  NAV_ITEMS.filter(item => !item.adminOnly || isAdmin).forEach(item => {
     if (item.group !== curGroup) {
       curGroup = item.group;
       navRows.push(<div className="nav-group-label" key={'g-' + item.group}>{item.group}</div>);
