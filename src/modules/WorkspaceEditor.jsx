@@ -157,6 +157,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const toast = useToast();
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState('idle');
   const saveTimer = useRef(null);
@@ -218,6 +219,13 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
+  useEffect(() => {
+    if (!iconPickerOpen) return;
+    const close = () => setIconPickerOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [iconPickerOpen]);
+
 
   return (
     <>
@@ -233,8 +241,31 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         }}
       />
       <div className="ws-editor-topbar">
-        <div className="ws-card-icon" style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic }}>
-          <i className={`ti ${ic.i}`}></i>
+        <div style={{ position: 'relative' }} onMouseDown={e => e.stopPropagation()}>
+          <div
+            className="ws-card-icon ws-icon-clickable"
+            style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic, cursor: 'pointer' }}
+            onClick={() => setIconPickerOpen(v => !v)}
+            title="Trocar ícone"
+          >
+            <i className={`ti ${ic.i}`}></i>
+          </div>
+          {iconPickerOpen && (
+            <div className="ws-icon-popover">
+              <div className="icon-picker">
+                {WS_ICONS.map((icon, i) => (
+                  <div
+                    key={i}
+                    className={`icon-opt ${page.icon === i ? 'selected' : ''}`}
+                    style={{ background: icon.bg, color: icon.ic }}
+                    onClick={() => { onUpdate(page.id, { icon: i }); setIconPickerOpen(false); }}
+                  >
+                    <i className={`ti ${icon.i}`}></i>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cat?.label || 'Workspace'} · {page.title}</div>
         {saveStatus === 'saving' && (

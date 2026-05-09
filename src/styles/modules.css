@@ -873,6 +873,20 @@
 .icon-opt.selected { border-color: var(--accent-500); background: var(--accent-50); }
 [data-theme="dark"] .icon-opt.selected { background: rgba(158, 26, 69, 0.12); }
 
+.ws-icon-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.ws-icon-popover .icon-picker { margin-bottom: 0; }
+.ws-icon-clickable:hover { opacity: 0.8; }
+
 /* ════════ NOTAS ════════ */
 .notes-layout {
   display: grid;
