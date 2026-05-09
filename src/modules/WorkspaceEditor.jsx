@@ -241,7 +241,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         }}
       />
       <div className="ws-editor-topbar">
-        <div style={{ position: 'relative' }} onMouseDown={e => e.stopPropagation()}>
+        <div style={{ position: 'relative' }}>
           <div
             className="ws-card-icon ws-icon-clickable"
             style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic, cursor: 'pointer' }}
@@ -250,22 +250,25 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
           >
             <i className={`ti ${ic.i}`}></i>
           </div>
-          {iconPickerOpen && (
-            <div className="ws-icon-popover">
-              <div className="icon-picker">
-                {WS_ICONS.map((icon, i) => (
-                  <div
-                    key={i}
-                    className={`icon-opt ${page.icon === i ? 'selected' : ''}`}
-                    style={{ background: icon.bg, color: icon.ic }}
-                    onClick={() => { onUpdate(page.id, { icon: i }); setIconPickerOpen(false); }}
-                  >
-                    <i className={`ti ${icon.i}`}></i>
-                  </div>
-                ))}
+          {iconPickerOpen && (() => {
+            const currentIcon = page.icon ?? 0;
+            return (
+              <div className="ws-icon-popover" onMouseDown={e => e.stopPropagation()}>
+                <div className="icon-picker">
+                  {WS_ICONS.map((icon, i) => (
+                    <div
+                      key={i}
+                      className={`icon-opt ${currentIcon === i ? 'selected' : ''}`}
+                      style={{ background: icon.bg, color: icon.ic }}
+                      onClick={() => { onUpdate(page.id, { icon: i }); setIconPickerOpen(false); }}
+                    >
+                      <i className={`ti ${icon.i}`}></i>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cat?.label || 'Workspace'} · {page.title}</div>
         {saveStatus === 'saving' && (
