@@ -9,7 +9,7 @@ export function useWsPages() {
   const timers = useRef({});
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('ws_pages').select('*').order('created_at');
+    const { data, error } = await supabase.from('ws_pages').select('*').order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar workspace', 'error');
     else if (data) setWsPages(data.map(toLocal));
     setLoading(false);
@@ -35,11 +35,12 @@ export function useWsPages() {
   }, []);
 
   const add = useCallback(async ({ title, icon, category, content }) => {
-    const opt = { id: crypto.randomUUID(), title, icon: icon ?? 0, category: category || 'protocolos', favorite: false, content: content || '', _pending: true };
+    const pos = wsPages.length > 0 ? Math.max(...wsPages.map(p => p.position ?? 0)) + 1 : 0;
+    const opt = { id: crypto.randomUUID(), title, icon: icon ?? 0, category: category || 'protocolos', favorite: false, content: content || '', position: pos, _pending: true };
     setWsPages(prev => [...prev, opt]);
     const { data, error } = await supabase
       .from('ws_pages')
-      .insert({ title, icon_index: icon ?? 0, category: category || 'protocolos', favorite: false, content: content || '' })
+      .insert({ title, icon_index: icon ?? 0, category: category || 'protocolos', favorite: false, content: content || '', position: pos })
       .select().single();
     if (error) {
       setWsPages(prev => prev.filter(p => p.id !== opt.id));
@@ -66,18 +67,31 @@ export function useWsPages() {
     }, 800);
   }, []);
 
+  const reorder = useCallback(async (newPages) => {
+    setWsPages(newPages);
+    const promises = newPages.map((p, i) =>
+      supabase.from('ws_pages').update({ position: i }).eq('id', p.id)
+    );
+    const results = await Promise.all(promises);
+    if (results.some(r => r.error)) {
+      toast('Erro ao reordenar páginas', 'error');
+      load();
+    }
+  }, [load, toast]);
+
   const remove = useCallback(async (id) => {
     setWsPages(prev => prev.filter(p => p.id !== id));
     const { error } = await supabase.from('ws_pages').delete().eq('id', id);
     if (error) { load(); toast('Erro ao excluir página', 'error'); }
   }, [load]);
 
-  return { wsPages, loading, add, update, remove };
+  return { wsPages, loading, add, update, remove, reorder };
 }
 
 function toLocal(row) {
   return {
     id: row.id, title: row.title, icon: row.icon_index,
     category: row.category, favorite: row.favorite, content: row.content || '',
+    position: row.position ?? 0,
   };
 }

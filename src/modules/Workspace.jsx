@@ -8,7 +8,7 @@ import PageEditor from './WorkspaceEditor.jsx';
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
 export default function Workspace() {
-  const { wsPages, loading, add, update, remove } = useWsPages();
+  const { wsPages, loading, add, update, remove, reorder } = useWsPages();
   const confirm = useConfirm();
   const [current, setCurrent] = useState(null);
   const [search, setSearch] = useState('');
@@ -16,6 +16,34 @@ export default function Workspace() {
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState(0);
   const [newCat, setNewCat] = useState('protocolos');
+
+  const handleDragStart = (e, page) => {
+    e.dataTransfer.setData('pageId', page.id);
+    e.currentTarget.classList.add('dragging');
+  };
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.classList.remove('dragging');
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetPage) => {
+    e.preventDefault();
+    const draggedId = e.dataTransfer.getData('pageId');
+    if (draggedId === targetPage.id) return;
+
+    const newList = [...wsPages];
+    const draggedIdx = newList.findIndex(p => p.id === draggedId);
+    const targetIdx = newList.findIndex(p => p.id === targetPage.id);
+
+    const [draggedItem] = newList.splice(draggedIdx, 1);
+    newList.splice(targetIdx, 0, draggedItem);
+
+    reorder(newList);
+  };
 
   const handleDelete = async (id) => {
     if (!(await confirm({ title: 'Excluir página', message: 'Tem certeza que deseja excluir esta página?', danger: true }))) return;
@@ -57,7 +85,15 @@ export default function Workspace() {
   const PageCard = ({ p }) => {
     const ic = WS_ICONS[p.icon] || WS_ICONS[0];
     return (
-      <div className="ws-page-card" onClick={() => setCurrent(p.id)}>
+      <div
+        className="ws-page-card"
+        draggable
+        onDragStart={(e) => handleDragStart(e, p)}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, p)}
+        onClick={() => setCurrent(p.id)}
+      >
         <div className="ws-card-icon" style={{ background: ic.bg, color: ic.ic }}><i className={`ti ${ic.i}`}></i></div>
         <div className="ws-card-title">{p.title}</div>
         <div className="ws-card-open">Abrir <i className="ti ti-arrow-right"></i></div>

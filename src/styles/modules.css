@@ -710,6 +710,9 @@
   display: flex; flex-direction: column; gap: 10px;
 }
 .ws-page-card:hover { border-color: var(--accent-400); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.ws-page-card { cursor: grab; }
+.ws-page-card:active { cursor: grabbing; }
+.ws-page-card.dragging { opacity: 0.4; transform: scale(0.95); }
 .ws-card-icon {
   width: 36px; height: 36px;
   border-radius: var(--radius-md);
