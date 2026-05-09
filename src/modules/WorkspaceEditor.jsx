@@ -21,6 +21,8 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     };
   });
 
+  useEffect(() => () => clearTimeout(saveTimer.current), []);
+
   const editor = useEditor({
     extensions: [
       StarterKit,
