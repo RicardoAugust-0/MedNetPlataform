@@ -9,7 +9,7 @@ export function useTemplates() {
   const timers = useRef({});
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('templates').select('*').order('created_at');
+    const { data, error } = await supabase.from('templates').select('*').order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar templates', 'error');
     else if (data) setTemplates(data.map(toLocal));
     setLoading(false);
@@ -35,11 +35,12 @@ export function useTemplates() {
   }, []);
 
   const add = useCallback(async ({ tag, tagLabel, title, text }) => {
-    const opt = { id: crypto.randomUUID(), tag, tagLabel, title, text, _pending: true };
+    const pos = templates.length > 0 ? Math.max(...templates.map(t => t.position ?? 0)) + 1 : 0;
+    const opt = { id: crypto.randomUUID(), tag, tagLabel, title, text, position: pos, _pending: true };
     setTemplates(prev => [...prev, opt]);
     const { data, error } = await supabase
       .from('templates')
-      .insert({ tag, tag_label: tagLabel, title, body: text })
+      .insert({ tag, tag_label: tagLabel, title, body: text, position: pos })
       .select().single();
     if (error) {
       setTemplates(prev => prev.filter(t => t.id !== opt.id));
@@ -63,15 +64,27 @@ export function useTemplates() {
     }, 600);
   }, []);
 
+  const reorder = useCallback(async (newTemplates) => {
+    setTemplates(newTemplates);
+    const promises = newTemplates.map((t, i) =>
+      supabase.from('templates').update({ position: i }).eq('id', t.id)
+    );
+    const results = await Promise.all(promises);
+    if (results.some(r => r.error)) {
+      toast('Erro ao reordenar templates', 'error');
+      load();
+    }
+  }, [load, toast]);
+
   const remove = useCallback(async (id) => {
     setTemplates(prev => prev.filter(t => t.id !== id));
     const { error } = await supabase.from('templates').delete().eq('id', id);
     if (error) { load(); toast('Erro ao excluir template', 'error'); }
   }, [load]);
 
-  return { templates, loading, add, update, remove };
+  return { templates, loading, add, update, remove, reorder };
 }
 
 function toLocal(row) {
-  return { id: row.id, tag: row.tag, tagLabel: row.tag_label, title: row.title, text: row.body };
+  return { id: row.id, tag: row.tag, tagLabel: row.tag_label, title: row.title, text: row.body, position: row.position ?? 0 };
 }

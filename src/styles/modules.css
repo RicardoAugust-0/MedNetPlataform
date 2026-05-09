@@ -387,6 +387,9 @@
   display: flex; flex-direction: column; gap: 8px;
 }
 .template-card:hover { border-color: var(--accent-400); box-shadow: var(--shadow-sm); }
+.template-card { cursor: grab; }
+.template-card:active { cursor: grabbing; }
+.template-card.dragging { opacity: 0.4; transform: scale(0.95); }
 .template-card-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
 }

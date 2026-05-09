@@ -13,7 +13,7 @@ const TAG_OPTIONS = [
 ];
 
 export default function Templates() {
-  const { templates, loading, add, update, remove } = useTemplates();
+  const { templates, loading, add, update, remove, reorder } = useTemplates();
   const confirm = useConfirm();
   const [filter, setFilter] = useState('todos');
   const [search, setSearch] = useState('');
@@ -34,6 +34,34 @@ export default function Templates() {
     btn.innerHTML = '<i class="ti ti-check"></i> Copiado';
     btn.style.background = 'var(--success-500)';
     setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1400);
+  };
+
+  const handleDragStart = (e, tpl) => {
+    e.dataTransfer.setData('tplId', tpl.id);
+    e.currentTarget.classList.add('dragging');
+  };
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.classList.remove('dragging');
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetTpl) => {
+    e.preventDefault();
+    const draggedId = e.dataTransfer.getData('tplId');
+    if (draggedId === targetTpl.id) return;
+
+    const newList = [...templates];
+    const draggedIdx = newList.findIndex(t => t.id === draggedId);
+    const targetIdx = newList.findIndex(t => t.id === targetTpl.id);
+
+    const [draggedItem] = newList.splice(draggedIdx, 1);
+    newList.splice(targetIdx, 0, draggedItem);
+
+    reorder(newList);
   };
 
   const handleRemove = async (id) => {
@@ -74,7 +102,15 @@ export default function Templates() {
         {list.length === 0
           ? <div className="empty-state" style={{ gridColumn: '1/-1' }}><i className="ti ti-file-off"></i>Nenhum template encontrado</div>
           : list.map(t => (
-            <div className={`template-card ${t._pending ? 'opacity-50' : ''}`} key={t.id}>
+            <div
+              className={`template-card ${t._pending ? 'opacity-50' : ''}`}
+              key={t.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, t)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, t)}
+            >
               <div className="template-card-header">
                 <span className={`tag tag-${t.tag}`}>{t.tagLabel}</span>
                 <div style={{ display: 'flex', gap: 2 }}>
