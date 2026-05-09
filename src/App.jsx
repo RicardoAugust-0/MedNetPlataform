@@ -1,29 +1,30 @@
 import { useEffect, useRef } from 'react';
-import { useApp } from './context';
-import { useAuth } from './auth/AuthContext';
-import { useReminders } from './hooks/useReminders';
-import { useToast } from './hooks/useToast';
-import { applyAccent } from './utils';
-import LoginPage from './auth/LoginPage';
-import SetPasswordPage from './auth/SetPasswordPage';
-import Profile from './modules/Profile';
-import Sidebar from './components/Sidebar';
-import Topbar from './components/Topbar';
-import TweaksPanel from './components/TweaksPanel';
-import Dashboard from './modules/Dashboard';
-import Monitor from './modules/Monitor';
-import Templates from './modules/Templates';
-import Links from './modules/Links';
-import Workspace from './modules/Workspace';
-import Notes from './modules/Notes';
-import Agenda from './modules/Agenda';
-import Admin from './modules/Admin';
-import Analytics from './modules/Analytics';
+import { useApp } from "./context.jsx";
+import { useAuth } from "./auth/AuthContext.jsx";
+import { useReminders } from "./hooks/useReminders.js";
+import { useToast } from "./hooks/useToast.jsx";
+import { applyAccent } from "./utils.js";
+import LoginPage from "./auth/LoginPage.jsx";
+import SetPasswordPage from "./auth/SetPasswordPage.jsx";
+import Profile from "./modules/Profile.jsx";
+import Sidebar from "./components/Sidebar.jsx";
+import Topbar from "./components/Topbar.jsx";
+import TweaksPanel from "./components/TweaksPanel.jsx";
+import Dashboard from "./modules/Dashboard.jsx";
+import Monitor from "./modules/Monitor.jsx";
+import Templates from "./modules/Templates.jsx";
+import Links from "./modules/Links.jsx";
+import Workspace from "./modules/Workspace.jsx";
+import Notes from "./modules/Notes.jsx";
+import Agenda from "./modules/Agenda.jsx";
+import Admin from "./modules/Admin.jsx";
+import Analytics from "./modules/Analytics.jsx";
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
+  if (activePanel !== id) return null;
   return (
-    <div className={`panel ${activePanel === id ? 'active' : ''}`}>
+    <div className="panel active">
       {children}
     </div>
   );

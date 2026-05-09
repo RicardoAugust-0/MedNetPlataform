@@ -152,7 +152,7 @@ export default function Dashboard() {
                     return <div key={i} className={`spark-bar ${v === maxVal && v > 0 ? 'peak' : ''}`} style={{ height: `${h}%` }} title={`${labels7[i]}: ${v} atendimento${v !== 1 ? 's' : ''}`} />;
                   })}
                 </div>
-                <div className="spark-axis">{labels7.filter((_, i) => i % 2 === 0 || i === 6).map((l, i) => <span key={i}>{l}</span>)}</div>
+                <div className="spark-axis">{labels7.filter((item, i) => i % 2 === 0 || i === 6).map((l, i) => <span key={i}>{l}</span>)}</div>
               </>
             )}
           </div>
