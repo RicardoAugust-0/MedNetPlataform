@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -8,9 +8,17 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const ic = WS_ICONS[page.icon] || WS_ICONS[0];
   const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
 
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const saveTimer = useRef(null);
+
   const onUpdateRef = useRef(null);
   useLayoutEffect(() => {
-    onUpdateRef.current = (html) => onUpdate(page.id, { content: html });
+    onUpdateRef.current = (html) => {
+      setSaveStatus('saving');
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => setSaveStatus('saved'), 1500);
+      onUpdate(page.id, { content: html });
+    };
   });
 
   const editor = useEditor({
@@ -30,6 +38,16 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
           <i className={`ti ${ic.i}`}></i>
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cat?.label || 'Workspace'} · {page.title}</div>
+        {saveStatus === 'saving' && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <i className="ti ti-loader-2" style={{ marginRight: 3 }}></i>Salvando...
+          </div>
+        )}
+        {saveStatus === 'saved' && (
+          <div style={{ fontSize: 11, color: 'var(--success-600)' }}>
+            <i className="ti ti-check" style={{ marginRight: 3 }}></i>Salvo
+          </div>
+        )}
         <div style={{ flex: 1 }}></div>
         <button className="btn btn-sm" title={page.favorite ? 'Desfavoritar' : 'Favoritar'} onClick={() => onUpdate(page.id, { favorite: !page.favorite })}>
           <i className={`ti ${page.favorite ? 'ti-star-filled' : 'ti-star'}`} style={page.favorite ? { color: 'var(--warning-500)' } : {}}></i>
