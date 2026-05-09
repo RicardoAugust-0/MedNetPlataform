@@ -1,41 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
-import { TextStyle, Color } from '@tiptap/extension-text-style';
+import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
-
-const FontSize = Extension.create({
-  name: 'fontSize',
-  addOptions() {
-    return { types: ['textStyle'] };
-  },
-  addGlobalAttributes() {
-    return [{
-      types: this.options.types,
-      attributes: {
-        fontSize: {
-          default: null,
-          parseHTML: element => element.style.fontSize || null,
-          renderHTML: attributes => {
-            if (!attributes.fontSize) return {};
-            return { style: `font-size: ${attributes.fontSize}` };
-          },
-        },
-      },
-    }];
-  },
-  addCommands() {
-    return {
-      setFontSize: (size) => ({ chain }) =>
-        chain().setMark('textStyle', { fontSize: size }).run(),
-      unsetFontSize: () => ({ chain }) =>
-        chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
-    };
-  },
-});
 
 const COLORS = [
   { label: 'Preto',        value: '#1A1A1A' },
