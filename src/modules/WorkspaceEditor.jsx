@@ -107,7 +107,11 @@ function Toolbar({ editor }) {
         <span className="tb-sep"></span>
         <ToolbarBtn
           active={editor.isActive('table')}
-          action={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          action={() => {
+            if (!editor.isActive('table')) {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+            }
+          }}
           icon="ti-table"
           title="Inserir tabela"
         />
@@ -115,15 +119,15 @@ function Toolbar({ editor }) {
       {editor.isActive('table') && (
         <div className="ws-table-toolbar">
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>Tabela:</span>
-          <button className="tb-btn" title="Inserir coluna antes"  onMouseDown={e => { e.preventDefault(); editor.chain().focus().addColumnBefore().run(); }}><i className="ti ti-column-insert-left"></i></button>
-          <button className="tb-btn" title="Inserir coluna depois" onMouseDown={e => { e.preventDefault(); editor.chain().focus().addColumnAfter().run(); }}><i className="ti ti-column-insert-right"></i></button>
-          <button className="tb-btn" title="Remover coluna"        onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteColumn().run(); }}><i className="ti ti-column-remove"></i></button>
+          <ToolbarBtn active={false} action={() => editor.chain().focus().addColumnBefore().run()} icon="ti-column-insert-left"  title="Inserir coluna antes" />
+          <ToolbarBtn active={false} action={() => editor.chain().focus().addColumnAfter().run()}  icon="ti-column-insert-right" title="Inserir coluna depois" />
+          <ToolbarBtn active={false} action={() => editor.chain().focus().deleteColumn().run()}    icon="ti-column-remove"       title="Remover coluna" />
           <span className="tb-sep"></span>
-          <button className="tb-btn" title="Inserir linha antes"   onMouseDown={e => { e.preventDefault(); editor.chain().focus().addRowBefore().run(); }}><i className="ti ti-row-insert-top"></i></button>
-          <button className="tb-btn" title="Inserir linha depois"  onMouseDown={e => { e.preventDefault(); editor.chain().focus().addRowAfter().run(); }}><i className="ti ti-row-insert-bottom"></i></button>
-          <button className="tb-btn" title="Remover linha"         onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteRow().run(); }}><i className="ti ti-row-remove"></i></button>
+          <ToolbarBtn active={false} action={() => editor.chain().focus().addRowBefore().run()}    icon="ti-row-insert-top"      title="Inserir linha antes" />
+          <ToolbarBtn active={false} action={() => editor.chain().focus().addRowAfter().run()}     icon="ti-row-insert-bottom"   title="Inserir linha depois" />
+          <ToolbarBtn active={false} action={() => editor.chain().focus().deleteRow().run()}       icon="ti-row-remove"          title="Remover linha" />
           <span className="tb-sep"></span>
-          <button className="tb-btn" title="Excluir tabela" style={{ color: 'var(--danger-500)' }} onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteTable().run(); }}><i className="ti ti-trash"></i></button>
+          <ToolbarBtn active={false} action={() => editor.chain().focus().deleteTable().run()}     icon="ti-trash"               title="Excluir tabela" />
         </div>
       )}
     </>
