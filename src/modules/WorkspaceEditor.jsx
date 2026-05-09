@@ -78,7 +78,7 @@ function Toolbar({ editor, onImageClick, uploading }) {
             <i className="ti ti-palette"></i>
           </button>
           {colorOpen && (
-            <div className="ws-color-popover" onMouseDown={e => e.preventDefault()}>
+            <div className="ws-color-popover" onMouseDown={e => e.stopPropagation()}>
               {COLORS.map(c => (
                 <div
                   key={c.value}
