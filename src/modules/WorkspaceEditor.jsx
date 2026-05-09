@@ -9,6 +9,7 @@ import { Image } from '@tiptap/extension-image';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { uploadImage } from '../lib/uploadImage.js';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
+import { useToast } from '../hooks/useToast.jsx';
 
 const COLORS = [
   { label: 'Preto',        value: '#1A1A1A' },
@@ -25,12 +26,15 @@ const COLORS = [
 
 const FONT_SIZES = ['12px', '14px', '16px', '18px', '24px'];
 
-function ToolbarBtn({ active, action, icon, title }) {
+const ALLOWED_PASTE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+function ToolbarBtn({ active, action, icon, title, disabled }) {
   return (
     <button
       className={`tb-btn${active ? ' active' : ''}`}
       title={title}
-      onMouseDown={e => { e.preventDefault(); action(); }}
+      disabled={disabled}
+      onMouseDown={e => { e.preventDefault(); if (!disabled) action(); }}
     >
       <i className={`ti ${icon}`}></i>
     </button>
@@ -124,6 +128,7 @@ function Toolbar({ editor, onImageClick, uploading }) {
           action={onImageClick}
           icon={uploading ? 'ti-loader-2' : 'ti-photo'}
           title="Inserir imagem"
+          disabled={uploading}
         />
       </div>
       {editor.isActive('table') && (
@@ -149,6 +154,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
 
   const { profile } = useAuth();
+  const toast = useToast();
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
@@ -177,7 +183,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     editorProps: {
       handlePaste: (_view, event) => {
         const items = Array.from(event.clipboardData?.items || []);
-        const imageItem = items.find(i => i.type.startsWith('image/'));
+        const imageItem = items.find(i => ALLOWED_PASTE_TYPES.includes(i.type));
         if (!imageItem) return false;
         handleImageFileRef.current?.(imageItem.getAsFile());
         return true;
@@ -194,10 +200,16 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     };
     handleImageFileRef.current = async (file) => {
       if (!file) return;
+      if (!profile?.id) {
+        toast('Usuário não autenticado', 'error');
+        return;
+      }
       setUploading(true);
       try {
-        const url = await uploadImage(file, profile?.id);
+        const url = await uploadImage(file, profile.id);
         editor?.chain().focus().setImage({ src: url }).run();
+      } catch (err) {
+        toast(err?.message || 'Erro ao enviar imagem', 'error');
       } finally {
         setUploading(false);
       }
