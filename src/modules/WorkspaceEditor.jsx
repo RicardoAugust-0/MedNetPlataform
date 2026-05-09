@@ -2,8 +2,22 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
+
+const COLORS = [
+  { label: 'Preto',        value: '#1A1A1A' },
+  { label: 'Cinza escuro', value: '#4A4A4A' },
+  { label: 'Cinza',        value: '#888888' },
+  { label: 'Azul',         value: '#0C447C' },
+  { label: 'Azul claro',   value: '#2E86C1' },
+  { label: 'Verde',        value: '#27500A' },
+  { label: 'Vermelho',     value: '#7D2E10' },
+  { label: 'Laranja',      value: '#E67E22' },
+  { label: 'Roxo',         value: '#3C3489' },
+  { label: 'Ciano',        value: '#085041' },
+];
 
 function ToolbarBtn({ active, action, icon, title }) {
   return (
@@ -18,6 +32,7 @@ function ToolbarBtn({ active, action, icon, title }) {
 }
 
 function Toolbar({ editor }) {
+  const [colorOpen, setColorOpen] = useState(false);
   if (!editor) return null;
 
   return (
@@ -34,6 +49,39 @@ function Toolbar({ editor }) {
       <ToolbarBtn active={editor.isActive('orderedList')} action={() => editor.chain().focus().toggleOrderedList().run()} icon="ti-list-numbers" title="Lista numerada" />
       <ToolbarBtn active={editor.isActive('blockquote')}  action={() => editor.chain().focus().toggleBlockquote().run()}  icon="ti-quote"        title="Citação" />
       <ToolbarBtn active={false}                          action={() => editor.chain().focus().setHorizontalRule().run()} icon="ti-minus"        title="Divisor" />
+      <span className="tb-sep"></span>
+      <div style={{ position: 'relative' }}>
+        <button
+          className="tb-btn"
+          title="Cor do texto"
+          onMouseDown={e => { e.preventDefault(); setColorOpen(v => !v); }}
+        >
+          <i className="ti ti-palette"></i>
+        </button>
+        {colorOpen && (
+          <div className="ws-color-popover" onMouseDown={e => e.preventDefault()}>
+            {COLORS.map(c => (
+              <div
+                key={c.value}
+                className="ws-color-dot"
+                title={c.label}
+                style={{ background: c.value }}
+                onClick={() => {
+                  editor.chain().focus().setColor(c.value).run();
+                  setColorOpen(false);
+                }}
+              />
+            ))}
+            <div
+              className="ws-color-dot ws-color-dot--reset"
+              title="Remover cor"
+              onClick={() => { editor.chain().focus().unsetColor().run(); setColorOpen(false); }}
+            >
+              <i className="ti ti-x" style={{ fontSize: 10 }}></i>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -61,6 +109,8 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     extensions: [
       StarterKit,
       Underline,
+      TextStyle,
+      Color,
       Placeholder.configure({ placeholder: 'Comece a escrever...' }),
     ],
     content: page.content || '',
