@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useWsPages } from '../hooks/useWsPages';
 import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
@@ -144,9 +145,9 @@ export default function Workspace() {
         )}
       </div>
 
-      {modal && (
-        <div className="modal-overlay open">
-          <div className="modal">
+      {modal && createPortal(
+        <div className="modal-overlay open" onClick={() => setModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title"><i className="ti ti-notebook"></i> Nova página</div>
               <button className="btn-icon" onClick={() => setModal(false)}><i className="ti ti-x"></i></button>
@@ -176,7 +177,8 @@ export default function Workspace() {
               <button className="btn btn-primary" onClick={createPage}><i className="ti ti-check"></i> Criar</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
