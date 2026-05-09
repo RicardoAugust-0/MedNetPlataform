@@ -823,6 +823,15 @@
 .ws-content .ProseMirror .selectedCell {
   background: var(--accent-50);
 }
+.ws-content .ProseMirror img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: 8px 0;
+  display: block;
+}
+.ws-content .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-500);
+}
 
 .ws-content .ProseMirror {
   outline: none;

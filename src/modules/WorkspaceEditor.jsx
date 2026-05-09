@@ -5,6 +5,9 @@ import Underline from '@tiptap/extension-underline';
 import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
+import { Image } from '@tiptap/extension-image';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { uploadImage } from '../lib/uploadImage.js';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
 
 const COLORS = [
@@ -34,7 +37,7 @@ function ToolbarBtn({ active, action, icon, title }) {
   );
 }
 
-function Toolbar({ editor }) {
+function Toolbar({ editor, onImageClick, uploading }) {
   const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
@@ -115,6 +118,13 @@ function Toolbar({ editor }) {
           icon="ti-table"
           title="Inserir tabela"
         />
+        <span className="tb-sep"></span>
+        <ToolbarBtn
+          active={false}
+          action={onImageClick}
+          icon={uploading ? 'ti-loader-2' : 'ti-photo'}
+          title="Inserir imagem"
+        />
       </div>
       {editor.isActive('table') && (
         <div className="ws-table-toolbar">
@@ -138,20 +148,15 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const ic = WS_ICONS[page.icon] || WS_ICONS[0];
   const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
 
+  const { profile } = useAuth();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
   const [saveStatus, setSaveStatus] = useState('idle');
   const saveTimer = useRef(null);
 
   const onUpdateRef = useRef(null);
-  useLayoutEffect(() => {
-    onUpdateRef.current = (html) => {
-      setSaveStatus('saving');
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => setSaveStatus('saved'), 1500);
-      onUpdate(page.id, { content: html });
-    };
-  });
-
-  useEffect(() => () => clearTimeout(saveTimer.current), []);
+  const handleImageFileRef = useRef(null);
 
   const editor = useEditor({
     extensions: [
@@ -164,15 +169,57 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
       TableRow,
       TableCell,
       TableHeader,
+      Image,
       Placeholder.configure({ placeholder: 'Comece a escrever...' }),
     ],
     content: page.content || '',
     onUpdate: ({ editor }) => onUpdateRef.current?.(editor.getHTML()),
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const items = Array.from(event.clipboardData?.items || []);
+        const imageItem = items.find(i => i.type.startsWith('image/'));
+        if (!imageItem) return false;
+        handleImageFileRef.current?.(imageItem.getAsFile());
+        return true;
+      },
+    },
   });
+
+  useLayoutEffect(() => {
+    onUpdateRef.current = (html) => {
+      setSaveStatus('saving');
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => setSaveStatus('saved'), 1500);
+      onUpdate(page.id, { content: html });
+    };
+    handleImageFileRef.current = async (file) => {
+      if (!file) return;
+      setUploading(true);
+      try {
+        const url = await uploadImage(file, profile?.id);
+        editor?.chain().focus().setImage({ src: url }).run();
+      } finally {
+        setUploading(false);
+      }
+    };
+  });
+
+  useEffect(() => () => clearTimeout(saveTimer.current), []);
 
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) handleImageFileRef.current?.(f);
+          e.target.value = '';
+        }}
+      />
       <div className="ws-editor-topbar">
         <div className="ws-card-icon" style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic }}>
           <i className={`ti ${ic.i}`}></i>
@@ -202,7 +249,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
         <hr className="ws-divider" />
-        <Toolbar editor={editor} />
+        <Toolbar editor={editor} onImageClick={() => fileInputRef.current?.click()} uploading={uploading} />
         <EditorContent editor={editor} className="ws-content" />
       </div>
     </>
