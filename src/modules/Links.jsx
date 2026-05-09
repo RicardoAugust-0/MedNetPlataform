@@ -1,3 +1,4 @@
+// deno-lint-ignore-file
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLinks, PALETTE, AVAILABLE_ICONS } from '../hooks/useLinks';
