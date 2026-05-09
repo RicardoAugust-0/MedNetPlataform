@@ -67,9 +67,18 @@ export function useReminders() {
     if (error) { load(); toast('Erro ao excluir lembrete', 'error'); }
   }, [load]);
 
-  return { reminders, loading, add, toggle, remove };
+  const update = useCallback(async (id, { title, sub, time, urgent, date, icon }) => {
+    setReminders(prev => prev.map(r => r.id === id ? { ...r, title, sub: sub || '', time, urgent: !!urgent, date, icon: icon || null } : r));
+    const { error } = await supabase
+      .from('reminders')
+      .update({ title, sub: sub || '', time, urgent: !!urgent, reminder_date: date, icon: icon || null })
+      .eq('id', id);
+    if (error) { load(); toast('Erro ao atualizar lembrete', 'error'); }
+  }, [load]);
+
+  return { reminders, loading, add, toggle, remove, update };
 }
 
 function toLocal(row) {
-  return { id: row.id, title: row.title, sub: row.sub, time: row.time, urgent: row.urgent, done: row.done, date: row.reminder_date || today() };
+  return { id: row.id, title: row.title, sub: row.sub, time: row.time, urgent: row.urgent, done: row.done, date: row.reminder_date || today(), icon: row.icon || null };
 }
