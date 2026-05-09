@@ -1,9 +1,10 @@
+// deno-lint-ignore-file
 import { useState, useRef, useEffect } from 'react';
-import { useApp } from '../context';
-import { useAuth } from '../auth/AuthContext';
-import { NAV_ITEMS, APP_CONFIG } from '../data';
-import { iniciais } from '../utils';
-import { usePWA } from '../hooks/usePWA';
+import { useApp } from "../context.jsx";
+import { useAuth } from "../auth/AuthContext.jsx";
+import { NAV_ITEMS, APP_CONFIG } from "../data.js";
+import { iniciais } from '../utils.js';
+import { usePWA } from '../hooks/usePWA.js';
 
 export default function Sidebar() {
   const { activePanel, setActivePanel, drivers } = useApp();
