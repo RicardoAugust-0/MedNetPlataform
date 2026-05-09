@@ -1,10 +1,41 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import { WS_ICONS, WS_CATEGORIES } from '../data.js';
+
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() {
+    return { types: ['textStyle'] };
+  },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: element => element.style.fontSize || null,
+          renderHTML: attributes => {
+            if (!attributes.fontSize) return {};
+            return { style: `font-size: ${attributes.fontSize}` };
+          },
+        },
+      },
+    }];
+  },
+  addCommands() {
+    return {
+      setFontSize: (size) => ({ chain }) =>
+        chain().setMark('textStyle', { fontSize: size }).run(),
+      unsetFontSize: () => ({ chain }) =>
+        chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+    };
+  },
+});
 
 const COLORS = [
   { label: 'Preto',        value: '#1A1A1A' },
@@ -18,6 +49,8 @@ const COLORS = [
   { label: 'Roxo',         value: '#3C3489' },
   { label: 'Ciano',        value: '#085041' },
 ];
+
+const FONT_SIZES = ['12px', '14px', '16px', '18px', '24px'];
 
 function ToolbarBtn({ active, action, icon, title }) {
   return (
@@ -90,6 +123,16 @@ function Toolbar({ editor }) {
           </div>
         )}
       </div>
+      <span className="tb-sep"></span>
+      <select
+        className="tb-font-size"
+        title="Tamanho da fonte"
+        value={editor.getAttributes('textStyle').fontSize || '14px'}
+        onChange={e => editor.chain().focus().setFontSize(e.target.value).run()}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
     </div>
   );
 }
@@ -119,6 +162,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
       Underline,
       TextStyle,
       Color,
+      FontSize,
       Placeholder.configure({ placeholder: 'Comece a escrever...' }),
     ],
     content: page.content || '',
