@@ -33,6 +33,14 @@ function ToolbarBtn({ active, action, icon, title }) {
 
 function Toolbar({ editor }) {
   const [colorOpen, setColorOpen] = useState(false);
+
+  useEffect(() => {
+    if (!colorOpen) return;
+    const close = () => setColorOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [colorOpen]);
+
   if (!editor) return null;
 
   return (
