@@ -47,9 +47,9 @@ async function notificarCriticos(criticos) {
 }
 
 export default function Monitor() {
-  const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
+  const { drivers, setDrivers, filters, setFilters, setActivePanel } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
@@ -90,7 +90,6 @@ export default function Monitor() {
   /* ── Filtros fila ── */
   const filtered = drivers.filter(d => {
     const f = filters;
-    if (excluirTecnicos && d.alertas === 0 && d.reportaveis === 0) return false;
     if (f.turno && d.turno !== f.turno) return false;
     if (f.empresa && d.transportadora !== f.empresa) return false;
     if (f.comportamento) {
@@ -112,7 +111,8 @@ export default function Monitor() {
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
-      const { drivers: newDrivers, stats } = await parseSheetFile(file);
+      const filterHistory = await loadAtendimentosForFilter(90);
+      const { drivers: newDrivers, stats } = await parseSheetFile(file, filterHistory);
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
       setDrivers(timestamped);
@@ -121,7 +121,8 @@ export default function Monitor() {
       setSheetAgeMin(0);
       setLoadStats(stats);
       setStatusKind('active');
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
+      const filtroMsg = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${filtroMsg}`);
       setActiveTab('intervencao');
       notificarCriticos(timestamped.filter(d => d.alertas >= 5));
     } catch (err) {
@@ -233,8 +234,7 @@ export default function Monitor() {
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
       />
 
-      <MonitorFilters 
-        excluirTecnicos={excluirTecnicos} setExcluirTecnicos={setExcluirTecnicos}
+      <MonitorFilters
         profile={profile} filters={filters} setFilters={setFilters}
         transps={transps} resetFilters={resetFilters}
       />

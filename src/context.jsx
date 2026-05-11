@@ -14,7 +14,6 @@ export function AppProvider({ children }) {
   const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
   const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'' });
-  const [excluirTecnicos, setExcluirTecnicos] = useState(() => load('excluirTecnicos', false));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));
   const [accent,      setAccentState]      = useState(() => load('accent',   'vinho'));
@@ -35,14 +34,11 @@ export function AppProvider({ children }) {
   const setVibe        = persist(setVibeState,        'vibe');
   const setRhythm      = persist(setRhythmState,      'rhythm');
 
-  const persistExcluirTecnicos = (v) => { setExcluirTecnicos(v); save('excluirTecnicos', v); };
-
   return (
     <Ctx.Provider value={{
       activePanel, setActivePanel,
       drivers, setDrivers,
       filters, setFilters,
-      excluirTecnicos, setExcluirTecnicos: persistExcluirTecnicos,
       theme, setTheme,
       density, setDensity,
       accent, setAccent,

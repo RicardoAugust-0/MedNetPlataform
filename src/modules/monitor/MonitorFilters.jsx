@@ -1,6 +1,4 @@
 export default function MonitorFilters({
-  excluirTecnicos,
-  setExcluirTecnicos,
   profile,
   filters,
   setFilters,
@@ -9,20 +7,6 @@ export default function MonitorFilters({
 }) {
   return (
     <>
-      {/* Config */}
-      <div className="config-bar" style={{ marginTop: 12 }}>
-        <div className="config-row">
-          <div>
-            <div className="config-text">Ocultar motoristas apenas com técnicos</div>
-            <div className="config-hint">Esconde placas com apenas eventos técnicos (Obstrução de Câmera / Perda de vídeo). <em>Use com atenção</em></div>
-          </div>
-          <label className="toggle-wrap">
-            <input type="checkbox" checked={excluirTecnicos} onChange={e => setExcluirTecnicos(e.target.checked)} />
-            <span className="toggle-track"><span className="toggle-thumb"></span></span>
-          </label>
-        </div>
-      </div>
-
       {/* Operador */}
       <div className="operator-bar">
         <label><i className="ti ti-user"></i> Operador:</label>
