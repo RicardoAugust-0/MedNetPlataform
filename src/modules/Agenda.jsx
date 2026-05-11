@@ -4,7 +4,12 @@ import { useReminders } from '../hooks/useReminders';
 import { useConfirm } from '../hooks/useConfirm';
 import { fmtDate } from '../utils';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
 const fmtDisplayDate = (iso) => {
   const d = new Date(iso + 'T00:00:00');
   const t = new Date(); t.setHours(0,0,0,0);
@@ -128,7 +133,7 @@ export default function Agenda() {
   const sorted = [...reminders]
     .filter(r => {
       if (filter === 'hoje')   return r.date === todayStr;
-      if (filter === 'futuros') return r.date >= todayStr;
+      if (filter === 'futuros') return r.date > todayStr;
       return true;
     })
     .sort((a, b) => {
