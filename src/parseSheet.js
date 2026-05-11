@@ -6,8 +6,15 @@ const normalize = (value) =>
   String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+// Distra\u00e7\u00e3o Gen\u00e9rica pode aparecer com varia\u00e7\u00f5es de caixa/espa\u00e7o ou na coluna Categoria.
+const isDistracaoGenerica = (e) => {
+  const combo = `${e._eventoNorm || ''} ${e._categoriaNorm || ''}`;
+  return combo.includes('distracao') && combo.includes('generica');
+};
 
 const TECNICO_CATS_NORM = TECNICO_CATS.map(normalize);
 const TECNICO_EVENTOS_NORM = TECNICO_EVENTOS.map(normalize);
@@ -124,7 +131,8 @@ export async function parseSheetFile(file, history = []) {
 
         // Montar objetos de motorista
         const drivers = Object.values(byPlaca).map(d => {
-          const isIntervencao = e => INTERVENCAO_EVENTOS_NORM.includes(e._eventoNorm);
+          const isIntervencao = e =>
+            INTERVENCAO_EVENTOS_NORM.includes(e._eventoNorm) || isDistracaoGenerica(e);
           const isTecnico     = e => {
             const byCategoria = TECNICO_CATS_NORM.includes(e._categoriaNorm);
             const byEvento = TECNICO_EVENTOS_NORM.includes(e._eventoNorm);
