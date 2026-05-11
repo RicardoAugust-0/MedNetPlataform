@@ -3,9 +3,11 @@ import { useApp } from "./context.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import { useReminders } from "./hooks/useReminders.js";
 import { useToast } from "./hooks/useToast.jsx";
+import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { applyAccent } from "./utils.js";
 import LoginPage from "./auth/LoginPage.jsx";
 import SetPasswordPage from "./auth/SetPasswordPage.jsx";
+import MaintenancePage from "./components/MaintenancePage.jsx";
 import Profile from "./modules/Profile.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Topbar from "./components/Topbar.jsx";
@@ -78,6 +80,7 @@ function ReminderNotifier() {
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
+  const { maintenance, loading: maintLoading } = useMaintenance();
 
   useEffect(() => {
     const r = document.documentElement;
@@ -89,6 +92,10 @@ function AppShell() {
   }, [theme, density, mode, vibe, rhythm]);
 
   useEffect(() => { applyAccent(accent); }, [accent]);
+
+  if (!maintLoading && maintenance.enabled && profile?.role !== 'admin') {
+    return <MaintenancePage message={maintenance.message} />;
+  }
 
   return (
     <div id="app">
@@ -113,6 +120,19 @@ function AppShell() {
           )}
         </div>
       </div>
+      {profile?.role === 'admin' && maintenance.enabled && (
+        <div style={{
+          position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          background: '#F26931', color: '#fff',
+          padding: '8px 16px', borderRadius: 999,
+          fontSize: 12, fontWeight: 600, letterSpacing: 0.3,
+          boxShadow: '0 6px 20px rgba(242,105,49,0.4)',
+          display: 'flex', alignItems: 'center', gap: 6,
+          zIndex: 9999,
+        }}>
+          <i className="ti ti-tools"></i> Plataforma em manutenção (visível só para admins)
+        </div>
+      )}
       <TweaksPanel />
     </div>
   );
