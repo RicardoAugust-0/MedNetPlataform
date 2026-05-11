@@ -171,11 +171,14 @@ export default function Monitor() {
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
-  const deleteAlert = async (d) => {
-    const isIntervencao = d.alertas > 0;
+  const deleteAlert = async (d, tipo = 'intervencao') => {
+    const isIntervencao = tipo === 'intervencao';
+    const isReportar = tipo === 'reportar';
+    const isTecnico = tipo === 'tecnico';
+    const tipoLabel = isIntervencao ? 'intervenção' : isReportar ? 'reportar' : 'técnico';
     if (!(await confirm({
       title: 'Descartar alerta',
-      message: `Descartar alerta de ${isIntervencao ? 'intervenção' : 'reportar'} de ${d.nome}?`,
+      message: `Descartar alerta ${tipoLabel} de ${d.nome}?`,
       danger: true
     }))) return;
     await registrar({
@@ -185,17 +188,18 @@ export default function Monitor() {
       tipo: 'descarte',
       obs: isIntervencao
         ? `Alerta descartado · ${d.alertas} evento(s) removidos`
-        : `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`
+        : isReportar
+          ? `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`
+          : `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
     });
-    setDrivers(drivers.map(x => x === d
-      ? {
-          ...x,
-          alertas: 0,
-          tipos: [],
-          reportaveis: isIntervencao ? x.reportaveis : 0,
-          tiposReportar: isIntervencao ? x.tiposReportar : []
-        }
-      : x));
+    setDrivers(drivers.map(x => x === d ? {
+      ...x,
+      alertas: isIntervencao ? 0 : x.alertas,
+      tipos: isIntervencao ? [] : x.tipos,
+      reportaveis: isReportar ? 0 : x.reportaveis,
+      tiposReportar: isReportar ? [] : x.tiposReportar,
+      tecnicos: isTecnico ? 0 : x.tecnicos
+    } : x));
   };
 
   const clearQueue = async () => {
