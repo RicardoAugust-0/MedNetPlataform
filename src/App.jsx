@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useApp } from "./context.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
-import { useReminders } from "./hooks/useReminders.js";
+import { useReminders, RemindersProvider } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
 import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { applyAccent } from "./utils.js";
@@ -98,43 +98,45 @@ function AppShell() {
   }
 
   return (
-    <div id="app">
-      <ReminderNotifier />
-      <Sidebar />
-      <div className="main-area">
-        <Topbar />
-        <div className="content-area">
-          <Panel id="dashboard"><Dashboard /></Panel>
-          <Panel id="monitor"><Monitor /></Panel>
-          <Panel id="agenda"><Agenda /></Panel>
-          <Panel id="templates"><Templates /></Panel>
-          <Panel id="workspace"><Workspace /></Panel>
-          <Panel id="notas"><Notes /></Panel>
-          <Panel id="links"><Links /></Panel>
-          <Panel id="perfil"><Profile /></Panel>
-          {profile?.role === 'admin' && (
-            <>
-              <Panel id="admin"><Admin /></Panel>
-              <Panel id="analytics"><Analytics /></Panel>
-            </>
-          )}
+    <RemindersProvider>
+      <div id="app">
+        <ReminderNotifier />
+        <Sidebar />
+        <div className="main-area">
+          <Topbar />
+          <div className="content-area">
+            <Panel id="dashboard"><Dashboard /></Panel>
+            <Panel id="monitor"><Monitor /></Panel>
+            <Panel id="agenda"><Agenda /></Panel>
+            <Panel id="templates"><Templates /></Panel>
+            <Panel id="workspace"><Workspace /></Panel>
+            <Panel id="notas"><Notes /></Panel>
+            <Panel id="links"><Links /></Panel>
+            <Panel id="perfil"><Profile /></Panel>
+            {profile?.role === 'admin' && (
+              <>
+                <Panel id="admin"><Admin /></Panel>
+                <Panel id="analytics"><Analytics /></Panel>
+              </>
+            )}
+          </div>
         </div>
+        {profile?.role === 'admin' && maintenance.enabled && (
+          <div style={{
+            position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+            background: '#F26931', color: '#fff',
+            padding: '8px 16px', borderRadius: 999,
+            fontSize: 12, fontWeight: 600, letterSpacing: 0.3,
+            boxShadow: '0 6px 20px rgba(242,105,49,0.4)',
+            display: 'flex', alignItems: 'center', gap: 6,
+            zIndex: 9999,
+          }}>
+            <i className="ti ti-tools"></i> Plataforma em manutenção (visível só para admins)
+          </div>
+        )}
+        <TweaksPanel />
       </div>
-      {profile?.role === 'admin' && maintenance.enabled && (
-        <div style={{
-          position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-          background: '#F26931', color: '#fff',
-          padding: '8px 16px', borderRadius: 999,
-          fontSize: 12, fontWeight: 600, letterSpacing: 0.3,
-          boxShadow: '0 6px 20px rgba(242,105,49,0.4)',
-          display: 'flex', alignItems: 'center', gap: 6,
-          zIndex: 9999,
-        }}>
-          <i className="ti ti-tools"></i> Plataforma em manutenção (visível só para admins)
-        </div>
-      )}
-      <TweaksPanel />
-    </div>
+    </RemindersProvider>
   );
 }
 

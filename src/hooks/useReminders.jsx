@@ -1,13 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function useReminders() {
+function toLocal(row) {
+  return { id: row.id, title: row.title, sub: row.sub, time: row.time, urgent: row.urgent, done: row.done, date: row.reminder_date || today(), icon: row.icon || null };
+}
+
+const RemindersContext = createContext(null);
+
+export function RemindersProvider({ children }) {
   const toast = useToast();
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const remindersRef = useRef(reminders);
+  useEffect(() => { remindersRef.current = reminders; }, [reminders]);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('reminders').select('*').order('reminder_date').order('time');
@@ -51,12 +59,10 @@ export function useReminders() {
   }, []);
 
   const toggle = useCallback(async (id) => {
-    let newDone;
-    setReminders(prev => prev.map(r => {
-      if (r.id !== id) return r;
-      newDone = !r.done;
-      return { ...r, done: newDone };
-    }));
+    const current = remindersRef.current.find(r => r.id === id);
+    if (!current) return;
+    const newDone = !current.done;
+    setReminders(prev => prev.map(r => r.id === id ? { ...r, done: newDone } : r));
     const { error } = await supabase.from('reminders').update({ done: newDone }).eq('id', id);
     if (error) { load(); toast('Erro ao atualizar lembrete', 'error'); }
   }, [load]);
@@ -76,9 +82,15 @@ export function useReminders() {
     if (error) { load(); toast('Erro ao atualizar lembrete', 'error'); }
   }, [load]);
 
-  return { reminders, loading, add, toggle, remove, update };
+  return (
+    <RemindersContext.Provider value={{ reminders, loading, add, toggle, remove, update }}>
+      {children}
+    </RemindersContext.Provider>
+  );
 }
 
-function toLocal(row) {
-  return { id: row.id, title: row.title, sub: row.sub, time: row.time, urgent: row.urgent, done: row.done, date: row.reminder_date || today(), icon: row.icon || null };
+export function useReminders() {
+  const ctx = useContext(RemindersContext);
+  if (!ctx) throw new Error('useReminders must be used within RemindersProvider');
+  return ctx;
 }
