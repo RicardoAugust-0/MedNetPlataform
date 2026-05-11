@@ -172,9 +172,30 @@ export default function Monitor() {
   };
 
   const deleteAlert = async (d) => {
-    if (!(await confirm({ title: 'Descartar alerta', message: `Descartar alerta de intervenção de ${d.nome}?`, danger: true }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'descarte', obs: `Alerta descartado · ${d.alertas} evento(s) removidos` });
-    setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+    const isIntervencao = d.alertas > 0;
+    if (!(await confirm({
+      title: 'Descartar alerta',
+      message: `Descartar alerta de ${isIntervencao ? 'intervenção' : 'reportar'} de ${d.nome}?`,
+      danger: true
+    }))) return;
+    await registrar({
+      motorista: d.nome,
+      placa: d.placa,
+      transportadora: d.transportadora,
+      tipo: 'descarte',
+      obs: isIntervencao
+        ? `Alerta descartado · ${d.alertas} evento(s) removidos`
+        : `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`
+    });
+    setDrivers(drivers.map(x => x === d
+      ? {
+          ...x,
+          alertas: 0,
+          tipos: [],
+          reportaveis: isIntervencao ? x.reportaveis : 0,
+          tiposReportar: isIntervencao ? x.tiposReportar : []
+        }
+      : x));
   };
 
   const clearQueue = async () => {

@@ -71,6 +71,7 @@ export default function DriverCard({ d, type, handlers }) {
             <button className="btn btn-sm" onClick={() => handlers.openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
             <button className="btn btn-sm btn-warning" onClick={() => handlers.reportar(d)}><i className="ti ti-building"></i> Reportar e Remover</button>
+            <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d)}><i className="ti ti-trash"></i></button>
           </>
         )}
 
