@@ -3,8 +3,12 @@ export default function MonitorFilters({
   filters,
   setFilters,
   transps,
-  resetFilters
+  resetFilters,
+  platform,
 }) {
+  const taxonomy    = platform?.taxonomy    || { intervencao: [], reportar: [], tecnico: [] };
+  const severidades = platform?.severidades || ['Gravíssimo', 'Grave', 'Normal'];
+
   return (
     <>
       {/* Operador */}
@@ -29,9 +33,9 @@ export default function MonitorFilters({
           <label>Severidade</label>
           <select value={filters.prioridade} onChange={e => setFilters({ ...filters, prioridade: e.target.value })}>
             <option value="">Todas</option>
-            <option value="gravissimo">Gravíssimo</option>
-            <option value="grave">Grave</option>
-            <option value="normal">Normal</option>
+            {severidades.map(sev => (
+              <option key={sev} value={sev.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')}>{sev}</option>
+            ))}
           </select>
         </div>
         <div className="filter-group">
@@ -45,15 +49,21 @@ export default function MonitorFilters({
           <label>Evento</label>
           <select value={filters.comportamento} onChange={e => setFilters({ ...filters, comportamento: e.target.value })}>
             <option value="">Todos</option>
-            <optgroup label="— Intervenção —">
-              <option value="Bocejo">Bocejo</option>
-              <option value="Olho fechado">Olho fechado</option>
-            </optgroup>
-            <optgroup label="— Reportar —">
-              <option value="Distração">Distração genérica</option>
-              <option value="Uso de celular">Uso de celular</option>
-              <option value="Fumando">Fumando</option>
-            </optgroup>
+            {taxonomy.intervencao.length > 0 && (
+              <optgroup label="— Intervenção —">
+                {taxonomy.intervencao.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
+            {taxonomy.reportar.length > 0 && (
+              <optgroup label="— Reportar —">
+                {taxonomy.reportar.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
+            {taxonomy.tecnico.length > 0 && (
+              <optgroup label="— Técnico —">
+                {taxonomy.tecnico.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
           </select>
         </div>
         <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento}>

@@ -6,7 +6,7 @@ export const APP_CONFIG = {
 
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',      icon: 'ti-layout-dashboard', group: 'Operação' },
-  { id: 'monitor',   label: 'Monitor Sascar', icon: 'ti-truck-delivery',   group: 'Operação' },
+  { id: 'monitor',   label: 'Monitor de Frota', icon: 'ti-truck-delivery', group: 'Operação' },
   { id: 'agenda',    label: 'Agenda',         icon: 'ti-calendar-event',   group: 'Operação' },
   { id: 'templates', label: 'Templates',      icon: 'ti-message-2',        group: 'Conhecimento' },
   { id: 'workspace', label: 'Workspace',      icon: 'ti-notebook',         group: 'Conhecimento' },
@@ -19,7 +19,7 @@ export const NAV_ITEMS = [
 
 export const PANEL_TITLES = {
   dashboard: { t: 'Dashboard',              s: 'Visão geral da operação de hoje' },
-  monitor:   { t: 'Monitor Sascar',         s: 'Alertas logísticos & fila de intervenção' },
+  monitor:   { t: 'Monitor de Frota',       s: 'Alertas logísticos & fila de intervenção' },
   agenda:    { t: 'Agenda & Lembretes',     s: 'Compromissos e ações do dia' },
   templates: { t: 'Templates de Mensagem',  s: 'Scripts prontos para atendimento' },
   workspace: { t: 'Workspace',              s: 'Páginas e procedimentos da equipe' },

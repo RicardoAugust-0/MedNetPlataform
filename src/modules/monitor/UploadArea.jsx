@@ -9,7 +9,16 @@ export default function UploadArea({
   handleDrop,
   handleFile,
   loadStats,
+  platform,
+  platforms = [],
+  onPlatformChange,
 }) {
+  const spreadsheet = platform?.spreadsheet;
+  const supportsUpload = !!spreadsheet;
+  const accept       = spreadsheet?.accept      || ".xlsx,.xls,.csv";
+  const uploadTitle  = spreadsheet?.uploadTitle || `Solte aqui o relatório da plataforma ${platform?.name || ""}`.trim();
+  const uploadHint   = spreadsheet?.uploadHint  || accept.split(",").join(" · ");
+
   return (
     <>
       {/* Status bar */}
@@ -40,50 +49,78 @@ export default function UploadArea({
             {sheetAgeLabel}
           </span>
         )}
+
+        {/* Seletor de plataforma: aparece sempre que há mais de uma cadastrada */}
+        {platforms.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+              <i className="ti ti-stack-2" style={{ marginRight: 4 }}></i>Plataforma
+            </label>
+            <select
+              value={platform?.id || ""}
+              onChange={(e) => onPlatformChange?.(e.target.value)}
+              style={{ fontSize: 12, padding: "2px 6px" }}
+            >
+              {platforms.map((p) => (
+                <option key={p.id} value={p.id} disabled={p.status === "planned"}>
+                  {p.name}{p.status === "beta" ? " · beta" : ""}{p.status === "planned" ? " · em breve" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <button className="btn btn-sm btn-danger" onClick={clearQueue}>
           <i className="ti ti-trash"></i> Limpar fila
         </button>
-        <a
-          href="https://www.smartcamera.michelin.com/login/pc/login"
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-sm"
-          style={{ textDecoration: "none" }}
-        >
-          <i className="ti ti-external-link"></i> Abrir Portal Sascar
-        </a>
+
+        {platform?.portalUrl && (
+          <a
+            href={platform.portalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-sm"
+            style={{ textDecoration: "none" }}
+          >
+            <i className="ti ti-external-link"></i> Abrir Portal {platform.name}
+          </a>
+        )}
       </div>
 
       {/* Upload */}
-      <label
-        className="upload-area"
-        style={{ cursor: "pointer" }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.add("drag-over");
-        }}
-        onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
-        onDrop={handleDrop}
-      >
-        <div className="upload-icon">
-          <i className="ti ti-cloud-upload"></i>
-        </div>
-        <div className="upload-text">
-          <div className="upload-title">
-            Solte aqui o relatório de detalhes de evento do Sascar
+      {supportsUpload ? (
+        <label
+          className="upload-area"
+          style={{ cursor: "pointer" }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add("drag-over");
+          }}
+          onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
+          onDrop={handleDrop}
+        >
+          <div className="upload-icon">
+            <i className="ti ti-cloud-upload"></i>
           </div>
-          <div className="upload-hint">
-            .xlsx · .xls · .csv &nbsp;·&nbsp; Falsos positivos removidos
-            automaticamente
+          <div className="upload-text">
+            <div className="upload-title">{uploadTitle}</div>
+            <div className="upload-hint">{uploadHint}</div>
           </div>
+          <input
+            type="file"
+            accept={accept}
+            hidden
+            onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
+          />
+        </label>
+      ) : (
+        <div className="empty-state">
+          <i className="ti ti-plug-connected"></i>
+          A plataforma {platform?.name} não usa upload de planilha.
+          {platform?.inputType === "api" && " A integração será via API (em breve)."}
+          {platform?.inputType === "scraper" && " A integração será via scraping (em breve)."}
         </div>
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          hidden
-          onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
-        />
-      </label>
+      )}
 
       {/* KPIs */}
       {loadStats && (
@@ -95,7 +132,7 @@ export default function UploadArea({
           <div className="stat-box">
             <div className="stat-label">Intervenção</div>
             <div className="stat-value danger">{loadStats.comIntervencao}</div>
-            <div className="stat-sub">Bocejo · Olho fechado</div>
+            <div className="stat-sub">{(platform?.taxonomy?.intervencao || []).join(" · ") || "—"}</div>
           </div>
           <div className="stat-box">
             <div className="stat-label">Reportar</div>
@@ -105,7 +142,7 @@ export default function UploadArea({
           <div className="stat-box">
             <div className="stat-label">Só técnico</div>
             <div className="stat-value">{loadStats.soTecnico}</div>
-            <div className="stat-sub">Obstrução / perda de vídeo</div>
+            <div className="stat-sub">{(platform?.taxonomy?.tecnico || []).join(" · ") || "—"}</div>
           </div>
           <div className="stat-box">
             <div className="stat-label">Falsos positivos</div>
