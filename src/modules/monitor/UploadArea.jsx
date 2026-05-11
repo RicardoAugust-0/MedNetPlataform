@@ -114,6 +114,15 @@ export default function UploadArea({
             </div>
             <div className="stat-sub">removidos</div>
           </div>
+          {loadStats.filtradosPorHistorico > 0 && (
+            <div className="stat-box">
+              <div className="stat-label">Já tratados</div>
+              <div className="stat-value" style={{ color: "var(--text-muted)" }}>
+                {loadStats.filtradosPorHistorico}
+              </div>
+              <div className="stat-sub">eventos ignorados</div>
+            </div>
+          )}
         </div>
       )}
     </>

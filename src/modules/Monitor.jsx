@@ -49,7 +49,7 @@ async function notificarCriticos(criticos) {
 export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
@@ -112,7 +112,8 @@ export default function Monitor() {
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
-      const { drivers: newDrivers, stats } = await parseSheetFile(file);
+      const filterHistory = await loadAtendimentosForFilter(90);
+      const { drivers: newDrivers, stats } = await parseSheetFile(file, filterHistory);
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
       setDrivers(timestamped);
@@ -121,7 +122,8 @@ export default function Monitor() {
       setSheetAgeMin(0);
       setLoadStats(stats);
       setStatusKind('active');
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
+      const filtroMsg = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${filtroMsg}`);
       setActiveTab('intervencao');
       notificarCriticos(timestamped.filter(d => d.alertas >= 5));
     } catch (err) {
