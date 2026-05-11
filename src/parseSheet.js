@@ -1,7 +1,10 @@
 const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado', 'Distração Genérica'];
 const TECNICO_CATS        = ['Obstrução de Câmera'];
-const TECNICO_EVENTOS     = ['Perda de vídeo'];
+const TECNICO_EVENTOS     = ['Perda de vídeo', 'Sem motorista'];
 const MIN_MOVING_SPEED_KMH = 10;
+
+// Transportadoras com regra especial de auto-descarte para eventos de fumo
+const DINON_CARRIERS_NORM = ['dinon'];
 
 const normalize = (value) =>
   String(value || '')
@@ -162,6 +165,7 @@ export async function parseSheetFile(file, history = []) {
         });
 
         let filtradosPorHistorico = 0;
+        const dinonAutoDescartes = [];
 
         // Montar objetos de motorista
         const drivers = Object.values(byPlaca).map(d => {
@@ -188,17 +192,49 @@ export async function parseSheetFile(file, history = []) {
 
           const evTecnico     = d.eventos.filter(isTecnico);
 
+          // Task: Dinon fumo auto-discard — smoking events from Dinon are silently removed from queue
+          const transportadoraNorm = normalize(d.transportadora);
+          const isDinonCarrier = DINON_CARRIERS_NORM.some(n => transportadoraNorm.includes(n));
+          const isFumoEvento = (e) => e._eventoNorm.includes('fumo') || e._categoriaNorm.includes('fumo');
+
+          const evReportarAutoDesc = isDinonCarrier ? evReportar.filter(isFumoEvento) : [];
+          const evReportarFinal    = isDinonCarrier ? evReportar.filter(e => !isFumoEvento(e)) : evReportar;
+
           const tiposIntervencao = [...new Set(evIntervencao.map(e => e['Evento']))];
-          const tiposReportar    = [...new Set(evReportar.map(e => e['Evento']))];
+          const tiposReportar    = [...new Set(evReportarFinal.map(e => e['Evento']))];
+
+          // Task: Count per technical event type for breakdown display
+          const tiposTecnico = {};
+          evTecnico.forEach(e => {
+            const tipo = e['Evento'] || '—';
+            tiposTecnico[tipo] = (tiposTecnico[tipo] || 0) + 1;
+          });
+
+          // Task: Last event timestamps for intervencao and reportar tabs
+          const evIntervencaoDates = evIntervencao.map(e => e._eventDate).filter(Boolean);
+          const evReportarDates    = evReportarFinal.map(e => e._eventDate).filter(Boolean);
+          const ultimoEvento = evIntervencaoDates.length > 0
+            ? new Date(Math.max(...evIntervencaoDates.map(dt => dt.getTime()))) : null;
+          const ultimoEventoReportar = evReportarDates.length > 0
+            ? new Date(Math.max(...evReportarDates.map(dt => dt.getTime()))) : null;
 
           const severidadeMax = maxSeveridade(
-            [...evIntervencao, ...evReportar].map(e => e['Severidade'])
+            [...evIntervencao, ...evReportarFinal].map(e => e['Severidade'])
           );
 
           // Turno predominante
           const turnoCount = {};
           d.turnos.forEach(t => { turnoCount[t] = (turnoCount[t] || 0) + 1; });
           const turno = Object.entries(turnoCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'diurno';
+
+          if (evReportarAutoDesc.length > 0) {
+            dinonAutoDescartes.push({
+              nome: d.nome || d.placa,
+              placa: d.placa,
+              transportadora: d.transportadora,
+              count: evReportarAutoDesc.length,
+            });
+          }
 
           return {
             nome:            d.nome || d.placa,
@@ -209,11 +245,14 @@ export async function parseSheetFile(file, history = []) {
             // Intervenção (Bocejo + Olho fechado)
             alertas:         evIntervencao.length,
             tipos:           tiposIntervencao,
+            ultimoEvento,
             // Reportar à empresa
-            reportaveis:     evReportar.length,
+            reportaveis:     evReportarFinal.length,
             tiposReportar,
-            // Técnicos (Obstrução de Câmera + Perda de vídeo)
+            ultimoEventoReportar,
+            // Técnicos (Obstrução de Câmera + Perda de vídeo + Sem motorista)
             tecnicos:        evTecnico.length,
+            tiposTecnico,
             severidade:      severidadeMax,
             intervencoes:    0,
           };
@@ -228,6 +267,7 @@ export async function parseSheetFile(file, history = []) {
           falsosPositivos,
           filtradosPorVelocidade,
           filtradosPorHistorico,
+          dinonAutoDescartes,
         };
 
         resolve({ drivers, stats });
