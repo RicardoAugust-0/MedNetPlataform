@@ -69,18 +69,37 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+        .insert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() })
         .select('role')
         .single();
+
+      if (error) {
+        const { data: current } = await supabase
+          .from('profiles')
+          .select('nome, cargo, role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (!ignore && current) {
+          setProfile({
+            id: session.user.id,
+            email: session.user.email,
+            nome: current.nome || nome,
+            cargo: current.cargo || cargo,
+            role: current.role || 'operador',
+          });
+        }
+        return;
+      }
 
       if (!ignore) {
         setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: data?.role || 'operador' });
       }
     };
 
-    syncProfile();
+    syncProfile().catch(() => {});
     return () => { ignore = true; };
   }, [session]);
 
