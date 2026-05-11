@@ -114,6 +114,15 @@ export default function UploadArea({
             </div>
             <div className="stat-sub">removidos</div>
           </div>
+          {loadStats.filtradosPorVelocidade > 0 && (
+            <div className="stat-box">
+              <div className="stat-label">Baixa velocidade</div>
+              <div className="stat-value" style={{ color: "var(--text-muted)" }}>
+                {loadStats.filtradosPorVelocidade}
+              </div>
+              <div className="stat-sub">&lt; 10 km/h ignorados</div>
+            </div>
+          )}
           {loadStats.filtradosPorHistorico > 0 && (
             <div className="stat-box">
               <div className="stat-label">Já tratados</div>
