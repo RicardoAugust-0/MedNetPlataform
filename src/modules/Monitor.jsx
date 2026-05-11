@@ -171,10 +171,40 @@ export default function Monitor() {
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
-  const deleteAlert = async (d) => {
-    if (!(await confirm({ title: 'Descartar alerta', message: `Descartar alerta de intervenção de ${d.nome}?`, danger: true }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'descarte', obs: `Alerta descartado · ${d.alertas} evento(s) removidos` });
-    setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+  const deleteAlert = async (d, tipo = 'intervencao') => {
+    const isIntervencao = tipo === 'intervencao';
+    const isReportar = tipo === 'reportar';
+    const isTecnico = tipo === 'tecnico';
+    const tipoLabel = {
+      intervencao: 'intervenção',
+      reportar: 'reportar',
+      tecnico: 'técnico'
+    }[tipo] || 'intervenção';
+    const descarteObs = {
+      intervencao: `Alerta descartado · ${d.alertas} evento(s) removidos`,
+      reportar: `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`,
+      tecnico: `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
+    }[tipo] || `Alerta descartado · ${d.alertas} evento(s) removidos`;
+    if (!(await confirm({
+      title: 'Descartar alerta',
+      message: `Descartar alerta ${tipoLabel} de ${d.nome}?`,
+      danger: true
+    }))) return;
+    await registrar({
+      motorista: d.nome,
+      placa: d.placa,
+      transportadora: d.transportadora,
+      tipo: 'descarte',
+      obs: descarteObs
+    });
+    setDrivers(drivers.map(x => x === d ? {
+      ...x,
+      alertas: isIntervencao ? 0 : x.alertas,
+      tipos: isIntervencao ? [] : x.tipos,
+      reportaveis: isReportar ? 0 : x.reportaveis,
+      tiposReportar: isReportar ? [] : x.tiposReportar,
+      tecnicos: isTecnico ? 0 : x.tecnicos
+    } : x));
   };
 
   const clearQueue = async () => {
