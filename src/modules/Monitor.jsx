@@ -123,9 +123,21 @@ export default function Monitor() {
       setStatusKind('active');
       const filtroMsg = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
       const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}`);
+      const dinonMsg = stats.dinonAutoDescartes?.length > 0 ? ` · ${stats.dinonAutoDescartes.reduce((s, x) => s + x.count, 0)} evento(s) de fumo Dinon auto-descartados` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${dinonMsg}`);
       setActiveTab('intervencao');
       notificarCriticos(timestamped.filter(d => d.alertas >= 5));
+
+      // Auto-register Dinon fumo discards silently in the background
+      for (const item of stats.dinonAutoDescartes || []) {
+        registrar({
+          motorista: item.nome,
+          placa: item.placa,
+          transportadora: item.transportadora,
+          tipo: 'descarte',
+          obs: `Auto-descarte (regra Dinon) · ${item.count} evento(s) de fumo descartados automaticamente`,
+        }).catch(console.warn);
+      }
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);

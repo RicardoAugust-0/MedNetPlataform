@@ -33,6 +33,20 @@ export default function DriverCard({ d, type, handlers }) {
           )}
 
           <ElapsedTimer since={d._loadedAt} />
+
+          {type === 'intervencao' && d.ultimoEvento && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
+              <i className="ti ti-clock-hour-4" style={{ fontSize: 9, marginRight: 2 }}></i>
+              {new Date(d.ultimoEvento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          {type === 'reportar' && d.ultimoEventoReportar && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
+              <i className="ti ti-clock-hour-4" style={{ fontSize: 9, marginRight: 2 }}></i>
+              {new Date(d.ultimoEventoReportar).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
         </div>
         
         <div className="d-detail">
@@ -46,8 +60,16 @@ export default function DriverCard({ d, type, handlers }) {
           </span>
         </div>
         
-        <TiposBadge tipos={type === 'intervencao' ? d.tipos : d.tiposReportar} />
-        
+        <TiposBadge tipos={type === 'intervencao' ? d.tipos : type === 'reportar' ? d.tiposReportar : null} />
+
+        {type === 'tecnicos' && d.tiposTecnico && Object.keys(d.tiposTecnico).length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            {Object.entries(d.tiposTecnico).map(([tipo, cnt], i, arr) => (
+              <span key={tipo}>{cnt} {tipo}{i < arr.length - 1 ? ' + ' : ''}</span>
+            ))}
+          </div>
+        )}
+
         {type === 'intervencao' && d.reportaveis > 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             + {d.reportaveis} evento(s) reportável(is): {d.tiposReportar?.join(', ')}
