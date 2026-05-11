@@ -39,9 +39,12 @@ function maxSeveridade(severidades) {
 
 function parseSpeed(value) {
   if (value == null || value === '') return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  const match = String(value).trim().replace(',', '.').match(/-?\d+(?:\.\d+)?/);
-  return match ? Number.parseFloat(match[0]) : null;
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
+  const normalized = String(value).trim().replace(',', '.');
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number.parseFloat(match[0]);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 // Aceita Date, número serial do Excel ou string "DD/MM/AAAA HH:MM[:SS]".
@@ -100,10 +103,8 @@ export async function parseSheetFile(file, history = []) {
         const wb   = XLSX.read(data, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws);
-        const firstRow = rows[0];
-        const speedColumn = firstRow
-          ? Object.keys(firstRow).find(key => normalize(key).includes('velocidade'))
-          : null;
+        const speedColumn = [...new Set(rows.flatMap(row => Object.keys(row || {})))]
+          .find(key => normalize(key).includes('velocidade'));
 
         let falsosPositivos = 0;
         let filtradosPorVelocidade = 0;
