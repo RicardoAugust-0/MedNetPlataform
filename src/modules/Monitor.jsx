@@ -175,7 +175,16 @@ export default function Monitor() {
     const isIntervencao = tipo === 'intervencao';
     const isReportar = tipo === 'reportar';
     const isTecnico = tipo === 'tecnico';
-    const tipoLabel = isIntervencao ? 'intervenção' : isReportar ? 'reportar' : 'técnico';
+    const tipoLabel = {
+      intervencao: 'intervenção',
+      reportar: 'reportar',
+      tecnico: 'técnico'
+    }[tipo] || 'intervenção';
+    const descarteObs = {
+      intervencao: `Alerta descartado · ${d.alertas} evento(s) removidos`,
+      reportar: `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`,
+      tecnico: `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
+    }[tipo] || `Alerta descartado · ${d.alertas} evento(s) removidos`;
     if (!(await confirm({
       title: 'Descartar alerta',
       message: `Descartar alerta ${tipoLabel} de ${d.nome}?`,
@@ -186,11 +195,7 @@ export default function Monitor() {
       placa: d.placa,
       transportadora: d.transportadora,
       tipo: 'descarte',
-      obs: isIntervencao
-        ? `Alerta descartado · ${d.alertas} evento(s) removidos`
-        : isReportar
-          ? `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`
-          : `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
+      obs: descarteObs
     });
     setDrivers(drivers.map(x => x === d ? {
       ...x,
