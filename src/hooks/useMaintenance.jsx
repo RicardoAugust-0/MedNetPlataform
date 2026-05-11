@@ -24,7 +24,7 @@ export function useMaintenance() {
       });
 
     const channel = supabase
-      .channel('app_settings_maintenance')
+      .channel('app_settings_maintenance-' + crypto.randomUUID())
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.maintenance' },
