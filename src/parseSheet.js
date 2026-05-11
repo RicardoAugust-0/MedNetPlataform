@@ -41,7 +41,8 @@ function parseSpeed(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
   const normalized = String(value).trim().replace(',', '.');
-  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  if (normalized.startsWith('-')) return null;
+  const match = normalized.match(/\d+(?:\.\d+)?/);
   if (!match) return null;
   const parsed = Number.parseFloat(match[0]);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
@@ -103,8 +104,12 @@ export async function parseSheetFile(file, history = []) {
         const wb   = XLSX.read(data, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws);
-        const speedColumn = [...new Set(rows.flatMap(row => Object.keys(row || {})))]
-          .find(key => normalize(key).includes('velocidade'));
+        const speedColumnRow = rows.find(row =>
+          Object.keys(row || {}).some(key => normalize(key).includes('velocidade'))
+        );
+        const speedColumn = speedColumnRow
+          ? Object.keys(speedColumnRow).find(key => normalize(key).includes('velocidade'))
+          : null;
 
         let falsosPositivos = 0;
         let filtradosPorVelocidade = 0;
@@ -115,10 +120,12 @@ export async function parseSheetFile(file, history = []) {
             falsosPositivos += 1;
             return false;
           }
-          const velocidade = speedColumn ? parseSpeed(r[speedColumn]) : null;
-          if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
-            filtradosPorVelocidade += 1;
-            return false;
+          if (speedColumn) {
+            const velocidade = parseSpeed(r[speedColumn]);
+            if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
+              filtradosPorVelocidade += 1;
+              return false;
+            }
           }
           return true;
         });
