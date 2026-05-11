@@ -257,6 +257,28 @@
 .driver-item:last-child { border-bottom: none; }
 .driver-item:hover { background: var(--surface-1); }
 
+.driver-list-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.driver-list-divider i { color: var(--warning-500); }
+.driver-list-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .d-avatar {
   width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center;
