@@ -259,9 +259,18 @@ export default function Monitor() {
         intervencaoList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista requer intervenção" sub="Bocejo ou Olho fechado" />
           : <div className="driver-list">
-              {paginate(intervencaoList).map(d => (
-                <DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} />
-              ))}
+              {paginate(intervencaoList).reduce((acc, d, i, arr) => {
+                if (i > 0 && arr[i - 1].alertas >= 5 && d.alertas < 5) {
+                  acc.push(
+                    <div key="divider-below-5" className="driver-list-divider">
+                      <i className="ti ti-arrow-down"></i>
+                      <span>Abaixo de 5 eventos</span>
+                    </div>
+                  );
+                }
+                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} />);
+                return acc;
+              }, [])}
             </div>
       )}
 
