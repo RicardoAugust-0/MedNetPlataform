@@ -43,15 +43,45 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Upsert atualiza last_seen e retorna a linha — incluindo role gerenciado pelo admin
-    supabase
-      .from('profiles')
-      .upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-      .select('role')
-      .single()
-      .then(({ data }) => {
+    let ignore = false;
+    const syncProfile = async () => {
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('nome, cargo, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', session.user.id);
+
+        if (!ignore) {
+          setProfile({
+            id: session.user.id,
+            email: session.user.email,
+            nome: existing.nome || nome,
+            cargo: existing.cargo || cargo,
+            role: existing.role || 'operador',
+          });
+        }
+        return;
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+        .select('role')
+        .single();
+
+      if (!ignore) {
         setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: data?.role || 'operador' });
-      });
+      }
+    };
+
+    syncProfile();
+    return () => { ignore = true; };
   }, [session]);
 
   const signIn = (email, password) =>
