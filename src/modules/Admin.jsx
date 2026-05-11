@@ -1,6 +1,7 @@
 // deno-lint-ignore-file
 import { useState } from 'react';
 import { useProfiles } from '../hooks/useProfiles.jsx';
+import { useMaintenance } from '../hooks/useMaintenance.jsx';
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useToast } from '../hooks/useToast.jsx';
 import { supabase } from '../supabase.js';
@@ -8,6 +9,7 @@ import { iniciais } from '../utils.js';
 
 export default function Admin() {
   const { profiles, loading, updateRole, updateInfo } = useProfiles();
+  const { maintenance, setMaintenance } = useMaintenance();
   const { profile: me } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState(null);
@@ -15,6 +17,23 @@ export default function Admin() {
   const [editCargo, setEditCargo] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [maintMsg, setMaintMsg] = useState('');
+  const [savingMaint, setSavingMaint] = useState(false);
+
+  const toggleMaintenance = async () => {
+    const next = !maintenance.enabled;
+    setSavingMaint(true);
+    try {
+      await setMaintenance({ enabled: next, message: maintMsg || maintenance.message || '' });
+      toast(
+        next ? 'Plataforma travada para manutenção' : 'Plataforma liberada',
+        next ? 'info' : 'success'
+      );
+    } catch {
+      toast('Erro ao atualizar modo manutenção', 'error');
+    }
+    setSavingMaint(false);
+  };
 
   const startEdit = (p) => { setEditing(p.id); setEditNome(p.nome || ''); setEditCargo(p.cargo || ''); };
   const saveEdit  = async () => { await updateInfo(editing, { nome: editNome, cargo: editCargo }); setEditing(null); };
@@ -91,6 +110,52 @@ export default function Admin() {
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
           O operador receberá um e-mail com link para definir a senha e acessar a plataforma.
         </div>
+      </div>
+
+      {/* Modo manutenção */}
+      <div className="card" style={{ marginBottom: 16, borderColor: maintenance.enabled ? '#F26931' : undefined }}>
+        <div className="card-header">
+          <div className="card-title">
+            <i className="ti ti-tools"></i> Modo manutenção
+            {maintenance.enabled && (
+              <span style={{ fontSize: 10, background: '#F26931', color: '#fff', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700, letterSpacing: 0.4 }}>
+                ATIVO
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.55 }}>
+          Quando ativo, operadores veem uma página de manutenção e não conseguem acessar a plataforma. Admins continuam com acesso normal.
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Mensagem opcional para os operadores</label>
+          <input
+            className="form-control"
+            type="text"
+            placeholder="Ex: Estamos atualizando o sistema, voltamos em breve."
+            value={maintMsg || maintenance.message || ''}
+            onChange={e => setMaintMsg(e.target.value)}
+            disabled={savingMaint}
+          />
+        </div>
+        <button
+          type="button"
+          className="btn"
+          onClick={toggleMaintenance}
+          disabled={savingMaint}
+          style={{
+            background: maintenance.enabled ? 'var(--success-500, #1a7a3a)' : '#F26931',
+            color: '#fff',
+            border: 'none',
+          }}
+        >
+          {savingMaint
+            ? <><i className="ti ti-loader-2"></i> Salvando…</>
+            : maintenance.enabled
+              ? <><i className="ti ti-lock-open"></i> Liberar plataforma</>
+              : <><i className="ti ti-lock"></i> Travar plataforma</>
+          }
+        </button>
       </div>
 
       {/* Lista de operadores */}
