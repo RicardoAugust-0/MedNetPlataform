@@ -99,7 +99,9 @@ export function AuthProvider({ children }) {
       }
     };
 
-    syncProfile().catch(() => {});
+    syncProfile().catch((error) => {
+      console.error('Erro ao sincronizar perfil do usuário:', error);
+    });
     return () => { ignore = true; };
   }, [session]);
 
