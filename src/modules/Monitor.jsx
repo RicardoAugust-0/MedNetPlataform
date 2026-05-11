@@ -1,11 +1,11 @@
 // deno-lint-ignore-file
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
-import { parseSheetFile } from '../parseSheet';
+import { getPlatform, listPlatforms } from '../platforms';
 
 // Monitor Subcomponents
 import { EmptyState, applyTemplate } from './monitor/utils';
@@ -47,11 +47,14 @@ async function notificarCriticos(criticos) {
 }
 
 export default function Monitor() {
-  const { drivers, setDrivers, filters, setFilters, setActivePanel } = useApp();
+  const { drivers, setDrivers, filters, setFilters, setActivePanel, platformId, setPlatformId } = useApp();
   const { profile, session } = useAuth();
   const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
+
+  const platform     = useMemo(() => getPlatform(platformId), [platformId]);
+  const allPlatforms = useMemo(() => listPlatforms({ includePlanned: true }), []);
 
   const [templateModal, setTemplateModal] = useState(null);
   const [dossieDriver, setDossieDriver] = useState(null);
@@ -88,6 +91,7 @@ export default function Monitor() {
   }, [sheetLoadedAt]);
 
   /* ── Filtros fila ── */
+  const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filtered = drivers.filter(d => {
     const f = filters;
     if (f.turno && d.turno !== f.turno) return false;
@@ -96,9 +100,7 @@ export default function Monitor() {
       const todos = [...(d.tipos || []), ...(d.tiposReportar || [])];
       if (!todos.some(t => t.includes(f.comportamento))) return false;
     }
-    if (f.prioridade === 'gravissimo' && d.severidade !== 'Gravíssimo') return false;
-    if (f.prioridade === 'grave'      && d.severidade !== 'Grave')      return false;
-    if (f.prioridade === 'normal'     && d.severidade !== 'Normal')     return false;
+    if (f.prioridade && normalizeSev(d.severidade) !== f.prioridade) return false;
     return true;
   });
 
@@ -111,31 +113,35 @@ export default function Monitor() {
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
+      if (!platform.spreadsheet?.parse) {
+        throw new Error(`Plataforma "${platform.name}" não suporta upload de planilha.`);
+      }
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: newDrivers, stats } = await parseSheetFile(file, filterHistory);
+      const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
       const loadedAt = new Date().toISOString();
-      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
+      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
       setDrivers(timestamped);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats(stats);
       setStatusKind('active');
-      const filtroMsg = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
+      const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
       const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
-      const dinonMsg = stats.dinonAutoDescartes?.length > 0 ? ` · ${stats.dinonAutoDescartes.reduce((s, x) => s + x.count, 0)} evento(s) de fumo Dinon auto-descartados` : '';
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${dinonMsg}`);
+      const autoDesc      = stats.autoDescartes || [];
+      const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}`);
       setActiveTab('intervencao');
       notificarCriticos(timestamped.filter(d => d.alertas >= 5));
 
-      // Auto-register Dinon fumo discards silently in the background
-      for (const item of stats.dinonAutoDescartes || []) {
+      // Auto-register platform-specific discards silently in the background
+      for (const item of autoDesc) {
         registrar({
           motorista: item.nome,
           placa: item.placa,
           transportadora: item.transportadora,
           tipo: 'descarte',
-          obs: `Auto-descarte (regra Dinon) · ${item.count} evento(s) de fumo descartados automaticamente`,
+          obs: `Auto-descarte · ${item.motivo || platform.name} · ${item.count} evento(s)`,
         }).catch(console.warn);
       }
     } catch (err) {
@@ -165,7 +171,7 @@ export default function Monitor() {
     postToSheets({
       data,
       empresa:         d.transportadora || '',
-      sistema:         'SASCAR',
+      sistema:         platform.sistema,
       colaborador:     d.nome,
       placa:           d.placa || '',
       frota:           d.frota || '',
@@ -271,15 +277,17 @@ export default function Monitor() {
   return (
     <div className="monitor-grid">
       
-      <UploadArea 
+      <UploadArea
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
+        platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
       />
 
       <MonitorFilters
         profile={profile} filters={filters} setFilters={setFilters}
         transps={transps} resetFilters={resetFilters}
+        platform={platform}
       />
 
       {/* Tabs */}

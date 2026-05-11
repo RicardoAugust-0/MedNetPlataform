@@ -14,6 +14,7 @@ export function AppProvider({ children }) {
   const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
   const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'' });
+  const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));
   const [accent,      setAccentState]      = useState(() => load('accent',   'vinho'));
@@ -27,6 +28,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const setActivePanel = persist(setActivePanelState, 'activePanel');
+  const setPlatformId  = persist(setPlatformIdState,  'platformId');
   const setTheme       = persist(setThemeState,       'theme');
   const setDensity     = persist(setDensityState,     'density');
   const setAccent      = persist(setAccentState,      'accent');
@@ -39,6 +41,7 @@ export function AppProvider({ children }) {
       activePanel, setActivePanel,
       drivers, setDrivers,
       filters, setFilters,
+      platformId, setPlatformId,
       theme, setTheme,
       density, setDensity,
       accent, setAccent,
