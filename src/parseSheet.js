@@ -1,6 +1,7 @@
 const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado', 'Distração Genérica'];
 const TECNICO_CATS        = ['Obstrução de Câmera'];
 const TECNICO_EVENTOS     = ['Perda de vídeo'];
+const MIN_MOVING_SPEED_KMH = 10;
 
 const normalize = (value) =>
   String(value || '')
@@ -34,6 +35,13 @@ function maxSeveridade(severidades) {
   if (severidades.includes('Gravíssimo')) return 'Gravíssimo';
   if (severidades.includes('Grave'))      return 'Grave';
   return 'Normal';
+}
+
+function parseSpeed(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const match = String(value).trim().replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number.parseFloat(match[0]) : null;
 }
 
 // Aceita Date, número serial do Excel ou string "DD/MM/AAAA HH:MM[:SS]".
@@ -92,9 +100,24 @@ export async function parseSheetFile(file, history = []) {
         const wb   = XLSX.read(data, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws);
+        const speedColumn = Object.keys(rows[0] || {}).find(key => normalize(key).includes('velocidade'));
 
-        // Remove falsos positivos
-        const valid = rows.filter(r => r['Status'] !== 'Falso positivo');
+        let falsosPositivos = 0;
+        let filtradosPorVelocidade = 0;
+
+        // Remove falsos positivos e eventos com motorista parado / baixa velocidade.
+        const valid = rows.filter(r => {
+          if (r['Status'] === 'Falso positivo') {
+            falsosPositivos += 1;
+            return false;
+          }
+          const velocidade = speedColumn ? parseSpeed(r[speedColumn]) : null;
+          if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
+            filtradosPorVelocidade += 1;
+            return false;
+          }
+          return true;
+        });
 
         // Agrupar por Placa
         const byPlaca = {};
@@ -191,7 +214,8 @@ export async function parseSheetFile(file, history = []) {
           soReportar:       drivers.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
           soTecnico:        drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
           totalEventos:     valid.length,
-          falsosPositivos:  rows.length - valid.length,
+          falsosPositivos,
+          filtradosPorVelocidade,
           filtradosPorHistorico,
         };
 
