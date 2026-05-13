@@ -120,8 +120,17 @@ export function AuthProvider({ children }) {
     return () => { ignore = true; };
   }, [session]);
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (email, password) => {
+    if (!isSupabaseConfigured) {
+      if (email === 'admin@mednet.com.br') {
+        setSession({ user: { id: 'mock-admin', email, user_metadata: { nome: 'Admin Teste', cargo: 'Gerente' } } });
+        return { error: null };
+      }
+      setSession({ user: { id: 'mock-user', email, user_metadata: { nome: 'Operador Teste', cargo: 'Operador' } } });
+      return { error: null };
+    }
+    return supabase.auth.signInWithPassword({ email, password });
+  };
 
   const signOut = () => supabase.auth.signOut();
 
