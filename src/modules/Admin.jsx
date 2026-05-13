@@ -53,7 +53,17 @@ export default function Admin() {
   };
 
   const startEdit = (p) => { setEditing(p.id); setEditNome(p.nome || ''); setEditCargo(p.cargo || ''); };
-  const saveEdit  = async () => { await updateInfo(editing, { nome: editNome, cargo: editCargo }); setEditing(null); };
+  const saveEdit  = async () => {
+    const nome  = editNome.trim();
+    const cargo = editCargo.trim();
+    const { error } = await updateInfo(editing, { nome, cargo });
+    if (error) {
+      toast(error.message || 'Não foi possível salvar as alterações', 'error');
+      return;
+    }
+    toast('Operador atualizado', 'success');
+    setEditing(null);
+  };
 
   const handleInvite = async (e) => {
     e.preventDefault();
