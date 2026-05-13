@@ -1,3 +1,27 @@
+function buildSascarUrl() {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const startTime = Math.floor(today.getTime() / 1000);
+  const endTime = startTime + 86399;
+
+  const baseUrl = 'https://www.smartcamera.michelin.com/shipper/ft-shipper/alarm-list';
+  const queryParts = [
+    'alarmCategory=100574',
+    'alarmCategory=100575',
+    'alarmCategory=100573',
+    'alarmLevel=15',
+    'alarmLevel=14',
+    'alarmLevel=13',
+    `endTime=${endTime}`,
+    'evidence_state=3',
+    'page=1',
+    'showMode=card',
+    `startTime=${startTime}`,
+  ];
+
+  return `${baseUrl}?${queryParts.join('&')}`;
+}
+
 export default function UploadArea({
   statusKind,
   statusMsg,
@@ -29,6 +53,8 @@ export default function UploadArea({
   const accept       = spreadsheet?.accept      || ".xlsx,.xls,.csv";
   const uploadTitle  = spreadsheet?.uploadTitle || `Solte aqui o relatório da plataforma ${platform?.name || ""}`.trim();
   const uploadHint   = spreadsheet?.uploadHint  || accept.split(",").join(" · ");
+
+  const portalUrl = platform?.id === 'sascar' ? buildSascarUrl() : platform?.portalUrl;
 
   return (
     <>
@@ -108,9 +134,9 @@ export default function UploadArea({
           <i className="ti ti-trash"></i> Limpar fila
         </button>
 
-        {platform?.portalUrl && (
+        {portalUrl && (
           <a
-            href={platform.portalUrl}
+            href={portalUrl}
             target="_blank"
             rel="noreferrer"
             className="btn btn-sm"
