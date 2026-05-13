@@ -1,6 +1,6 @@
 function buildSascarUrl() {
   const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
   const startTime = Math.floor(today.getTime() / 1000);
   const endTime = startTime + 86399;
 
