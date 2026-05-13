@@ -15,6 +15,7 @@ export const NAV_ITEMS = [
   { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
   { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
   { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
+  { id: 'crosscheck', label: 'Cross-Check',   icon: 'ti-list-check',      group: 'Operação' },
 ];
 
 export const PANEL_TITLES = {
@@ -28,6 +29,7 @@ export const PANEL_TITLES = {
   perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
   admin:     { t: 'Administração',          s: 'Gerenciamento da equipe' },
   analytics: { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
+  crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
 };
 
 export const MOCK_DRIVERS = [

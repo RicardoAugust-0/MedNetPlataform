@@ -21,6 +21,7 @@ import Notes from "./modules/Notes.jsx";
 import Agenda from "./modules/Agenda.jsx";
 import Admin from "./modules/Admin.jsx";
 import Analytics from "./modules/Analytics.jsx";
+import CrossCheck from "./modules/CrossCheck.jsx";
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
@@ -113,6 +114,7 @@ function AppShell() {
             <Panel id="notas"><Notes /></Panel>
             <Panel id="links"><Links /></Panel>
             <Panel id="perfil"><Profile /></Panel>
+            <Panel id="crosscheck"><CrossCheck /></Panel>
             {profile?.role === 'admin' && (
               <>
                 <Panel id="admin"><Admin /></Panel>
