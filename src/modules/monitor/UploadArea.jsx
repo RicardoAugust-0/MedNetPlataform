@@ -12,7 +12,18 @@ export default function UploadArea({
   platform,
   platforms = [],
   onPlatformChange,
+  historyAgeMin,
+  reloadHistory,
+  histLoading,
 }) {
+  const historyAgeLabel = historyAgeMin == null ? null
+    : historyAgeMin < 1  ? 'agora'
+    : historyAgeMin < 60 ? `${historyAgeMin}min`
+    : `${Math.floor(historyAgeMin / 60)}h${historyAgeMin % 60 > 0 ? ` ${historyAgeMin % 60}min` : ''}`;
+  const historyAgeColor = historyAgeMin == null ? null
+    : historyAgeMin < 10 ? 'var(--success-500, #22c55e)'
+    : historyAgeMin < 30 ? 'var(--warning-500)'
+    : 'var(--danger-500)';
   const spreadsheet = platform?.spreadsheet;
   const supportsUpload = !!spreadsheet;
   const accept       = spreadsheet?.accept      || ".xlsx,.xls,.csv";
@@ -69,6 +80,29 @@ export default function UploadArea({
             </select>
           </div>
         )}
+
+        {historyAgeLabel && (
+          <span
+            title="Idade do histórico de atendimentos carregado"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, padding: '2px 10px', borderRadius: 99, fontWeight: 600,
+              flexShrink: 0, background: historyAgeColor + '22', color: historyAgeColor,
+            }}
+          >
+            <i className="ti ti-history" style={{ fontSize: 10 }}></i>
+            histórico {historyAgeLabel}
+          </span>
+        )}
+
+        <button
+          className="btn btn-sm"
+          onClick={reloadHistory}
+          disabled={histLoading || !reloadHistory}
+          title="Recarregar histórico de atendimentos do banco"
+        >
+          <i className={`ti ${histLoading ? 'ti-loader-2' : 'ti-refresh'}`}></i> Recarregar histórico
+        </button>
 
         <button className="btn btn-sm btn-danger" onClick={clearQueue}>
           <i className="ti ti-trash"></i> Limpar fila
@@ -128,6 +162,9 @@ export default function UploadArea({
           <div className="stat-box">
             <div className="stat-label">Placas carregadas</div>
             <div className="stat-value">{loadStats.total}</div>
+            {loadStats.totalNaFila != null && loadStats.totalNaFila !== loadStats.total && (
+              <div className="stat-sub">{loadStats.novas} nova(s) · {loadStats.atualizadas} atualizada(s) · {loadStats.totalNaFila} na fila</div>
+            )}
           </div>
           <div className="stat-box">
             <div className="stat-label">Intervenção</div>

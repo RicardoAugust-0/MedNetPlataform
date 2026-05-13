@@ -11,6 +11,7 @@ export function useAtendimentos() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
+  const [historyLoadedAt, setHistoryLoadedAt] = useState(null);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -21,7 +22,7 @@ export function useAtendimentos() {
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
     if (error) { setError(error.message); toast('Erro ao carregar histórico', 'error'); }
-    else setHistory(data.map(toLocal));
+    else { setHistory(data.map(toLocal)); setHistoryLoadedAt(new Date().toISOString()); }
     setLoading(false);
   }, []);
 
@@ -125,7 +126,7 @@ export function useAtendimentos() {
     return all;
   }, []);
 
-  return { history, loading, error, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter };
+  return { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter };
 }
 
 function toLocal(row) {
