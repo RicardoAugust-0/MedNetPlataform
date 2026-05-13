@@ -92,6 +92,8 @@ export default function Monitor() {
 
   /* ── Filtros fila ── */
   const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const buscaNorm = normalizeText(filters.busca).trim();
   const filtered = drivers.filter(d => {
     const f = filters;
     if (f.turno && d.turno !== f.turno) return false;
@@ -101,6 +103,7 @@ export default function Monitor() {
       if (!todos.some(t => t.includes(f.comportamento))) return false;
     }
     if (f.prioridade && normalizeSev(d.severidade) !== f.prioridade) return false;
+    if (buscaNorm && !normalizeText(d.placa).includes(buscaNorm) && !normalizeText(d.nome).includes(buscaNorm)) return false;
     return true;
   });
 
@@ -110,11 +113,40 @@ export default function Monitor() {
   const transps         = [...new Set(drivers.map(d => d.transportadora))].sort();
 
   /* ── Upload ── */
+  const hashFile = async (file) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch { return null; }
+  };
+
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
       if (!platform.spreadsheet?.parse) {
         throw new Error(`Plataforma "${platform.name}" não suporta upload de planilha.`);
+      }
+      const hash = await hashFile(file);
+      if (hash) {
+        let recent = [];
+        try { recent = JSON.parse(localStorage.getItem('mn_sheet_hashes') || '[]'); } catch {}
+        const dup = recent.find(r => r.hash === hash);
+        if (dup) {
+          const when = new Date(dup.at).toLocaleString('pt-BR');
+          const ok = await confirm({
+            title: 'Planilha já carregada',
+            message: `Esta planilha (${dup.name}) já foi processada em ${when}. Deseja carregar novamente?`,
+          });
+          if (!ok) {
+            setLoading(false);
+            setStatusKind('idle');
+            setStatusMsg('Upload cancelado: planilha duplicada.');
+            return;
+          }
+        }
+        const updated = [{ hash, name: file.name, at: new Date().toISOString() }, ...recent.filter(r => r.hash !== hash)].slice(0, 10);
+        try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch {}
       }
       const filterHistory = await loadAtendimentosForFilter(90);
       const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
@@ -242,7 +274,7 @@ export default function Monitor() {
     setSheetAgeMin(null);
   };
 
-  const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
+  const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '', busca: '' });
 
   const openDossie = async (nome) => {
     setDossieDriver(nome);

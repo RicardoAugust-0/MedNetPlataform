@@ -13,7 +13,7 @@ export function AppProvider({ children }) {
   const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
   const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
   const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
-  const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'' });
+  const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));

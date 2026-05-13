@@ -22,6 +22,16 @@ export default function MonitorFilters({
       <div className="filter-bar">
         <div className="filter-group"><label><i className="ti ti-filter"></i> Filtros:</label></div>
         <div className="filter-group">
+          <label><i className="ti ti-search"></i> Buscar</label>
+          <input
+            type="search"
+            value={filters.busca || ''}
+            onChange={e => setFilters({ ...filters, busca: e.target.value })}
+            placeholder="Placa ou nome…"
+            style={{ fontSize: 12, padding: '2px 6px', minWidth: 140 }}
+          />
+        </div>
+        <div className="filter-group">
           <label>Turno</label>
           <select value={filters.turno} onChange={e => setFilters({ ...filters, turno: e.target.value })}>
             <option value="">Ambos</option>
@@ -66,7 +76,7 @@ export default function MonitorFilters({
             )}
           </select>
         </div>
-        <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento}>
+        <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento && !filters.busca}>
           Limpar
         </button>
       </div>
