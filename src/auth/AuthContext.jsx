@@ -35,11 +35,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!session?.user) { setProfile(null); return; }
     const meta = session.user.user_metadata;
-    const nome  = meta?.nome  || session.user.email.split('@')[0];
-    const cargo = meta?.cargo || 'Operador';
+    const emailFallback = session.user.email.split('@')[0];
+    // Usado apenas na criação do perfil (primeiro login). Para perfis já
+    // existentes a fonte de verdade é a tabela `profiles` — nunca o
+    // user_metadata, que pode estar desatualizado se um admin renomeou o
+    // operador (admin atualiza só `profiles`, não o auth user_metadata).
+    const initialNome  = meta?.nome  || emailFallback;
+    const initialCargo = meta?.cargo || 'Operador';
 
     if (!isSupabaseConfigured) {
-      setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: 'operador' });
+      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role: 'operador' });
       return;
     }
 
@@ -61,8 +66,8 @@ export function AuthProvider({ children }) {
           setProfile({
             id: session.user.id,
             email: session.user.email,
-            nome: existing.nome || nome,
-            cargo: existing.cargo || cargo,
+            nome: existing.nome || emailFallback,
+            cargo: existing.cargo || 'Operador',
             role: existing.role || 'operador',
             avatar_url: existing.avatar_url || null,
             telefone:   existing.telefone   || '',
@@ -74,7 +79,7 @@ export function AuthProvider({ children }) {
 
       const { data, error } = await supabase
         .from('profiles')
-        .insert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() })
+        .insert({ id: session.user.id, nome: initialNome, cargo: initialCargo, last_seen: new Date().toISOString() })
         .select('role')
         .single();
 
@@ -89,8 +94,8 @@ export function AuthProvider({ children }) {
           setProfile({
             id: session.user.id,
             email: session.user.email,
-            nome: current.nome || nome,
-            cargo: current.cargo || cargo,
+            nome: current.nome || emailFallback,
+            cargo: current.cargo || 'Operador',
             role: current.role || 'operador',
             avatar_url: current.avatar_url || null,
             telefone:   current.telefone   || '',
@@ -103,7 +108,7 @@ export function AuthProvider({ children }) {
       if (!ignore) {
         setProfile({
           id: session.user.id, email: session.user.email,
-          nome, cargo, role: data?.role || 'operador',
+          nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
           avatar_url: null, telefone: '', bio: '',
         });
       }
