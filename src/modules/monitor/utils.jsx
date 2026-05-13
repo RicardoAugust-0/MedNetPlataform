@@ -65,6 +65,12 @@ export const EmptyState = ({ icon, msg, sub }) => (
   </div>
 );
 
+// Escape RFC 4180: envolve em aspas duplas e dobra aspas internas.
+function csvEscape(value) {
+  const s = value == null ? '' : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 export function exportCSV(rows) {
   const header = ['Data', 'Hora', 'Motorista', 'Placa', 'Transportadora', 'Tipo', 'Operador', 'Observação'];
   const lines = rows.map(r => [
@@ -75,11 +81,12 @@ export function exportCSV(rows) {
     r.transportadora || '',
     { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' }[r.tipo] || r.tipo,
     r.operador || '',
-    (r.obs || '').replace(/,/g, ';'),
-  ].map(v => `"${v}"`).join(','));
-  const csv = [header.join(','), ...lines].join('\n');
+    r.obs || '',
+  ].map(csvEscape).join(','));
+  const csv = [header.map(csvEscape).join(','), ...lines].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `atendimentos_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+  URL.revokeObjectURL(a.href);
 }

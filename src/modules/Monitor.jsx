@@ -49,7 +49,7 @@ async function notificarCriticos(criticos) {
 export default function Monitor() {
   const { drivers, setDrivers, filters, setFilters, setActivePanel, platformId, setPlatformId } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
@@ -89,6 +89,15 @@ export default function Monitor() {
     }, 60000);
     return () => clearInterval(id);
   }, [sheetLoadedAt]);
+
+  const [historyAgeMin, setHistoryAgeMin] = useState(null);
+  useEffect(() => {
+    if (!historyLoadedAt) { setHistoryAgeMin(null); return; }
+    const tick = () => setHistoryAgeMin(Math.floor((Date.now() - new Date(historyLoadedAt)) / 60000));
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, [historyLoadedAt]);
 
   /* ── Filtros fila ── */
   const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -263,6 +272,47 @@ export default function Monitor() {
     } : x));
   };
 
+  const bulkDiscard = async () => {
+    const tab = activeTab;
+    if (!['intervencao', 'reportar', 'tecnicos'].includes(tab)) return;
+    const list = tab === 'intervencao' ? intervencaoList : tab === 'reportar' ? reportarList : tecList;
+    if (list.length === 0) return;
+    const tabLabel = tab === 'intervencao' ? 'intervenção' : tab === 'reportar' ? 'reportar' : 'técnico';
+    if (!(await confirm({
+      title: `Descartar todos os alertas de ${tabLabel}`,
+      message: `Descartar ${list.length} alerta(s) de ${tabLabel} visíveis na fila atual? Cada motorista terá um atendimento "descarte" registrado.`,
+      danger: true,
+    }))) return;
+
+    setLoading(true);
+    setStatusMsg(`Descartando ${list.length} alerta(s) de ${tabLabel}…`);
+
+    const obsFor = (d) => tab === 'intervencao' ? `Descarte em massa · ${d.alertas} evento(s)`
+                       : tab === 'reportar'    ? `Descarte em massa · ${d.reportaveis} evento(s) reportáveis`
+                       :                         `Descarte em massa · ${d.tecnicos} evento(s) técnicos`;
+
+    const results = await Promise.allSettled(list.map(d => registrar({
+      motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
+      tipo: 'descarte', obs: obsFor(d),
+    })));
+    const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
+    const fail = list.length - ok;
+
+    const placasDescartadas = new Set(list.map(d => d.placa));
+    setDrivers(drivers.map(d => placasDescartadas.has(d.placa) ? {
+      ...d,
+      alertas:      tab === 'intervencao' ? 0  : d.alertas,
+      tipos:        tab === 'intervencao' ? [] : d.tipos,
+      reportaveis:  tab === 'reportar'    ? 0  : d.reportaveis,
+      tiposReportar: tab === 'reportar'   ? [] : d.tiposReportar,
+      tecnicos:     tab === 'tecnicos'    ? 0  : d.tecnicos,
+    } : d));
+
+    setLoading(false);
+    setStatusKind(fail > 0 ? 'error' : 'active');
+    setStatusMsg(`Descarte em massa: ${ok} ok${fail > 0 ? ` · ${fail} falha(s)` : ''}`);
+  };
+
   const clearQueue = async () => {
     if (!(await confirm({ title: 'Limpar fila', message: 'Tem certeza que deseja limpar toda a fila de motoristas?', danger: true }))) return;
     setDrivers([]);
@@ -320,6 +370,7 @@ export default function Monitor() {
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
+        historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />
 
       <MonitorFilters
@@ -329,7 +380,7 @@ export default function Monitor() {
       />
 
       {/* Tabs */}
-      <div className="tabs">
+      <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
         {[
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
@@ -341,6 +392,17 @@ export default function Monitor() {
             <span className="tab-count">{cnt}</span>
           </div>
         ))}
+        {activeTab !== 'historico' && activeList.length > 0 && (
+          <button
+            className="btn btn-sm"
+            onClick={bulkDiscard}
+            disabled={loading}
+            style={{ marginLeft: 'auto' }}
+            title={`Descartar todos os ${activeList.length} alerta(s) visíveis na aba`}
+          >
+            <i className="ti ti-trash-x"></i> Descartar todos ({activeList.length})
+          </button>
+        )}
       </div>
 
       {/* Tab: Intervenção */}
