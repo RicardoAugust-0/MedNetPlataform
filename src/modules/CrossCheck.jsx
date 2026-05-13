@@ -87,10 +87,8 @@ export default function CrossCheck() {
     for (const [plate, levents] of byPlateL) {
       if (!plate) continue;
       const revents = byPlateR.get(plate) || [];
-      const lCrit = levents.filter(x => x.critical);
-      const rCrit = revents.filter(x => x.critical);
-      if (lCrit.length && rCrit.length) {
-        found.push({ key: plate, by: 'placa', left: lCrit, right: rCrit });
+      if (levents.length && revents.length) {
+        found.push({ key: plate, by: 'placa', left: levents, right: revents });
       }
     }
 
@@ -100,18 +98,16 @@ export default function CrossCheck() {
       const already = found.find(f => f.key === driver);
       if (already) continue;
       const revents = byDriverR.get(driver) || [];
-      const lCrit = levents.filter(x => x.critical);
-      const rCrit = revents.filter(x => x.critical);
-      if (lCrit.length && rCrit.length) {
-        found.push({ key: driver, by: 'motorista', left: lCrit, right: rCrit });
+      if (levents.length && revents.length) {
+        found.push({ key: driver, by: 'motorista', left: levents, right: revents });
       }
     }
 
     setMatches(found);
     if (found.length > 0) {
-      toast(`${found.length} correspondência(s) crítica(s) encontrada(s)`, 'success');
+      toast(`${found.length} correspondência(s) encontrada(s)`, 'success');
     } else {
-      toast('Nenhuma correspondência crítica encontrada entre os arquivos carregados.', 'info');
+      toast('Nenhuma correspondência encontrada entre os arquivos carregados.', 'info');
     }
   }
   return (
@@ -123,48 +119,61 @@ export default function CrossCheck() {
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260 }}>
-              <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (esquerda)</label>
-              <input value={leftName} onChange={e => setLeftName(e.target.value)} style={{ marginBottom: 6 }} />
-              <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'left')} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260, gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ marginBottom: 4 }}>Nome da Plataforma (Esq.)</label>
+                <input className="form-control" value={leftName} onChange={e => setLeftName(e.target.value)} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ marginBottom: 4 }}>Planilha 1</label>
+                <input className="form-control" type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'left')} style={{ padding:'8px' }} />
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260 }}>
-              <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (direita)</label>
-              <input value={rightName} onChange={e => setRightName(e.target.value)} style={{ marginBottom: 6 }} />
-              <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'right')} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260, gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ marginBottom: 4 }}>Nome da Plataforma (Dir.)</label>
+                <input className="form-control" value={rightName} onChange={e => setRightName(e.target.value)} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ marginBottom: 4 }}>Planilha 2</label>
+                <input className="form-control" type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'right')} style={{ padding:'8px' }} />
+              </div>
             </div>
-            <div style={{ marginLeft: 'auto' }}>
-              <button onClick={() => computeMatches()} className="btn">Comparar</button>
+            <div style={{ marginLeft: 'auto', alignSelf: 'flex-end', paddingBottom: '4px' }}>
+              <button onClick={() => computeMatches()} className="btn btn-primary" style={{ height: 42, padding: '0 24px' }}>Comparar Lado a Lado</button>
             </div>
           </div>
 
-          <div>
-            <h3 style={{ marginTop: 0 }}>Matches encontrados: {matches.length}</h3>
+          <div style={{ marginTop: 24 }}>
+            <h3 style={{ marginTop: 0, fontSize: 16, marginBottom: 16 }}>Resultados: {matches.length} matches encontrados</h3>
             {matches.length === 0 ? (
-              <div className="card" style={{ padding: 12, borderRadius: 6 }}>
-                <div style={{ color: 'var(--text-muted)' }}>Nenhuma correspondência crítica encontrada entre os arquivos carregados.</div>
+              <div className="empty-state" style={{ padding: '40px 20px' }}>
+                <i className="ti ti-layers-subtract"></i>
+                <p>Nenhuma correspondência encontrada entre os arquivos carregados.</p>
               </div>
             ) : (
               matches.map((m, i) => (
-                <div key={i} className="card" style={{ padding: 12, marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700 }}>{m.by === 'placa' ? `Placa: ${m.key}` : `Motorista: ${m.key}`}</div>
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <div key={i} className="stat-box" style={{ padding: 18, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                    {m.by === 'placa' ? <><i className="ti ti-car" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Placa: {m.key}</> : <><i className="ti ti-user" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Motorista: {m.key}</>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 24, marginTop: 16 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{leftName} ({m.left.length} crítico(s))</div>
+                      <div className="stat-label">{leftName} <span style={{ textTransform: 'lowercase' }}>({m.left.length} ocorrências)</span></div>
                       {m.left.map((ev, j) => (
-                        <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
-                          <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{ev.severityRaw}</div>
+                        <div key={j} style={{ padding: '8px 0', borderBottom: '1px dashed var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{ev.driverRaw || ev.plateRaw}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 11, background: 'var(--surface-1)', padding: '2px 8px', borderRadius: 4 }}>{ev.severityRaw || 'Sem criticidade'}</div>
                         </div>
                       ))}
                     </div>
-                    <div style={{ width: 12 }} />
+                    <div style={{ width: 1, background: 'var(--border)' }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{rightName} ({m.right.length} crítico(s))</div>
+                      <div className="stat-label">{rightName} <span style={{ textTransform: 'lowercase' }}>({m.right.length} ocorrências)</span></div>
                       {m.right.map((ev, j) => (
-                        <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
-                          <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{ev.severityRaw}</div>
+                        <div key={j} style={{ padding: '8px 0', borderBottom: '1px dashed var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{ev.driverRaw || ev.plateRaw}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 11, background: 'var(--surface-1)', padding: '2px 8px', borderRadius: 4 }}>{ev.severityRaw || 'Sem criticidade'}</div>
                         </div>
                       ))}
                     </div>

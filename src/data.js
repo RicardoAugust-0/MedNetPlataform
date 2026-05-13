@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',      icon: 'ti-layout-dashboard', group: 'Operação' },
   { id: 'monitor',   label: 'Monitor de Frota', icon: 'ti-truck-delivery', group: 'Operação' },
   { id: 'agenda',    label: 'Agenda',         icon: 'ti-calendar-event',   group: 'Operação' },
+  { id: 'crosscheck', label: 'Cross-Check',   icon: 'ti-list-check',      group: 'Operação' },
   { id: 'templates', label: 'Templates',      icon: 'ti-message-2',        group: 'Conhecimento' },
   { id: 'workspace', label: 'Workspace',      icon: 'ti-notebook',         group: 'Conhecimento' },
   { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
@@ -15,7 +16,6 @@ export const NAV_ITEMS = [
   { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
   { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
   { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
-  { id: 'crosscheck', label: 'Cross-Check',   icon: 'ti-list-check',      group: 'Operação' },
 ];
 
 export const PANEL_TITLES = {
