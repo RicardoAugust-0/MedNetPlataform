@@ -36,6 +36,8 @@ export default function Sidebar() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  const isAdmin = profile?.role === 'admin';
+
   const navResults = query.length > 0
     ? NAV_ITEMS.filter(i => (!i.adminOnly || isAdmin) && i.label.toLowerCase().includes(query.toLowerCase()))
     : [];
@@ -48,8 +50,6 @@ export default function Sidebar() {
     : [];
 
   const hasResults = navResults.length > 0 || driverResults.length > 0;
-
-  const isAdmin = profile?.role === 'admin';
 
   let curGroup = '';
   const navRows = [];

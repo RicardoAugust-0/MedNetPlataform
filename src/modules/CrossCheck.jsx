@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context.jsx';
+import { useToast } from '../hooks/useToast.jsx';
 
 function normalizeText(v) {
   if (!v && v !== 0) return '';
@@ -24,6 +25,7 @@ function isCriticalLabel(s) {
 
 export default function CrossCheck() {
   const {  } = useApp();
+  const toast = useToast();
   const [leftEvents, setLeftEvents] = useState([]);
   const [rightEvents, setRightEvents] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -106,57 +108,71 @@ export default function CrossCheck() {
     }
 
     setMatches(found);
+    if (found.length > 0) {
+      toast(`${found.length} correspondência(s) crítica(s) encontrada(s)`, 'success');
+    } else {
+      toast('Nenhuma correspondência crítica encontrada entre os arquivos carregados.', 'info');
+    }
   }
-
   return (
-    <div style={{ padding: 16 }}>
-      <h2>Cross-Check: comparação entre plataformas</h2>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (esquerda)</label>
-          <input value={leftName} onChange={e => setLeftName(e.target.value)} style={{ marginBottom: 6 }} />
-          <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'left')} />
+    <div>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title"><i className="ti ti-shuffle" style={{ color: 'var(--accent-500)' }}></i> Cross-Check</div>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comparar alertas entre plataformas</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (direita)</label>
-          <input value={rightName} onChange={e => setRightName(e.target.value)} style={{ marginBottom: 6 }} />
-          <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'right')} />
-        </div>
-        <div style={{ marginLeft: 'auto' }}>
-          <button onClick={() => computeMatches()} className="btn">Comparar</button>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 8 }}>
-        <h3>Matches encontrados: {matches.length}</h3>
-        <div>
-          {matches.map((m, i) => (
-            <div key={i} style={{ border: '1px solid #eee', padding: 8, marginBottom: 8, borderRadius: 6 }}>
-              <div style={{ fontWeight: 700 }}>{m.by === 'placa' ? `Placa: ${m.key}` : `Motorista: ${m.key}`}</div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: '#666', fontSize: 12 }}>{leftName} ({m.left.length} crítico(s))</div>
-                  {m.left.map((ev, j) => (
-                    <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed #f0f0f0' }}>
-                      <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
-                      <div style={{ color: '#888', fontSize: 12 }}>{ev.severityRaw}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ width: 12 }}></div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: '#666', fontSize: 12 }}>{rightName} ({m.right.length} crítico(s))</div>
-                  {m.right.map((ev, j) => (
-                    <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed #f0f0f0' }}>
-                      <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
-                      <div style={{ color: '#888', fontSize: 12 }}>{ev.severityRaw}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        <div style={{ padding: 16 }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260 }}>
+              <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (esquerda)</label>
+              <input value={leftName} onChange={e => setLeftName(e.target.value)} style={{ marginBottom: 6 }} />
+              <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'left')} />
             </div>
-          ))}
-          {matches.length === 0 && <div style={{ color: '#666' }}>Nenhuma correspondência crítica encontrada entre os arquivos carregados.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 260 }}>
+              <label style={{ fontSize: 12, opacity: 0.8 }}>Plataforma (direita)</label>
+              <input value={rightName} onChange={e => setRightName(e.target.value)} style={{ marginBottom: 6 }} />
+              <input type="file" accept=".csv,.xls,.xlsx" onChange={e => handleUpload(e, 'right')} />
+            </div>
+            <div style={{ marginLeft: 'auto' }}>
+              <button onClick={() => computeMatches()} className="btn">Comparar</button>
+            </div>
+          </div>
+
+          <div>
+            <h3 style={{ marginTop: 0 }}>Matches encontrados: {matches.length}</h3>
+            {matches.length === 0 ? (
+              <div className="card" style={{ padding: 12, borderRadius: 6 }}>
+                <div style={{ color: 'var(--text-muted)' }}>Nenhuma correspondência crítica encontrada entre os arquivos carregados.</div>
+              </div>
+            ) : (
+              matches.map((m, i) => (
+                <div key={i} className="card" style={{ padding: 12, marginBottom: 8 }}>
+                  <div style={{ fontWeight: 700 }}>{m.by === 'placa' ? `Placa: ${m.key}` : `Motorista: ${m.key}`}</div>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{leftName} ({m.left.length} crítico(s))</div>
+                      {m.left.map((ev, j) => (
+                        <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
+                          <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{ev.severityRaw}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ width: 12 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{rightName} ({m.right.length} crítico(s))</div>
+                      {m.right.map((ev, j) => (
+                        <div key={j} style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
+                          <div style={{ fontSize: 13 }}>{ev.driverRaw || ev.plateRaw}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{ev.severityRaw}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
