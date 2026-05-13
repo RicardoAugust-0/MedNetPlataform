@@ -128,6 +128,9 @@ export default function UploadArea({
           <div className="stat-box">
             <div className="stat-label">Placas carregadas</div>
             <div className="stat-value">{loadStats.total}</div>
+            {loadStats.totalNaFila != null && loadStats.totalNaFila !== loadStats.total && (
+              <div className="stat-sub">{loadStats.novas} nova(s) · {loadStats.atualizadas} atualizada(s) · {loadStats.totalNaFila} na fila</div>
+            )}
           </div>
           <div className="stat-box">
             <div className="stat-label">Intervenção</div>

@@ -120,19 +120,23 @@ export default function Monitor() {
       const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
+      const existingPlacas = new Set(drivers.map(d => d.placa));
       const newPlacas = new Set(timestamped.map(d => d.placa));
+      const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
+      const atualizadas = timestamped.length - novas;
       const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
       setDrivers(merged);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
-      setLoadStats(stats);
+      setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
       setStatusKind('active');
       const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
       const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
       const autoDesc      = stats.autoDescartes || [];
       const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}`);
+      const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
       setActiveTab('intervencao');
       notificarCriticos(merged.filter(d => d.alertas >= 5));
 
