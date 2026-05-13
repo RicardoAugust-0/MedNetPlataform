@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
     const syncProfile = async () => {
       const { data: existing } = await supabase
         .from('profiles')
-        .select('nome, cargo, role')
+        .select('nome, cargo, role, avatar_url, telefone, bio')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -64,6 +64,9 @@ export function AuthProvider({ children }) {
             nome: existing.nome || nome,
             cargo: existing.cargo || cargo,
             role: existing.role || 'operador',
+            avatar_url: existing.avatar_url || null,
+            telefone:   existing.telefone   || '',
+            bio:        existing.bio        || '',
           });
         }
         return;
@@ -78,7 +81,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const { data: current } = await supabase
           .from('profiles')
-          .select('nome, cargo, role')
+          .select('nome, cargo, role, avatar_url, telefone, bio')
           .eq('id', session.user.id)
           .maybeSingle();
 
@@ -89,13 +92,20 @@ export function AuthProvider({ children }) {
             nome: current.nome || nome,
             cargo: current.cargo || cargo,
             role: current.role || 'operador',
+            avatar_url: current.avatar_url || null,
+            telefone:   current.telefone   || '',
+            bio:        current.bio        || '',
           });
         }
         return;
       }
 
       if (!ignore) {
-        setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: data?.role || 'operador' });
+        setProfile({
+          id: session.user.id, email: session.user.email,
+          nome, cargo, role: data?.role || 'operador',
+          avatar_url: null, telefone: '', bio: '',
+        });
       }
     };
 
@@ -113,13 +123,27 @@ export function AuthProvider({ children }) {
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
 
-  const updateProfile = async (nome, cargo) => {
-    const { error } = await supabase.auth.updateUser({ data: { nome, cargo } });
-    if (error) return { error };
-    if (isSupabaseConfigured && session?.user) {
-      await supabase.from('profiles').update({ nome, cargo }).eq('id', session.user.id);
+  // Aceita tanto a assinatura antiga (nome, cargo) quanto um objeto com
+  // qualquer subconjunto de { nome, cargo, telefone, bio, avatar_url }.
+  const updateProfile = async (nomeOrPatch, cargoArg) => {
+    const patch = typeof nomeOrPatch === 'object' && nomeOrPatch !== null
+      ? nomeOrPatch
+      : { nome: nomeOrPatch, cargo: cargoArg };
+
+    // Sincroniza apenas nome/cargo no user_metadata (compat com partes legadas).
+    const metaPatch = {};
+    if ('nome'  in patch) metaPatch.nome  = patch.nome;
+    if ('cargo' in patch) metaPatch.cargo = patch.cargo;
+    if (Object.keys(metaPatch).length > 0) {
+      const { error } = await supabase.auth.updateUser({ data: metaPatch });
+      if (error) return { error };
     }
-    setProfile(prev => prev ? { ...prev, nome, cargo } : prev);
+
+    if (isSupabaseConfigured && session?.user) {
+      const { error } = await supabase.from('profiles').update(patch).eq('id', session.user.id);
+      if (error) return { error };
+    }
+    setProfile(prev => prev ? { ...prev, ...patch } : prev);
     return { error: null };
   };
 

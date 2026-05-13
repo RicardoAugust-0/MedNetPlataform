@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { uploadAvatar, removeAvatar } from '../lib/uploadAvatar';
+import { iniciais } from '../utils.js';
 
 function Section({ title, children }) {
   return (
@@ -38,22 +40,111 @@ function Alert({ type, msg }) {
   );
 }
 
+function AvatarSection({ profile, updateProfile }) {
+  const fileInputRef = useRef(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoMsg,     setPhotoMsg]     = useState(null);
+
+  const handlePick = () => fileInputRef.current?.click();
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-selecionar o mesmo arquivo depois
+    if (!file || !profile?.id) return;
+    setPhotoLoading(true);
+    setPhotoMsg(null);
+    try {
+      const url = await uploadAvatar(file, profile.id);
+      const { error } = await updateProfile({ avatar_url: url });
+      if (error) throw error;
+      setPhotoMsg({ type: 'success', text: 'Foto atualizada.' });
+    } catch (err) {
+      setPhotoMsg({ type: 'error', text: err.message || 'Falha ao enviar foto.' });
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!profile?.id || !profile.avatar_url) return;
+    if (!window.confirm('Remover sua foto de perfil?')) return;
+    setPhotoLoading(true);
+    setPhotoMsg(null);
+    try {
+      await removeAvatar(profile.id);
+      const { error } = await updateProfile({ avatar_url: null });
+      if (error) throw error;
+      setPhotoMsg({ type: 'success', text: 'Foto removida.' });
+    } catch (err) {
+      setPhotoMsg({ type: 'error', text: err.message || 'Falha ao remover foto.' });
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  return (
+    <Section title={<><i className="ti ti-camera" style={{ marginRight: 6 }}></i>Foto de perfil</>}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div
+          style={{
+            width: 96, height: 96, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--surface-1, #2a2a2a)', color: 'var(--text-primary)',
+            fontSize: 32, fontWeight: 600, border: '1px solid var(--border)',
+          }}
+        >
+          {profile?.avatar_url
+            ? <img src={profile.avatar_url} alt={profile.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span>{iniciais(profile?.nome || '?')}</span>}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-primary" onClick={handlePick} disabled={photoLoading}>
+              <i className={`ti ${photoLoading ? 'ti-loader-2' : 'ti-upload'}`} style={photoLoading ? { animation: 'spin 1s linear infinite' } : null}></i>
+              {profile?.avatar_url ? 'Trocar foto' : 'Enviar foto'}
+            </button>
+            {profile?.avatar_url && (
+              <button type="button" className="btn btn-danger" onClick={handleRemove} disabled={photoLoading}>
+                <i className="ti ti-trash"></i> Remover
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+            JPG, PNG ou WebP · até 2 MB
+          </div>
+          <Alert type={photoMsg?.type} msg={photoMsg?.text} />
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleFile}
+          hidden
+        />
+      </div>
+    </Section>
+  );
+}
+
 export default function Profile() {
   const { profile, updateProfile, setPassword } = useAuth();
 
-  // Seção: dados pessoais
-  const [nome,  setNome]  = useState(profile?.nome  || '');
-  const [cargo, setCargo] = useState(profile?.cargo || '');
+  const [nome,     setNome]     = useState(profile?.nome     || '');
+  const [cargo,    setCargo]    = useState(profile?.cargo    || '');
+  const [telefone, setTelefone] = useState(profile?.telefone || '');
+  const [bio,      setBio]      = useState(profile?.bio      || '');
   const [infoLoading, setInfoLoading] = useState(false);
-  const [infoMsg, setInfoMsg] = useState(null); // { type, text }
+  const [infoMsg, setInfoMsg] = useState(null);
 
-  // Sincroniza campos quando o perfil carrega (profile vem null no primeiro render)
+  // Sincroniza quando o perfil termina de carregar.
   useEffect(() => {
-    if (profile?.nome  && !nome)  setNome(profile.nome);
-    if (profile?.cargo && !cargo) setCargo(profile.cargo);
+    if (!profile) return;
+    if (profile.nome     && !nome)     setNome(profile.nome);
+    if (profile.cargo    && !cargo)    setCargo(profile.cargo);
+    if (profile.telefone && !telefone) setTelefone(profile.telefone);
+    if (profile.bio      && !bio)      setBio(profile.bio);
   }, [profile]);
 
-  // Seção: senha
   const [novaSenha,    setNovaSenha]    = useState('');
   const [confirmSenha, setConfirmSenha] = useState('');
   const [senhaLoading, setSenhaLoading] = useState(false);
@@ -71,7 +162,12 @@ export default function Profile() {
     }
     setInfoLoading(true);
     setInfoMsg(null);
-    const { error } = await updateProfile(nome.trim(), cargo.trim());
+    const { error } = await updateProfile({
+      nome:     nome.trim(),
+      cargo:    cargo.trim(),
+      telefone: telefone.trim(),
+      bio:      bio.trim(),
+    });
     setInfoMsg(error
       ? { type: 'error', text: error.message }
       : { type: 'success', text: 'Informações atualizadas com sucesso.' }
@@ -105,6 +201,8 @@ export default function Profile() {
   return (
     <div style={{ maxWidth: 560 }}>
 
+      <AvatarSection profile={profile} updateProfile={updateProfile} />
+
       <Section title={<><i className="ti ti-user" style={{ marginRight: 6 }}></i>Informações pessoais</>}>
         <form onSubmit={handleInfo}>
           <div className="form-group">
@@ -136,6 +234,31 @@ export default function Profile() {
               onChange={e => setCargo(e.target.value)}
               placeholder="Ex: Analista Fadiga Zero"
             />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Telefone</label>
+            <input
+              className="form-control"
+              type="tel"
+              value={telefone}
+              onChange={e => setTelefone(e.target.value)}
+              placeholder="(11) 99999-9999"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Bio</label>
+            <textarea
+              className="form-control"
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+              placeholder="Uma frase rápida sobre você (opcional)"
+              rows={3}
+              maxLength={200}
+              style={{ resize: 'vertical' }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>
+              {bio.length}/200
+            </div>
           </div>
           <Alert type={infoMsg?.type} msg={infoMsg?.text} />
           <SaveBtn loading={infoLoading} />
