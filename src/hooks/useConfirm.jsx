@@ -1,10 +1,27 @@
-import { useState, useCallback, createContext, useContext } from 'react';
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 
 const ConfirmContext = createContext(null);
 
 export function ConfirmProvider({ children }) {
   const [modal, setModal] = useState(null);
+  const confirmBtnRef = useRef(null);
+
+  useEffect(() => {
+    if (!modal) return;
+    confirmBtnRef.current?.focus();
+    const handleKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        modal.onConfirm();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        modal.onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [modal]);
 
   const confirm = useCallback((options) => {
     return new Promise((resolve) => {
@@ -37,7 +54,7 @@ export function ConfirmProvider({ children }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-ghost" onClick={modal.onCancel}>{modal.cancelText}</button>
-              <button className={`btn ${modal.danger ? 'btn-danger' : 'btn-primary'}`} onClick={modal.onConfirm}>
+              <button ref={confirmBtnRef} className={`btn ${modal.danger ? 'btn-danger' : 'btn-primary'}`} onClick={modal.onConfirm}>
                 {modal.confirmText}
               </button>
             </div>
