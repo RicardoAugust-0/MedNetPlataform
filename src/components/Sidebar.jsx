@@ -166,7 +166,11 @@ export default function Sidebar() {
           </div>
         )}
         <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => setActivePanel('perfil')} title="Abrir perfil">
-          <div className="user-avatar">{profile ? iniciais(profile.nome) : '?'}</div>
+          <div className="user-avatar" style={profile?.avatar_url ? { padding: 0, overflow: 'hidden' } : null}>
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt={profile.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : profile ? iniciais(profile.nome) : '?'}
+          </div>
           <div className="user-meta">
             <div className="user-name">{profile?.nome || '—'}</div>
             <div className="user-role">{profile?.cargo || 'Operador'}</div>
