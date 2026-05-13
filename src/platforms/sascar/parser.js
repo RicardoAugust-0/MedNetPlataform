@@ -45,7 +45,9 @@ function isDistracaoGenerica(e) {
 }
 
 function isFumoEvento(e) {
-  return e._eventoNorm.includes('fumo') || e._categoriaNorm.includes('fumo');
+  // Sascar pode emitir como "Fumando" (gerúndio) ou "Fumo" — ambos têm o radical "fum".
+  return /\bfum(o|ando|ante|ar)\b/.test(e._eventoNorm) ||
+         /\bfum(o|ando|ante|ar)\b/.test(e._categoriaNorm);
 }
 
 // Detecta se as headers da planilha batem com o formato Sascar.
