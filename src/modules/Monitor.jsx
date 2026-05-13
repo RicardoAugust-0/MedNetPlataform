@@ -120,7 +120,9 @@ export default function Monitor() {
       const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
-      setDrivers(timestamped);
+      const newPlacas = new Set(timestamped.map(d => d.placa));
+      const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
+      setDrivers(merged);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
@@ -132,7 +134,7 @@ export default function Monitor() {
       const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
       setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}`);
       setActiveTab('intervencao');
-      notificarCriticos(timestamped.filter(d => d.alertas >= 5));
+      notificarCriticos(merged.filter(d => d.alertas >= 5));
 
       // Auto-register platform-specific discards silently in the background
       for (const item of autoDesc) {
