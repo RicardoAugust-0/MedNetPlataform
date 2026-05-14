@@ -26,7 +26,7 @@ const CRITICIDADE_COLOR = {
 
 function SheetRow({ row }) {
   const color = CRITICIDADE_COLOR[row.criticidade?.toUpperCase()] || 'var(--text-muted)';
-  const done  = Boolean(row.realizadoPor || row.realizado);
+  const done  = Boolean(row.realizadoPor?.trim());
   return (
     <div className="history-item">
       <div className="h-avatar" style={{ background: 'var(--surface-2)' }}>
