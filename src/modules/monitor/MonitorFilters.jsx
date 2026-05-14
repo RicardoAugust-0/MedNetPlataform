@@ -1,28 +1,16 @@
 export default function MonitorFilters({
-  excluirTecnicos,
-  setExcluirTecnicos,
   profile,
   filters,
   setFilters,
   transps,
-  resetFilters
+  resetFilters,
+  platform,
 }) {
+  const taxonomy    = platform?.taxonomy    || { intervencao: [], reportar: [], tecnico: [] };
+  const severidades = platform?.severidades || ['Gravíssimo', 'Grave', 'Normal'];
+
   return (
     <>
-      {/* Config */}
-      <div className="config-bar" style={{ marginTop: 12 }}>
-        <div className="config-row">
-          <div>
-            <div className="config-text">Ocultar motoristas apenas com técnicos</div>
-            <div className="config-hint">Esconde placas com apenas eventos técnicos (Obstrução de Câmera / Perda de vídeo). <em>Use com atenção</em></div>
-          </div>
-          <label className="toggle-wrap">
-            <input type="checkbox" checked={excluirTecnicos} onChange={e => setExcluirTecnicos(e.target.checked)} />
-            <span className="toggle-track"><span className="toggle-thumb"></span></span>
-          </label>
-        </div>
-      </div>
-
       {/* Operador */}
       <div className="operator-bar">
         <label><i className="ti ti-user"></i> Operador:</label>
@@ -33,6 +21,16 @@ export default function MonitorFilters({
       {/* Filtros fila */}
       <div className="filter-bar">
         <div className="filter-group"><label><i className="ti ti-filter"></i> Filtros:</label></div>
+        <div className="filter-group">
+          <label><i className="ti ti-search"></i> Buscar</label>
+          <input
+            type="search"
+            value={filters.busca || ''}
+            onChange={e => setFilters({ ...filters, busca: e.target.value })}
+            placeholder="Placa ou nome…"
+            style={{ fontSize: 12, padding: '2px 6px', minWidth: 140 }}
+          />
+        </div>
         <div className="filter-group">
           <label>Turno</label>
           <select value={filters.turno} onChange={e => setFilters({ ...filters, turno: e.target.value })}>
@@ -45,9 +43,9 @@ export default function MonitorFilters({
           <label>Severidade</label>
           <select value={filters.prioridade} onChange={e => setFilters({ ...filters, prioridade: e.target.value })}>
             <option value="">Todas</option>
-            <option value="gravissimo">Gravíssimo</option>
-            <option value="grave">Grave</option>
-            <option value="normal">Normal</option>
+            {severidades.map(sev => (
+              <option key={sev} value={sev.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')}>{sev}</option>
+            ))}
           </select>
         </div>
         <div className="filter-group">
@@ -61,18 +59,24 @@ export default function MonitorFilters({
           <label>Evento</label>
           <select value={filters.comportamento} onChange={e => setFilters({ ...filters, comportamento: e.target.value })}>
             <option value="">Todos</option>
-            <optgroup label="— Intervenção —">
-              <option value="Bocejo">Bocejo</option>
-              <option value="Olho fechado">Olho fechado</option>
-            </optgroup>
-            <optgroup label="— Reportar —">
-              <option value="Distração">Distração genérica</option>
-              <option value="Uso de celular">Uso de celular</option>
-              <option value="Fumando">Fumando</option>
-            </optgroup>
+            {taxonomy.intervencao.length > 0 && (
+              <optgroup label="— Intervenção —">
+                {taxonomy.intervencao.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
+            {taxonomy.reportar.length > 0 && (
+              <optgroup label="— Reportar —">
+                {taxonomy.reportar.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
+            {taxonomy.tecnico.length > 0 && (
+              <optgroup label="— Técnico —">
+                {taxonomy.tecnico.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </optgroup>
+            )}
           </select>
         </div>
-        <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento}>
+        <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento && !filters.busca}>
           Limpar
         </button>
       </div>

@@ -25,19 +25,37 @@ export const sevClass = (d) => d.severidade === 'Gravíssimo' ? 'danger' : d.sev
 export const TiposBadge = ({ tipos }) =>
   tipos?.length > 0 ? <div className="d-tags">{tipos.map((t, i) => <span key={i} className="d-tag">{t}</span>)}</div> : null;
 
+export const getCustomVars = () => {
+  try { return JSON.parse(localStorage.getItem('mn_template_vars') || '{}'); } catch { return {}; }
+};
+
+export const setCustomVars = (vars) => {
+  try { localStorage.setItem('mn_template_vars', JSON.stringify(vars)); } catch {}
+};
+
 export const applyTemplate = (rawText, d) => {
   if (!rawText) return '';
   const hour = new Date().getHours();
   const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
-  
+
   const nomeMotorista = (!d.nome || d.nome === d.placa || d.nome === '—') ? 'o condutor' : d.nome;
-  
-  return rawText
+
+  let text = rawText
     .replace(/(?:\{\{saudacao\}\}|\[SAUDACAO\]|\[SAUDAÇÃO\])/gi, saudacao)
     .replace(/(?:\{\{nome\}\}|\[NOME\])/gi, nomeMotorista)
     .replace(/(?:\{\{placa\}\}|\[PLACA\])/gi, d.placa || '—')
     .replace(/(?:\{\{transportadora\}\}|\[TRANSPORTADORA\]|\[EMPRESA\])/gi, d.transportadora || '—')
     .replace(/\[HORA\]/gi, new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+
+  // Custom user-defined variables
+  const customVars = getCustomVars();
+  Object.entries(customVars).forEach(([key, val]) => {
+    if (!key || val == null) return;
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), val);
+  });
+
+  return text;
 };
 
 export const EmptyState = ({ icon, msg, sub }) => (
@@ -46,6 +64,12 @@ export const EmptyState = ({ icon, msg, sub }) => (
     {sub && <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>{sub}</div>}
   </div>
 );
+
+// Escape RFC 4180: envolve em aspas duplas e dobra aspas internas.
+function csvEscape(value) {
+  const s = value == null ? '' : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
 
 export function exportCSV(rows) {
   const header = ['Data', 'Hora', 'Motorista', 'Placa', 'Transportadora', 'Tipo', 'Operador', 'Observação'];
@@ -57,11 +81,12 @@ export function exportCSV(rows) {
     r.transportadora || '',
     { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' }[r.tipo] || r.tipo,
     r.operador || '',
-    (r.obs || '').replace(/,/g, ';'),
-  ].map(v => `"${v}"`).join(','));
-  const csv = [header.join(','), ...lines].join('\n');
+    r.obs || '',
+  ].map(csvEscape).join(','));
+  const csv = [header.map(csvEscape).join(','), ...lines].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `atendimentos_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+  URL.revokeObjectURL(a.href);
 }

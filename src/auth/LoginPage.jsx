@@ -109,7 +109,7 @@ export default function LoginPage() {
 
           {!isSupabaseConfigured && (
             <div style={{ ...s.errorBox, marginTop: 16 }}>
-              <i className="ti ti-settings-exclamation"></i> Supabase não configurado — defina as variáveis de ambiente na Vercel.
+              <i className="ti ti-settings-exclamation"></i> Supabase não configurado. No modo local, qualquer e-mail/senha permite acesso (use admin@mednet.com.br para testar modo admin).
             </div>
           )}
 

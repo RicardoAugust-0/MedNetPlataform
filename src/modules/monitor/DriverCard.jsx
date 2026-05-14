@@ -33,6 +33,20 @@ export default function DriverCard({ d, type, handlers }) {
           )}
 
           <ElapsedTimer since={d._loadedAt} />
+
+          {type === 'intervencao' && d.ultimoEvento && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
+              <i className="ti ti-clock-hour-4" style={{ fontSize: 9, marginRight: 2 }}></i>
+              {new Date(d.ultimoEvento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          {type === 'reportar' && d.ultimoEventoReportar && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
+              <i className="ti ti-clock-hour-4" style={{ fontSize: 9, marginRight: 2 }}></i>
+              {new Date(d.ultimoEventoReportar).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
         </div>
         
         <div className="d-detail">
@@ -46,8 +60,16 @@ export default function DriverCard({ d, type, handlers }) {
           </span>
         </div>
         
-        <TiposBadge tipos={type === 'intervencao' ? d.tipos : d.tiposReportar} />
-        
+        <TiposBadge tipos={type === 'intervencao' ? d.tipos : type === 'reportar' ? d.tiposReportar : null} />
+
+        {type === 'tecnicos' && d.tiposTecnico && Object.keys(d.tiposTecnico).length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            {Object.entries(d.tiposTecnico).map(([tipo, cnt], i, arr) => (
+              <span key={tipo}>{cnt} {tipo}{i < arr.length - 1 ? ' + ' : ''}</span>
+            ))}
+          </div>
+        )}
+
         {type === 'intervencao' && d.reportaveis > 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             + {d.reportaveis} evento(s) reportável(is): {d.tiposReportar?.join(', ')}
@@ -62,7 +84,7 @@ export default function DriverCard({ d, type, handlers }) {
             <button className="btn btn-sm" onClick={() => handlers.openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
             <button className="btn btn-sm btn-primary" onClick={() => handlers.attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
-            <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d)}><i className="ti ti-trash"></i></button>
+            <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'intervencao')}><i className="ti ti-trash"></i></button>
           </>
         )}
 
@@ -71,11 +93,12 @@ export default function DriverCard({ d, type, handlers }) {
             <button className="btn btn-sm" onClick={() => handlers.openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
             <button className="btn btn-sm btn-warning" onClick={() => handlers.reportar(d)}><i className="ti ti-building"></i> Reportar e Remover</button>
+            <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'reportar')}><i className="ti ti-trash"></i></button>
           </>
         )}
 
         {type === 'tecnicos' && (
-          <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar" onClick={() => handlers.deleteAlert(d)}>
+          <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar" onClick={() => handlers.deleteAlert(d, 'tecnico')}>
             <i className="ti ti-trash"></i>
           </button>
         )}

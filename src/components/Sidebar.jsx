@@ -36,6 +36,8 @@ export default function Sidebar() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  const isAdmin = profile?.role === 'admin';
+
   const navResults = query.length > 0
     ? NAV_ITEMS.filter(i => (!i.adminOnly || isAdmin) && i.label.toLowerCase().includes(query.toLowerCase()))
     : [];
@@ -48,8 +50,6 @@ export default function Sidebar() {
     : [];
 
   const hasResults = navResults.length > 0 || driverResults.length > 0;
-
-  const isAdmin = profile?.role === 'admin';
 
   let curGroup = '';
   const navRows = [];
@@ -166,7 +166,11 @@ export default function Sidebar() {
           </div>
         )}
         <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => setActivePanel('perfil')} title="Abrir perfil">
-          <div className="user-avatar">{profile ? iniciais(profile.nome) : '?'}</div>
+          <div className="user-avatar" style={profile?.avatar_url ? { padding: 0, overflow: 'hidden' } : null}>
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt={profile.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : profile ? iniciais(profile.nome) : '?'}
+          </div>
           <div className="user-meta">
             <div className="user-name">{profile?.nome || '—'}</div>
             <div className="user-role">{profile?.cargo || 'Operador'}</div>

@@ -11,6 +11,7 @@ export function useAtendimentos() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
+  const [historyLoadedAt, setHistoryLoadedAt] = useState(null);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -21,7 +22,7 @@ export function useAtendimentos() {
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
     if (error) { setError(error.message); toast('Erro ao carregar histórico', 'error'); }
-    else setHistory(data.map(toLocal));
+    else { setHistory(data.map(toLocal)); setHistoryLoadedAt(new Date().toISOString()); }
     setLoading(false);
   }, []);
 
@@ -97,7 +98,35 @@ export function useAtendimentos() {
     return { data: data.map(toLocal), error: null };
   }, []);
 
-  return { history, loading, error, registrar, reload: load, loadByRange, loadDriverHistory };
+  // Carrega atendimentos recentes (placa, tipo, created_at) para deduplicar a planilha.
+  // Pagina para superar o limite default do Supabase (1000 linhas/requisição).
+  const loadAtendimentosForFilter = useCallback(async (daysAgo = 90) => {
+    if (!isSupabaseConfigured) return [];
+    const since = new Date(Date.now() - daysAgo * 86400000).toISOString();
+    const pageSize = 1000;
+    const all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('atendimentos')
+        .select('placa, tipo, created_at')
+        .gte('created_at', since)
+        .in('tipo', ['intervencao', 'descarte', 'reportar'])
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        console.warn('[useAtendimentos] erro carregando histórico para filtro:', error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }, []);
+
+  return { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter };
 }
 
 function toLocal(row) {

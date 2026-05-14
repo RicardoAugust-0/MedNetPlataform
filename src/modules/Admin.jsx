@@ -1,6 +1,7 @@
 // deno-lint-ignore-file
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProfiles } from '../hooks/useProfiles.jsx';
+import { useMaintenance } from '../hooks/useMaintenance.jsx';
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useToast } from '../hooks/useToast.jsx';
 import { supabase } from '../supabase.js';
@@ -8,6 +9,7 @@ import { iniciais } from '../utils.js';
 
 export default function Admin() {
   const { profiles, loading, updateRole, updateInfo } = useProfiles();
+  const { maintenance, setMaintenance } = useMaintenance();
   const { profile: me } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState(null);
@@ -15,9 +17,53 @@ export default function Admin() {
   const [editCargo, setEditCargo] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [maintMsg, setMaintMsg] = useState(maintenance.message || '');
+  const [savingMaint, setSavingMaint] = useState(false);
+
+  // Sincroniza o input quando a mensagem chega do servidor (load inicial ou
+  // realtime update vindo de outro admin).
+  useEffect(() => { setMaintMsg(maintenance.message || ''); }, [maintenance.message]);
+
+  const msgDirty = maintMsg !== (maintenance.message || '');
+
+  const toggleMaintenance = async () => {
+    const next = !maintenance.enabled;
+    setSavingMaint(true);
+    try {
+      await setMaintenance({ enabled: next, message: maintMsg });
+      toast(
+        next ? 'Plataforma travada para manutenção' : 'Plataforma liberada',
+        next ? 'info' : 'success'
+      );
+    } catch {
+      toast('Erro ao atualizar modo manutenção', 'error');
+    }
+    setSavingMaint(false);
+  };
+
+  const saveMessage = async () => {
+    setSavingMaint(true);
+    try {
+      await setMaintenance({ message: maintMsg });
+      toast('Mensagem atualizada', 'success');
+    } catch {
+      toast('Erro ao salvar mensagem', 'error');
+    }
+    setSavingMaint(false);
+  };
 
   const startEdit = (p) => { setEditing(p.id); setEditNome(p.nome || ''); setEditCargo(p.cargo || ''); };
-  const saveEdit  = async () => { await updateInfo(editing, { nome: editNome, cargo: editCargo }); setEditing(null); };
+  const saveEdit  = async () => {
+    const nome  = editNome.trim();
+    const cargo = editCargo.trim();
+    const { error } = await updateInfo(editing, { nome, cargo });
+    if (error) {
+      toast(error.message || 'Não foi possível salvar as alterações', 'error');
+      return;
+    }
+    toast('Operador atualizado', 'success');
+    setEditing(null);
+  };
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -93,6 +139,70 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Modo manutenção */}
+      <div className="card" style={{ marginBottom: 16, borderColor: maintenance.enabled ? '#F26931' : undefined }}>
+        <div className="card-header">
+          <div className="card-title">
+            <i className="ti ti-tools"></i> Modo manutenção
+            {maintenance.enabled && (
+              <span style={{ fontSize: 10, background: '#F26931', color: '#fff', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700, letterSpacing: 0.4 }}>
+                ATIVO
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.55 }}>
+          Quando ativo, operadores veem uma página de manutenção e não conseguem acessar a plataforma. Admins continuam com acesso normal.
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Mensagem opcional para os operadores</label>
+          <input
+            className="form-control"
+            type="text"
+            placeholder="Ex: Estamos atualizando o sistema, voltamos em breve."
+            value={maintMsg}
+            onChange={e => setMaintMsg(e.target.value)}
+            disabled={savingMaint}
+          />
+          {msgDirty && (
+            <div style={{ fontSize: 11, color: 'var(--warning-600, #b45309)', marginTop: 4 }}>
+              <i className="ti ti-alert-circle" style={{ fontSize: 11, marginRight: 3 }}></i>
+              Mensagem ainda não salva.
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={toggleMaintenance}
+            disabled={savingMaint}
+            style={{
+              background: maintenance.enabled ? 'var(--success-500, #1a7a3a)' : '#F26931',
+              color: '#fff',
+              border: 'none',
+            }}
+          >
+            {savingMaint
+              ? <><i className="ti ti-loader-2"></i> Salvando…</>
+              : maintenance.enabled
+                ? <><i className="ti ti-lock-open"></i> Liberar plataforma</>
+                : <><i className="ti ti-lock"></i> Travar plataforma</>
+            }
+          </button>
+          {msgDirty && (
+            <button
+              type="button"
+              className="btn"
+              onClick={saveMessage}
+              disabled={savingMaint}
+            >
+              <i className="ti ti-device-floppy"></i> Salvar mensagem
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Lista de operadores */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
@@ -106,11 +216,13 @@ export default function Admin() {
               borderBottom: '1px solid var(--border)',
             }}>
               <div style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: 'linear-gradient(135deg, var(--accent-500), var(--accent-700))',
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                background: p.avatar_url ? 'var(--surface-1, #2a2a2a)' : 'linear-gradient(135deg, var(--accent-500), var(--accent-700))',
                 display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, color: '#fff',
               }}>
-                {iniciais(p.nome || p.id.slice(0, 4))}
+                {p.avatar_url
+                  ? <img src={p.avatar_url} alt={p.nome || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : iniciais(p.nome || p.id.slice(0, 4))}
               </div>
 
               {editing === p.id ? (

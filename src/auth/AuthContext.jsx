@@ -35,40 +35,129 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!session?.user) { setProfile(null); return; }
     const meta = session.user.user_metadata;
-    const nome  = meta?.nome  || session.user.email.split('@')[0];
-    const cargo = meta?.cargo || 'Operador';
+    const emailFallback = session.user.email.split('@')[0];
+    // Usado apenas na criação do perfil (primeiro login). Para perfis já
+    // existentes a fonte de verdade é a tabela `profiles` — nunca o
+    // user_metadata, que pode estar desatualizado se um admin renomeou o
+    // operador (admin atualiza só `profiles`, não o auth user_metadata).
+    const initialNome  = meta?.nome  || emailFallback;
+    const initialCargo = meta?.cargo || 'Operador';
 
     if (!isSupabaseConfigured) {
-      setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: 'operador' });
+      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role: 'operador' });
       return;
     }
 
-    // Upsert atualiza last_seen e retorna a linha — incluindo role gerenciado pelo admin
-    supabase
-      .from('profiles')
-      .upsert({ id: session.user.id, nome, cargo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-      .select('role')
-      .single()
-      .then(({ data }) => {
-        setProfile({ id: session.user.id, email: session.user.email, nome, cargo, role: data?.role || 'operador' });
-      });
+    let ignore = false;
+    const syncProfile = async () => {
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('nome, cargo, role, avatar_url, telefone, bio')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', session.user.id);
+
+        if (!ignore) {
+          setProfile({
+            id: session.user.id,
+            email: session.user.email,
+            nome: existing.nome || emailFallback,
+            cargo: existing.cargo || 'Operador',
+            role: existing.role || 'operador',
+            avatar_url: existing.avatar_url || null,
+            telefone:   existing.telefone   || '',
+            bio:        existing.bio        || '',
+          });
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({ id: session.user.id, nome: initialNome, cargo: initialCargo, last_seen: new Date().toISOString() })
+        .select('role')
+        .single();
+
+      if (error) {
+        const { data: current } = await supabase
+          .from('profiles')
+          .select('nome, cargo, role, avatar_url, telefone, bio')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (!ignore && current) {
+          setProfile({
+            id: session.user.id,
+            email: session.user.email,
+            nome: current.nome || emailFallback,
+            cargo: current.cargo || 'Operador',
+            role: current.role || 'operador',
+            avatar_url: current.avatar_url || null,
+            telefone:   current.telefone   || '',
+            bio:        current.bio        || '',
+          });
+        }
+        return;
+      }
+
+      if (!ignore) {
+        setProfile({
+          id: session.user.id, email: session.user.email,
+          nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
+          avatar_url: null, telefone: '', bio: '',
+        });
+      }
+    };
+
+    syncProfile().catch((error) => {
+      console.error('Erro ao sincronizar perfil do usuário:', error);
+    });
+    return () => { ignore = true; };
   }, [session]);
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (email, password) => {
+    if (!isSupabaseConfigured) {
+      if (email === 'admin@mednet.com.br') {
+        setSession({ user: { id: 'mock-admin', email, user_metadata: { nome: 'Admin Teste', cargo: 'Gerente' } } });
+        return { error: null };
+      }
+      setSession({ user: { id: 'mock-user', email, user_metadata: { nome: 'Operador Teste', cargo: 'Operador' } } });
+      return { error: null };
+    }
+    return supabase.auth.signInWithPassword({ email, password });
+  };
 
   const signOut = () => supabase.auth.signOut();
 
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
 
-  const updateProfile = async (nome, cargo) => {
-    const { error } = await supabase.auth.updateUser({ data: { nome, cargo } });
-    if (error) return { error };
-    if (isSupabaseConfigured && session?.user) {
-      await supabase.from('profiles').update({ nome, cargo }).eq('id', session.user.id);
+  // Aceita tanto a assinatura antiga (nome, cargo) quanto um objeto com
+  // qualquer subconjunto de { nome, cargo, telefone, bio, avatar_url }.
+  const updateProfile = async (nomeOrPatch, cargoArg) => {
+    const patch = typeof nomeOrPatch === 'object' && nomeOrPatch !== null
+      ? nomeOrPatch
+      : { nome: nomeOrPatch, cargo: cargoArg };
+
+    // Sincroniza apenas nome/cargo no user_metadata (compat com partes legadas).
+    const metaPatch = {};
+    if ('nome'  in patch) metaPatch.nome  = patch.nome;
+    if ('cargo' in patch) metaPatch.cargo = patch.cargo;
+    if (Object.keys(metaPatch).length > 0) {
+      const { error } = await supabase.auth.updateUser({ data: metaPatch });
+      if (error) return { error };
     }
-    setProfile(prev => prev ? { ...prev, nome, cargo } : prev);
+
+    if (isSupabaseConfigured && session?.user) {
+      const { error } = await supabase.from('profiles').update(patch).eq('id', session.user.id);
+      if (error) return { error };
+    }
+    setProfile(prev => prev ? { ...prev, ...patch } : prev);
     return { error: null };
   };
 

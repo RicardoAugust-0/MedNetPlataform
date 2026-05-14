@@ -1,11 +1,11 @@
 // deno-lint-ignore-file
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
-import { parseSheetFile } from '../parseSheet';
+import { getPlatform, listPlatforms } from '../platforms';
 
 // Monitor Subcomponents
 import { EmptyState, applyTemplate } from './monitor/utils';
@@ -47,11 +47,14 @@ async function notificarCriticos(criticos) {
 }
 
 export default function Monitor() {
-  const { drivers, setDrivers, filters, setFilters, excluirTecnicos, setExcluirTecnicos, setActivePanel } = useApp();
+  const { drivers, setDrivers, filters, setFilters, setActivePanel, platformId, setPlatformId } = useApp();
   const { profile, session } = useAuth();
-  const { history, loading: histLoading, error: histError, registrar, loadByRange, loadDriverHistory } = useAtendimentos();
+  const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
+
+  const platform     = useMemo(() => getPlatform(platformId), [platformId]);
+  const allPlatforms = useMemo(() => listPlatforms({ includePlanned: true }), []);
 
   const [templateModal, setTemplateModal] = useState(null);
   const [dossieDriver, setDossieDriver] = useState(null);
@@ -87,19 +90,29 @@ export default function Monitor() {
     return () => clearInterval(id);
   }, [sheetLoadedAt]);
 
+  const [historyAgeMin, setHistoryAgeMin] = useState(null);
+  useEffect(() => {
+    if (!historyLoadedAt) { setHistoryAgeMin(null); return; }
+    const tick = () => setHistoryAgeMin(Math.floor((Date.now() - new Date(historyLoadedAt)) / 60000));
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, [historyLoadedAt]);
+
   /* ── Filtros fila ── */
+  const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const buscaNorm = normalizeText(filters.busca).trim();
   const filtered = drivers.filter(d => {
     const f = filters;
-    if (excluirTecnicos && d.alertas === 0 && d.reportaveis === 0) return false;
     if (f.turno && d.turno !== f.turno) return false;
     if (f.empresa && d.transportadora !== f.empresa) return false;
     if (f.comportamento) {
       const todos = [...(d.tipos || []), ...(d.tiposReportar || [])];
       if (!todos.some(t => t.includes(f.comportamento))) return false;
     }
-    if (f.prioridade === 'gravissimo' && d.severidade !== 'Gravíssimo') return false;
-    if (f.prioridade === 'grave'      && d.severidade !== 'Grave')      return false;
-    if (f.prioridade === 'normal'     && d.severidade !== 'Normal')     return false;
+    if (f.prioridade && normalizeSev(d.severidade) !== f.prioridade) return false;
+    if (buscaNorm && !normalizeText(d.placa).includes(buscaNorm) && !normalizeText(d.nome).includes(buscaNorm)) return false;
     return true;
   });
 
@@ -109,21 +122,75 @@ export default function Monitor() {
   const transps         = [...new Set(drivers.map(d => d.transportadora))].sort();
 
   /* ── Upload ── */
+  const hashFile = async (file) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch { return null; }
+  };
+
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
-      const { drivers: newDrivers, stats } = await parseSheetFile(file);
+      if (!platform.spreadsheet?.parse) {
+        throw new Error(`Plataforma "${platform.name}" não suporta upload de planilha.`);
+      }
+      const hash = await hashFile(file);
+      if (hash) {
+        let recent = [];
+        try { recent = JSON.parse(localStorage.getItem('mn_sheet_hashes') || '[]'); } catch {}
+        const dup = recent.find(r => r.hash === hash);
+        if (dup) {
+          const when = new Date(dup.at).toLocaleString('pt-BR');
+          const ok = await confirm({
+            title: 'Planilha já carregada',
+            message: `Esta planilha (${dup.name}) já foi processada em ${when}. Deseja carregar novamente?`,
+          });
+          if (!ok) {
+            setLoading(false);
+            setStatusKind('idle');
+            setStatusMsg('Upload cancelado: planilha duplicada.');
+            return;
+          }
+        }
+        const updated = [{ hash, name: file.name, at: new Date().toISOString() }, ...recent.filter(r => r.hash !== hash)].slice(0, 10);
+        try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch {}
+      }
+      const filterHistory = await loadAtendimentosForFilter(90);
+      const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
       const loadedAt = new Date().toISOString();
-      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt }));
-      setDrivers(timestamped);
+      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
+      const existingPlacas = new Set(drivers.map(d => d.placa));
+      const newPlacas = new Set(timestamped.map(d => d.placa));
+      const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
+      const atualizadas = timestamped.length - novas;
+      const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
+      setDrivers(merged);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
-      setLoadStats(stats);
+      setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
       setStatusKind('active');
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos`);
+      const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
+      const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
+      const autoDesc      = stats.autoDescartes || [];
+      const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
+      const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
+      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
       setActiveTab('intervencao');
-      notificarCriticos(timestamped.filter(d => d.alertas >= 5));
+      notificarCriticos(merged.filter(d => d.alertas >= 5));
+
+      // Auto-register platform-specific discards silently in the background
+      for (const item of autoDesc) {
+        registrar({
+          motorista: item.nome,
+          placa: item.placa,
+          transportadora: item.transportadora,
+          tipo: 'descarte',
+          obs: `Auto-descarte · ${item.motivo || platform.name} · ${item.count} evento(s)`,
+        }).catch(console.warn);
+      }
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);
@@ -151,7 +218,7 @@ export default function Monitor() {
     postToSheets({
       data,
       empresa:         d.transportadora || '',
-      sistema:         'SASCAR',
+      sistema:         platform.sistema,
       colaborador:     d.nome,
       placa:           d.placa || '',
       frota:           d.frota || '',
@@ -169,10 +236,81 @@ export default function Monitor() {
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
-  const deleteAlert = async (d) => {
-    if (!(await confirm({ title: 'Descartar alerta', message: `Descartar alerta de intervenção de ${d.nome}?`, danger: true }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'descarte', obs: `Alerta descartado · ${d.alertas} evento(s) removidos` });
-    setDrivers(drivers.map(x => x === d ? { ...x, alertas: 0, tipos: [] } : x));
+  const deleteAlert = async (d, tipo = 'intervencao') => {
+    const isIntervencao = tipo === 'intervencao';
+    const isReportar = tipo === 'reportar';
+    const isTecnico = tipo === 'tecnico';
+    const tipoLabel = {
+      intervencao: 'intervenção',
+      reportar: 'reportar',
+      tecnico: 'técnico'
+    }[tipo] || 'intervenção';
+    const descarteObs = {
+      intervencao: `Alerta descartado · ${d.alertas} evento(s) removidos`,
+      reportar: `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`,
+      tecnico: `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
+    }[tipo] || `Alerta descartado · ${d.alertas} evento(s) removidos`;
+    if (!(await confirm({
+      title: 'Descartar alerta',
+      message: `Descartar alerta ${tipoLabel} de ${d.nome}?`,
+      danger: true
+    }))) return;
+    await registrar({
+      motorista: d.nome,
+      placa: d.placa,
+      transportadora: d.transportadora,
+      tipo: 'descarte',
+      obs: descarteObs
+    });
+    setDrivers(drivers.map(x => x === d ? {
+      ...x,
+      alertas: isIntervencao ? 0 : x.alertas,
+      tipos: isIntervencao ? [] : x.tipos,
+      reportaveis: isReportar ? 0 : x.reportaveis,
+      tiposReportar: isReportar ? [] : x.tiposReportar,
+      tecnicos: isTecnico ? 0 : x.tecnicos
+    } : x));
+  };
+
+  const bulkDiscard = async () => {
+    const tab = activeTab;
+    if (!['intervencao', 'reportar', 'tecnicos'].includes(tab)) return;
+    const list = tab === 'intervencao' ? intervencaoList : tab === 'reportar' ? reportarList : tecList;
+    if (list.length === 0) return;
+    const tabLabel = tab === 'intervencao' ? 'intervenção' : tab === 'reportar' ? 'reportar' : 'técnico';
+    if (!(await confirm({
+      title: `Descartar todos os alertas de ${tabLabel}`,
+      message: `Descartar ${list.length} alerta(s) de ${tabLabel} visíveis na fila atual? Cada motorista terá um atendimento "descarte" registrado.`,
+      danger: true,
+    }))) return;
+
+    setLoading(true);
+    setStatusMsg(`Descartando ${list.length} alerta(s) de ${tabLabel}…`);
+
+    const obsFor = (d) => tab === 'intervencao' ? `Descarte em massa · ${d.alertas} evento(s)`
+                       : tab === 'reportar'    ? `Descarte em massa · ${d.reportaveis} evento(s) reportáveis`
+                       :                         `Descarte em massa · ${d.tecnicos} evento(s) técnicos`;
+
+    const results = await Promise.allSettled(list.map(d => registrar({
+      motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
+      tipo: 'descarte', obs: obsFor(d),
+    })));
+    const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
+    const fail = list.length - ok;
+
+    const placasDescartadas = new Set(list.map(d => d.placa));
+    setDrivers(drivers.map(d => placasDescartadas.has(d.placa) ? {
+      ...d,
+      alertas:      tab === 'intervencao' ? 0  : d.alertas,
+      tipos:        tab === 'intervencao' ? [] : d.tipos,
+      reportaveis:  tab === 'reportar'    ? 0  : d.reportaveis,
+      tiposReportar: tab === 'reportar'   ? [] : d.tiposReportar,
+      tecnicos:     tab === 'tecnicos'    ? 0  : d.tecnicos,
+    } : d));
+
+    setLoading(false);
+    setStatusKind(fail > 0 ? 'error' : 'active');
+    setStatusMsg(`Descarte em massa: ${ok} ok${fail > 0 ? ` · ${fail} falha(s)` : ''}`);
   };
 
   const clearQueue = async () => {
@@ -186,7 +324,7 @@ export default function Monitor() {
     setSheetAgeMin(null);
   };
 
-  const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '' });
+  const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '', busca: '' });
 
   const openDossie = async (nome) => {
     setDossieDriver(nome);
@@ -227,20 +365,22 @@ export default function Monitor() {
   return (
     <div className="monitor-grid">
       
-      <UploadArea 
+      <UploadArea
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
+        platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
+        historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />
 
-      <MonitorFilters 
-        excluirTecnicos={excluirTecnicos} setExcluirTecnicos={setExcluirTecnicos}
+      <MonitorFilters
         profile={profile} filters={filters} setFilters={setFilters}
         transps={transps} resetFilters={resetFilters}
+        platform={platform}
       />
 
       {/* Tabs */}
-      <div className="tabs">
+      <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
         {[
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
@@ -252,6 +392,17 @@ export default function Monitor() {
             <span className="tab-count">{cnt}</span>
           </div>
         ))}
+        {activeTab !== 'historico' && activeList.length > 0 && (
+          <button
+            className="btn btn-sm"
+            onClick={bulkDiscard}
+            disabled={loading}
+            style={{ marginLeft: 'auto' }}
+            title={`Descartar todos os ${activeList.length} alerta(s) visíveis na aba`}
+          >
+            <i className="ti ti-trash-x"></i> Descartar todos ({activeList.length})
+          </button>
+        )}
       </div>
 
       {/* Tab: Intervenção */}
@@ -259,9 +410,18 @@ export default function Monitor() {
         intervencaoList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista requer intervenção" sub="Bocejo ou Olho fechado" />
           : <div className="driver-list">
-              {paginate(intervencaoList).map(d => (
-                <DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} />
-              ))}
+              {paginate(intervencaoList).reduce((acc, d, i, arr) => {
+                if (i > 0 && arr[i - 1].alertas >= 5 && d.alertas < 5) {
+                  acc.push(
+                    <div key="divider-below-5" className="driver-list-divider">
+                      <i className="ti ti-arrow-down"></i>
+                      <span>Abaixo de 5 eventos</span>
+                    </div>
+                  );
+                }
+                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} />);
+                return acc;
+              }, [])}
             </div>
       )}
 
