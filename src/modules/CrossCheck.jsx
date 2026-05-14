@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useApp } from '../context.jsx';
 import { useToast } from '../hooks/useToast.jsx';
+
+const EMPTY_META = { name: '', rows: 0, loadedAt: null };
 
 function normalizeText(v) {
   if (!v && v !== 0) return '';
@@ -40,12 +41,6 @@ function pickFirst(row, keys) {
   return '';
 }
 
-function isCriticalLabel(s) {
-  if (!s && s !== 0) return false;
-  const str = String(s).toLowerCase();
-  return /grav|crit|grave|crític|crítico/.test(str);
-}
-
 function buildStats(events) {
   const plates = new Set();
   const drivers = new Set();
@@ -66,63 +61,94 @@ function formatLoadedAt(ts) {
 }
 
 export default function CrossCheck() {
-  const {  } = useApp();
   const toast = useToast();
   const [leftEvents, setLeftEvents] = useState([]);
   const [rightEvents, setRightEvents] = useState([]);
   const [matches, setMatches] = useState([]);
-  const [leftMeta, setLeftMeta] = useState({ name: '', rows: 0, loadedAt: null });
-  const [rightMeta, setRightMeta] = useState({ name: '', rows: 0, loadedAt: null });
+  const [leftMeta, setLeftMeta] = useState(EMPTY_META);
+  const [rightMeta, setRightMeta] = useState(EMPTY_META);
   const [leftInputKey, setLeftInputKey] = useState(0);
   const [rightInputKey, setRightInputKey] = useState(0);
   const [filterBy, setFilterBy] = useState('todos');
   const [sortBy, setSortBy] = useState('ocorrencias');
   const [onlyDivergences, setOnlyDivergences] = useState(false);
-  const leftName = 'Maxtrack';
-  const rightName = 'Horizon';
+  const [loadingSide, setLoadingSide] = useState(null);
+
+  const leftName = leftMeta.name ? leftMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 1';
+  const rightName = rightMeta.name ? rightMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 2';
+
+  const leftStats = buildStats(leftEvents);
+  const rightStats = buildStats(rightEvents);
+  const totalPlates = new Set([...leftStats.plates, ...rightStats.plates]).size;
+  const totalDrivers = new Set([...leftStats.drivers, ...rightStats.drivers]).size;
+  const totalRows = leftStats.rows + rightStats.rows;
+  const plateMatches = matches.filter(m => m.by === 'placa').length;
+  const driverMatches = matches.filter(m => m.by === 'motorista').length;
+  const divergenceCount = matches.filter(m => m.left.length !== m.right.length).length;
+
+  const filteredMatches = matches
+    .filter(m => filterBy === 'todos' || m.by === filterBy)
+    .filter(m => !onlyDivergences || m.left.length !== m.right.length)
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'alfabetica') return String(a.key).localeCompare(String(b.key));
+      return (b.left.length + b.right.length) - (a.left.length + a.right.length);
+    });
+
+  const latestFile = [leftMeta, rightMeta]
+    .filter(m => m.loadedAt)
+    .sort((a, b) => new Date(b.loadedAt) - new Date(a.loadedAt))[0];
+  const latestLabel = latestFile ? `${latestFile.name} · ${formatLoadedAt(latestFile.loadedAt)}` : '—';
 
   async function parseFile(file) {
     if (!file) return [];
-    const xlsxModule = await import('xlsx');
-    const XLSX = xlsxModule.default || xlsxModule;
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, { type: 'array' });
-    const sheetName = wb.SheetNames[0];
-    const sheet = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    // detect common keys (case, accent, and separator insensitive)
-    const plateKeys = ['Identificador/Placa', 'Placa', 'Plate', 'Veiculo', 'Identificador', 'Placa / Empurrador'];
-    const driverKeys = ['Motorista', 'Motorista / Comandante', 'Nome do Motorista', 'Nome', 'Driver'];
-    const severityKeys = ['Criticidade', 'Criticidade Original', 'Severidade', 'Prioridade', 'Categoria', 'Severity'];
+    try {
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const plateKeys = ['Identificador/Placa', 'Placa', 'Plate', 'Veiculo', 'Identificador', 'Placa / Empurrador'];
+      const driverKeys = ['Motorista', 'Motorista / Comandante', 'Nome do Motorista', 'Nome', 'Driver'];
+      const severityKeys = ['Criticidade', 'Criticidade Original', 'Severidade', 'Prioridade', 'Categoria', 'Severity'];
 
-    return rows.map(r => {
-      const rawPlate = pickFirst(r, plateKeys);
-      const rawDriver = pickFirst(r, driverKeys);
-      const rawSeverity = pickFirst(r, severityKeys);
-      return {
-        raw: r,
-        plate: normalizePlate(rawPlate),
-        plateRaw: rawPlate || '',
-        driver: normalizeText(rawDriver),
-        driverRaw: rawDriver || '',
-        severityRaw: rawSeverity || '',
-        critical: isCriticalLabel(rawSeverity),
-      };
-    });
+      return rows.map(r => {
+        const rawPlate = pickFirst(r, plateKeys);
+        const rawDriver = pickFirst(r, driverKeys);
+        const rawSeverity = pickFirst(r, severityKeys);
+        return {
+          raw: r,
+          plate: normalizePlate(rawPlate),
+          plateRaw: rawPlate || '',
+          driver: normalizeText(rawDriver),
+          driverRaw: rawDriver || '',
+          severityRaw: rawSeverity || '',
+        };
+      });
+    } catch {
+      toast(`Erro ao ler "${file.name}". Verifique se o arquivo é um xlsx, xls ou csv válido.`, 'error');
+      return null;
+    }
   }
 
   async function handleFile(file, side) {
     if (!file) return;
+    setLoadingSide(side);
     const parsed = await parseFile(file);
+    setLoadingSide(null);
+    if (!parsed) return;
     const meta = { name: file.name, rows: parsed.length, loadedAt: new Date().toISOString() };
     if (side === 'left') {
       setLeftEvents(parsed);
       setLeftMeta(meta);
+      computeMatches(parsed, rightEvents);
     } else {
       setRightEvents(parsed);
       setRightMeta(meta);
+      computeMatches(leftEvents, parsed);
     }
-    computeMatches(side === 'left' ? parsed : leftEvents, side === 'right' ? parsed : rightEvents);
   }
 
   function handleUpload(e, side) {
@@ -138,8 +164,8 @@ export default function CrossCheck() {
 
   function computeMatches(left, right, options = {}) {
     const { silent = false } = options;
-    const L = left || leftEvents;
-    const R = right || rightEvents;
+    const L = left ?? leftEvents;
+    const R = right ?? rightEvents;
     const byPlateL = new Map();
     const byDriverL = new Map();
     const byPlateR = new Map();
@@ -150,7 +176,6 @@ export default function CrossCheck() {
 
     const found = [];
 
-    // match by plate
     for (const [plate, levents] of byPlateL) {
       if (!plate) continue;
       const revents = byPlateR.get(plate) || [];
@@ -159,11 +184,12 @@ export default function CrossCheck() {
       }
     }
 
-    // match by driver name (only if not already matched by plate)
+    // Evitar duplicar motoristas já cobertos integralmente por matches de placa
+    const matchedPlates = new Set(found.flatMap(f => [...f.left, ...f.right].map(ev => ev.plate)));
+
     for (const [driver, levents] of byDriverL) {
       if (!driver) continue;
-      const already = found.find(f => f.key === driver);
-      if (already) continue;
+      if (levents.every(ev => matchedPlates.has(ev.plate))) continue;
       const revents = byDriverR.get(driver) || [];
       if (levents.length && revents.length) {
         found.push({ key: driver, by: 'motorista', left: levents, right: revents });
@@ -180,44 +206,38 @@ export default function CrossCheck() {
     }
   }
 
-  const emptyMeta = { name: '', rows: 0, loadedAt: null };
-
   function clearSide(side) {
     if (side === 'left') {
       setLeftEvents([]);
-      setLeftMeta(emptyMeta);
+      setLeftMeta(EMPTY_META);
       setLeftInputKey((k) => k + 1);
       computeMatches([], rightEvents, { silent: true });
-      return;
+    } else {
+      setRightEvents([]);
+      setRightMeta(EMPTY_META);
+      setRightInputKey((k) => k + 1);
+      computeMatches(leftEvents, [], { silent: true });
     }
-    setRightEvents([]);
-    setRightMeta(emptyMeta);
-    setRightInputKey((k) => k + 1);
-    computeMatches(leftEvents, [], { silent: true });
   }
 
   function clearAll() {
     setLeftEvents([]);
     setRightEvents([]);
-    setLeftMeta(emptyMeta);
-    setRightMeta(emptyMeta);
+    setLeftMeta(EMPTY_META);
+    setRightMeta(EMPTY_META);
     setMatches([]);
     setLeftInputKey((k) => k + 1);
     setRightInputKey((k) => k + 1);
   }
 
   function swapSides() {
-    const leftData = leftEvents;
-    const rightData = rightEvents;
-    const leftInfo = leftMeta;
-    const rightInfo = rightMeta;
-    setLeftEvents(rightData);
-    setRightEvents(leftData);
-    setLeftMeta(rightInfo);
-    setRightMeta(leftInfo);
+    setLeftEvents(rightEvents);
+    setRightEvents(leftEvents);
+    setLeftMeta(rightMeta);
+    setRightMeta(leftMeta);
     setLeftInputKey((k) => k + 1);
     setRightInputKey((k) => k + 1);
-    computeMatches(rightData, leftData, { silent: true });
+    computeMatches(rightEvents, leftEvents, { silent: true });
   }
 
   function exportResults() {
@@ -261,7 +281,7 @@ export default function CrossCheck() {
     });
 
     const csv = [header.join(';'), ...rows].join('\n');
-    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -270,28 +290,6 @@ export default function CrossCheck() {
     URL.revokeObjectURL(url);
   }
 
-  const leftStats = buildStats(leftEvents);
-  const rightStats = buildStats(rightEvents);
-  const totalPlates = new Set([...leftStats.plates, ...rightStats.plates]).size;
-  const totalDrivers = new Set([...leftStats.drivers, ...rightStats.drivers]).size;
-  const totalRows = leftStats.rows + rightStats.rows;
-  const plateMatches = matches.filter(m => m.by === 'placa').length;
-  const driverMatches = matches.filter(m => m.by === 'motorista').length;
-  const divergenceCount = matches.filter(m => m.left.length !== m.right.length).length;
-
-  const filteredMatches = matches
-    .filter(m => filterBy === 'todos' || m.by === filterBy)
-    .filter(m => !onlyDivergences || m.left.length !== m.right.length)
-    .slice()
-    .sort((a, b) => {
-      if (sortBy === 'alfabetica') return String(a.key).localeCompare(String(b.key));
-      return (b.left.length + b.right.length) - (a.left.length + a.right.length);
-    });
-
-  const latestFile = [leftMeta, rightMeta]
-    .filter(m => m.loadedAt)
-    .sort((a, b) => new Date(b.loadedAt) - new Date(a.loadedAt))[0];
-  const latestLabel = latestFile ? `${latestFile.name} · ${formatLoadedAt(latestFile.loadedAt)}` : '—';
   return (
     <div>
       <div className="card">
@@ -301,22 +299,22 @@ export default function CrossCheck() {
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comparar alertas entre plataformas</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button className="btn btn-sm btn-ghost" onClick={swapSides} disabled={leftEvents.length === 0 && rightEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={swapSides} disabled={!!loadingSide || (leftEvents.length === 0 && rightEvents.length === 0)}>
               <i className="ti ti-switch-horizontal"></i> Trocar lados
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('left')} disabled={leftEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('left')} disabled={!!loadingSide || leftEvents.length === 0}>
               Limpar planilha 1
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('right')} disabled={rightEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('right')} disabled={!!loadingSide || rightEvents.length === 0}>
               Limpar planilha 2
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={clearAll} disabled={leftEvents.length === 0 && rightEvents.length === 0 && matches.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={clearAll} disabled={!!loadingSide || (leftEvents.length === 0 && rightEvents.length === 0 && matches.length === 0)}>
               Limpar tudo
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={exportResults} disabled={filteredMatches.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={exportResults} disabled={!!loadingSide || filteredMatches.length === 0}>
               <i className="ti ti-download"></i> Exportar resultados
             </button>
-            <button onClick={() => computeMatches()} className="btn btn-sm btn-primary" disabled={leftEvents.length === 0 || rightEvents.length === 0}>
+            <button onClick={() => computeMatches()} className="btn btn-sm btn-primary" disabled={!!loadingSide || leftEvents.length === 0 || rightEvents.length === 0}>
               <i className="ti ti-shuffle"></i> Comparar lado a lado
             </button>
           </div>
@@ -366,10 +364,10 @@ export default function CrossCheck() {
                   onDrop={(e) => handleDrop(e, 'left')}
                 >
                   <div className="upload-icon">
-                    <i className="ti ti-cloud-upload"></i>
+                    <i className={loadingSide === 'left' ? 'ti ti-loader-2 ti-spin' : 'ti ti-cloud-upload'}></i>
                   </div>
                   <div className="upload-text">
-                    <div className="upload-title">Solte aqui a planilha do {leftName}</div>
+                    <div className="upload-title">{loadingSide === 'left' ? 'Lendo arquivo…' : 'Arraste ou clique para selecionar'}</div>
                     <div className="upload-hint">.xlsx · .xls · .csv</div>
                   </div>
                   <input
@@ -377,6 +375,7 @@ export default function CrossCheck() {
                     type="file"
                     accept=".csv,.xls,.xlsx"
                     hidden
+                    disabled={!!loadingSide}
                     onChange={e => handleUpload(e, 'left')}
                   />
                 </label>
@@ -408,10 +407,10 @@ export default function CrossCheck() {
                   onDrop={(e) => handleDrop(e, 'right')}
                 >
                   <div className="upload-icon">
-                    <i className="ti ti-cloud-upload"></i>
+                    <i className={loadingSide === 'right' ? 'ti ti-loader-2 ti-spin' : 'ti ti-cloud-upload'}></i>
                   </div>
                   <div className="upload-text">
-                    <div className="upload-title">Solte aqui a planilha do {rightName}</div>
+                    <div className="upload-title">{loadingSide === 'right' ? 'Lendo arquivo…' : 'Arraste ou clique para selecionar'}</div>
                     <div className="upload-hint">.xlsx · .xls · .csv</div>
                   </div>
                   <input
@@ -419,6 +418,7 @@ export default function CrossCheck() {
                     type="file"
                     accept=".csv,.xls,.xlsx"
                     hidden
+                    disabled={!!loadingSide}
                     onChange={e => handleUpload(e, 'right')}
                   />
                 </label>
@@ -471,8 +471,8 @@ export default function CrossCheck() {
                 <p>Nenhuma correspondência encontrada para os filtros atuais.</p>
               </div>
             ) : (
-              filteredMatches.map((m, i) => (
-                <div key={i} className="stat-box" style={{ padding: 18, marginBottom: 16 }}>
+              filteredMatches.map((m) => (
+                <div key={`${m.by}-${m.key}`} className="stat-box" style={{ padding: 18, marginBottom: 16 }}>
                   <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                     {m.by === 'placa' ? <><i className="ti ti-car" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Placa: {m.key}</> : <><i className="ti ti-user" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Motorista: {m.key}</>}
                   </div>
