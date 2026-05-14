@@ -127,13 +127,17 @@ function AvatarSection({ profile, updateProfile }) {
   );
 }
 
-function SascarSection({ profile, session, updateProfile }) {
-  const configured = !!profile?.sascar_token;
+function SascarSection({ profile }) {
+  const configured  = !!profile?.sascar_token;
+  const bookmarkRef = useRef(null);
 
-  // Bookmarklet: lê AUTH_TOKEN do localStorage do portal Sascar e abre o MedNet
-  // com o token na URL hash. O App.jsx detecta e salva automaticamente.
-  const mednetUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const bookmarkletHref = `javascript:(function(){var t=localStorage.getItem('AUTH_TOKEN');if(!t){alert('Faça login no portal Sascar primeiro!');return;}window.open('${mednetUrl}/#sascar-token='+encodeURIComponent(t),'_blank');})()`;
+  // React bloqueia javascript: em href — setamos direto no DOM via ref.
+  useEffect(() => {
+    if (!bookmarkRef.current) return;
+    const mednetUrl = window.location.origin;
+    const code = `javascript:(function(){var t=localStorage.getItem('AUTH_TOKEN');if(!t){alert('Faça login no portal Sascar primeiro!');return;}window.open('${mednetUrl}/#sascar-token='+encodeURIComponent(t),'_blank');})()`;
+    bookmarkRef.current.href = code;
+  }, []);
 
   return (
     <Section title={<><i className="ti ti-building-factory-2" style={{ marginRight: 6 }}></i>Sascar — Busca automática</>}>
@@ -177,9 +181,9 @@ function SascarSection({ profile, session, updateProfile }) {
           <li>O MedNet abre automaticamente com o token salvo — pronto!</li>
         </ol>
         <div style={{ marginTop: 12 }}>
-          {/* eslint-disable-next-line jsx-a11y/anchor-has-content */}
           <a
-            href={bookmarkletHref}
+            ref={bookmarkRef}
+            href="#bookmark"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '8px 16px', background: 'var(--accent-500, #F26931)',
