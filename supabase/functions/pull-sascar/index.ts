@@ -107,13 +107,10 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
-  const MIN_SPEED_KMH = 10;
 
-  // Filtra eventos abaixo de velocidade mínima
-  const valid = alarms.filter((a) => {
-    const speed = Number(a.speed ?? 0) / 100; // Sascar speed está em 1/100 km/h
-    return speed >= MIN_SPEED_KMH;
-  });
+  // A plataforma Sascar já filtra eventos em baixa velocidade internamente.
+  // Não aplicamos filtro de speed aqui para não descartar eventos legítimos.
+  const valid = alarms;
 
   // Agrupa por placa
   const byPlaca: Record<string, {
@@ -190,7 +187,7 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     soTecnico:              drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos:           valid.length,
     falsosPositivos:        0,
-    filtradosPorVelocidade: alarms.length - valid.length,
+    filtradosPorVelocidade: 0,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
   };
