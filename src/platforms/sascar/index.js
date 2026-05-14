@@ -7,6 +7,7 @@
 
 import { TAXONOMY } from './columns.js';
 import { parse, detect } from './parser.js';
+import { supabase } from '../../supabase.js';
 
 const sascar = {
   // ── Metadata ──
@@ -38,7 +39,6 @@ const sascar = {
   // Requer token configurado em Meu Perfil → Integrações → Sascar.
   scraper: {
     async pull() {
-      const { supabase } = await import('../../supabase.js');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
