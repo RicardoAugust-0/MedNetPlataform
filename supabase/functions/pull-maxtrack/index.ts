@@ -61,17 +61,17 @@ function getDayStartBRT(): Date {
   return start;
 }
 
-// Gera janelas de 30 min cobrindo o dia inteiro em BRT.
-// A API tem limite de ~30 eventos por chamada; janelas de 30 min garantem
-// que nenhuma janela estoure o limite mesmo em picos de alertas.
+// Gera janelas de 15 min cobrindo o dia inteiro em BRT até o momento atual.
+// A API limita ~30 eventos por chamada; janelas de 15 min garantem que nenhuma
+// janela estoure o limite mesmo nos horários de pico de alertas.
 function buildWindows(): Array<{ startDate: string; endDate: string }> {
   const dayStart = getDayStartBRT();
+  const now      = new Date();
   const windows  = [];
-  for (let i = 0; i < 48; i++) {                // 48 x 30 min = 24 h
-    const wStart = new Date(dayStart.getTime() + i * 30 * 60 * 1000);
-    const wEnd   = new Date(wStart.getTime() + 30 * 60 * 1000 - 1);
-    // Não busca janelas futuras
-    if (wStart > new Date()) break;
+  for (let i = 0; i < 96; i++) {                // 96 x 15 min = 24 h
+    const wStart = new Date(dayStart.getTime() + i * 15 * 60 * 1000);
+    const wEnd   = new Date(wStart.getTime() + 15 * 60 * 1000 - 1);
+    if (wStart >= now) break;
     windows.push({
       startDate: wStart.toISOString(),
       endDate:   wEnd.toISOString(),
@@ -188,8 +188,8 @@ Deno.serve(async (req) => {
       'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     };
 
-    // Busca todos os eventos do dia em janelas de 30 min em paralelo.
-    // A API limita ~30 eventos por chamada; janelas de 30 min evitam o teto.
+    // Busca todos os eventos do dia em janelas de 15 min em paralelo.
+    // A API limita ~30 eventos por chamada; janelas de 15 min evitam o teto.
     const windows = buildWindows();
 
     const fetchWindow = async (startDate: string, endDate: string) => {
