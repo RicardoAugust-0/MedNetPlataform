@@ -2,6 +2,22 @@ import { useState, useMemo, useEffect } from 'react';
 import { exportCSV, EmptyState } from './utils';
 import { useSheetHistory } from '../../hooks/useSheetHistory.js';
 
+const SHEET_PAGE_SIZE = 15;
+
+const MESES_NUM = {
+  JANEIRO:1, FEVEREIRO:2, 'MARÇO':3, ABRIL:4, MAIO:5, JUNHO:6,
+  JULHO:7, AGOSTO:8, SETEMBRO:9, OUTUBRO:10, NOVEMBRO:11, DEZEMBRO:12,
+};
+
+function sheetSortKey(row) {
+  const [mesNome, anoStr] = (row._mes || '').split(' ');
+  const year  = parseInt(anoStr) || 0;
+  const month = MESES_NUM[mesNome] || 0;
+  const [dStr] = (row.data || '').split('/');
+  const day = parseInt(dStr) || 0;
+  return year * 10000 + month * 100 + day;
+}
+
 const CRITICIDADE_COLOR = {
   'GRAVÍSSIMO': 'var(--danger-500)',
   'GRAVE':      'var(--warning-500)',
@@ -61,6 +77,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
 
   const [showSheets, setShowSheets] = useState(false);
   const [sheetSearch, setSheetSearch] = useState('');
+  const [sheetPage, setSheetPage] = useState(1);
   const sheet = useSheetHistory();
 
   const histFiltered = useMemo(() => {
@@ -99,6 +116,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
   const handleToggleSheets = () => {
     if (!showSheets && !sheet.loaded) sheet.load();
     setShowSheets(v => !v);
+    setSheetPage(1);
   };
 
   const displayHistory = histPeriod === 'intervalo' ? rangeHistory : histFiltered;
@@ -109,15 +127,20 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
   const paginatedList = displayHistory.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const sheetFiltered = useMemo(() => {
-    if (!sheetSearch.trim()) return sheet.rows;
-    const q = sheetSearch.toLowerCase();
-    return sheet.rows.filter(r =>
-      r.colaborador?.toLowerCase().includes(q) ||
-      r.placa?.toLowerCase().includes(q) ||
-      r.empresa?.toLowerCase().includes(q) ||
-      r.solicitadoPor?.toLowerCase().includes(q)
-    );
+    const q = sheetSearch.trim().toLowerCase();
+    const filtered = q
+      ? sheet.rows.filter(r =>
+          r.colaborador?.toLowerCase().includes(q) ||
+          r.placa?.toLowerCase().includes(q) ||
+          r.empresa?.toLowerCase().includes(q) ||
+          r.solicitadoPor?.toLowerCase().includes(q)
+        )
+      : sheet.rows;
+    return [...filtered].sort((a, b) => sheetSortKey(b) - sheetSortKey(a));
   }, [sheet.rows, sheetSearch]);
+
+  const sheetTotalPages   = Math.ceil(sheetFiltered.length / SHEET_PAGE_SIZE) || 1;
+  const sheetPaginatedList = sheetFiltered.slice((sheetPage - 1) * SHEET_PAGE_SIZE, sheetPage * SHEET_PAGE_SIZE);
 
   const histIcon  = { intervencao: 'ti-headset', reportar: 'ti-building', descarte: 'ti-trash', limpeza: 'ti-trash' };
   const tipoLabel = { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' };
@@ -256,7 +279,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
                 style={{ padding:'4px 8px', fontSize:12, border:'1px solid var(--border-md)', borderRadius:'var(--radius-sm)', background:'var(--surface-0)', color:'var(--text-primary)', minWidth:200 }}
                 placeholder="Buscar colaborador, placa, empresa…"
                 value={sheetSearch}
-                onChange={e => setSheetSearch(e.target.value)}
+                onChange={e => { setSheetSearch(e.target.value); setSheetPage(1); }}
               />
             )}
           </div>
@@ -265,9 +288,24 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
           {sheet.error  && <div className="empty-state" style={{ color:'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {sheet.error}</div>}
           {sheet.loaded && sheetFiltered.length === 0 && <EmptyState icon="ti-table-off" msg="Nenhum registro encontrado na planilha" />}
           {sheet.loaded && sheetFiltered.length > 0 && (
-            <div className="driver-list">
-              {sheetFiltered.map((row, i) => <SheetRow key={i} row={row} />)}
-            </div>
+            <>
+              <div className="driver-list">
+                {sheetPaginatedList.map((row, i) => <SheetRow key={i} row={row} />)}
+              </div>
+              {sheetTotalPages > 1 && (
+                <div className="pagination" style={{ display:'flex', justifyContent:'center', gap:8, marginTop:12 }}>
+                  <button className="btn btn-sm" disabled={sheetPage === 1} onClick={() => setSheetPage(p => p - 1)}>
+                    <i className="ti ti-chevron-left"></i>
+                  </button>
+                  <span style={{ fontSize:13, alignSelf:'center', color:'var(--text-muted)' }}>
+                    {sheetPage} / {sheetTotalPages} · {sheetFiltered.length} registros
+                  </span>
+                  <button className="btn btn-sm" disabled={sheetPage === sheetTotalPages} onClick={() => setSheetPage(p => p + 1)}>
+                    <i className="ti ti-chevron-right"></i>
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

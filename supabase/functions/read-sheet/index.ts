@@ -152,10 +152,13 @@ Deno.serve(async (req) => {
 
       const rows: string[][] = data.values || [];
 
-      for (let i = 0; i < rows.length; i++) {
+      // Coleta as linhas válidas da aba e inverte: última linha = mais recente = primeira.
+      const monthRows: SheetRow[] = [];
+      const firstDataRow = (rows.length > 0 && isHeaderRow(rows[0])) ? 1 : 0;
+
+      for (let i = firstDataRow; i < rows.length; i++) {
         const r = rows[i];
         if (!r) continue;
-        if (i === 0 && isHeaderRow(r)) continue; // pula cabeçalho
         // Detecta linhas sem dados reais pelos campos de identificação.
         // Não usar r.every() pois a coluna I pode ter fórmula =SE(...) em linhas vazias.
         const colaborador = cell(r, 3);
@@ -163,7 +166,7 @@ Deno.serve(async (req) => {
         const empresa = cell(r, 1);
         if (!colaborador && !placa && !empresa) continue;
 
-        allRows.push({
+        monthRows.push({
           data:            cell(r, 0),
           empresa:         cell(r, 1),
           sistema:         cell(r, 2),
@@ -182,9 +185,13 @@ Deno.serve(async (req) => {
           _mes:            mes,
         });
       }
+
+      // Inverte para que o último item inserido na aba apareça primeiro.
+      monthRows.reverse();
+      allRows.push(...monthRows);
     }
 
-    // Ordenar do mais recente para o mais antigo
+    // Ordena por data descendente entre meses; dentro do mesmo dia preserva a ordem invertida acima.
     allRows.sort((a, b) => rowTimestamp(b.data, b._mes) - rowTimestamp(a.data, a._mes));
 
     return json({ ok: true, rows: allRows, meses });
