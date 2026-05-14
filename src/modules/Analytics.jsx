@@ -78,6 +78,32 @@ export default function Analytics() {
     return { topDrivers, topTransp, timeSeries };
   }, [data]);
 
+  function exportAnalytics() {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const row = (...cols) => cols.map(esc).join(',');
+    const lines = [
+      'ANALYTICS DA OPERAÇÃO — ÚLTIMOS 30 DIAS',
+      '',
+      'TOP MOTORISTAS REINCIDENTES',
+      row('Motorista', 'Intervenções'),
+      ...topDrivers.map(d => row(d.name, d.count)),
+      '',
+      'TOP TRANSPORTADORAS',
+      row('Transportadora', 'Intervenções'),
+      ...topTransp.map(t => row(t.name, t.value)),
+      '',
+      'EVOLUÇÃO (14 DIAS)',
+      row('Data', 'Intervenções', 'Descartes'),
+      ...timeSeries.map(t => row(t.name, t.intervs, t.descartes)),
+    ];
+    const csv = lines.join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   if (loading) {
     return (
       <div className="empty-state">
@@ -89,9 +115,19 @@ export default function Analytics() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Analytics da Operação</h2>
-        <p style={{ color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Análise de reincidência e volume dos últimos 30 dias</p>
+      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Analytics da Operação</h2>
+          <p style={{ color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Análise de reincidência e volume dos últimos 30 dias</p>
+        </div>
+        <button
+          className="btn btn-sm btn-ghost"
+          onClick={exportAnalytics}
+          disabled={!topDrivers.length && !topTransp.length}
+          title="Exportar dados como CSV"
+        >
+          <i className="ti ti-download"></i> Exportar CSV
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>

@@ -114,6 +114,8 @@ lista dos motoristas mais críticos, gráfico de atendimentos dos últimos 7
 dias, atalhos para outros módulos. Saudação contextual e hero quando há
 motoristas com alta contagem.
 
+**Breakdown por transportadora** — card "Transportadoras com mais alertas" exibido automaticamente quando há alertas ativos. Mostra ranking top 5 com barra proporcional, contagem de alertas e número de motoristas por transportadora. Derivado de `drivers` (estado global); não requer chamada extra.
+
 ### 5.2. Monitor de Frota (`modules/Monitor.jsx`)
 Núcleo operacional. Recebe a entrada da plataforma (atualmente upload de
 planilha Sascar) e organiza em quatro abas:
@@ -126,12 +128,23 @@ planilha Sascar) e organiza em quatro abas:
 | **Histórico** | Atendimentos passados, com filtros por período, tipo e busca, e exportação CSV. |
 
 Filtros: turno, severidade, transportadora, evento (todos dinâmicos por
-plataforma).
+plataforma). **Presets de filtro** salvos em `localStorage` (`mn_filter_presets`) — até 5 combinações nomeadas, aplicadas com um clique.
+
+**Badges por motorista no DriverCard:**
+
+| Badge | Cor | Origem |
+|---|---|---|
+| Reincidente há Xd | Danger/Warning | Supabase — atendimento nos últimos 30 dias |
+| Planilha · dd/mm · Realizado/Pendente | Success/Warning | Google Sheets — entrada no mês atual ou anterior |
+
+**Descarte com motivo** — ao clicar em descartar, um modal solicita o motivo (falso positivo, câmera com falha, etc.) antes de registrar. O motivo é salvo no campo `obs` do atendimento.
+
+**Exportação da aba ativa** — botão "Exportar" na barra de abas gera CSV dos motoristas visíveis na aba atual (Intervenção, Reportar ou Só técnico).
 
 Sub-arquivos:
 - `monitor/UploadArea.jsx` — status bar, seletor de plataforma, drop zone, KPIs
-- `monitor/MonitorFilters.jsx` — filtros (taxonomia vem da plataforma)
-- `monitor/DriverCard.jsx` — cartão de cada motorista com badges
+- `monitor/MonitorFilters.jsx` — filtros + presets de filtro
+- `monitor/DriverCard.jsx` — cartão de cada motorista com badges (reincidência + planilha)
 - `monitor/MonitorModals.jsx` — modal de template + dossiê do motorista
 - `monitor/HistoryTab.jsx` — aba de histórico com filtros e CSV
 - `monitor/utils.jsx` — helpers (sevClass, applyTemplate, exportCSV)
@@ -200,9 +213,35 @@ Edita `nome`, `cargo` e senha. E-mail é read-only.
 Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
 `invite-user`). Toggle de manutenção e edição de role/nome/cargo dos colegas.
 
+**Mapeamento de transportadoras** — seção "Mapeamento de transportadoras" permite cadastrar pares Monitor → Planilha (ex.: "LSL Transportes" → "LSL 2W"). Persistido em `app_settings` com chave `carrier_aliases`. Aplicado automaticamente em `postToSheets` via `useCarrierAliases` + `resolveAlias`.
+
 ### 5.11. Analytics (`modules/Analytics.jsx`, admin-only)
 Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
-(pie), tendência de 14 dias intervenção × descarte (line).
+(pie), tendência de 14 dias intervenção × descarte (line). **Exportação CSV** — botão "Exportar CSV" no cabeçalho gera arquivo com as três seções (motoristas, transportadoras, série temporal).
+
+---
+
+## 5.12. Integração Google Sheets bidirecional
+
+### Escrita (`supabase/functions/append-sheet`)
+Acionada em "Inserir na planilha". Usa JWT de service account para autenticar na Sheets API.
+
+- **Range de detecção**: `A:H` — evita que a fórmula `=SE(ÉCÉL.VAZIA(N:N);"NÃO";"SIM")` pré-preenchida em ~1000 linhas da coluna I desvie o ponto de inserção para o final dessas linhas.
+- **Coluna I**: escrita com a fórmula idêntica às demais linhas — status auto-calculado para o novo registro sem intervenção manual.
+- **Mapeamento de transportadora**: aplica `resolveAlias()` antes de enviar, usando os aliases cadastrados em `app_settings.carrier_aliases`.
+
+### Leitura (`supabase/functions/read-sheet`)
+Nova Edge Function. Lê uma ou mais abas mensais (padrão: mês atual + anterior).
+
+- **Detecção de linhas vazias**: ignora linhas onde empresa, colaborador e placa estão todos vazios — resistente à fórmula da coluna I que preenche linhas sem dados reais.
+- **Erros de fórmula**: `#N/A`, `#VALOR!`, `#REF!` etc. são normalizados para string vazia.
+- **Ordenação**: última linha inserida na aba aparece primeiro (`.reverse()` por aba + sort por data descendente entre meses).
+- **Query param**: `?meses=MARÇO 2025,ABRIL 2025` para abas específicas.
+
+### Frontend
+- `hooks/useSheetHistory.js` — hook lazy; `load()` acionado sob demanda.
+- **HistoryTab** — botão "Planilha Sheets" no histórico carrega dados sob demanda, com paginação de 15 itens e busca por colaborador/placa/empresa.
+- **DriverCard** — badge "Planilha · dd/mm · Realizado/Pendente" para motoristas com entrada no Sheets; dados carregados em background ao montar o Monitor.
 
 ---
 
@@ -217,7 +256,7 @@ Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
 | `ws_pages` | `id`, `title`, `icon_index`, `category`, `favorite`, `content`, `position`, timestamps | Conteúdo HTML do TipTap |
 | `links` | `id`, `section`, `name`, `description`, `url`, `icon`, `bg`, `ic`, `position`, `created_at` | — |
 | `reminders` | `id`, `title`, `sub`, `time`, `urgent`, `done`, `reminder_date`, `icon`, `created_at` | — |
-| `app_settings` | `key`, `value` (JSON), `updated_at`, `updated_by` | `key='maintenance'` controla lockout |
+| `app_settings` | `key`, `value` (JSON), `updated_at`, `updated_by` | `key='maintenance'` controla lockout · `key='carrier_aliases'` mapeia nomes de transportadoras |
 
 Realtime: `atendimentos`, `templates`, `notes`, `ws_pages`, `links`,
 `reminders`, `app_settings`.

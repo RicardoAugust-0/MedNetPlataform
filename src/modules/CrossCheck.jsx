@@ -17,6 +17,17 @@ import {
 } from './crosscheck/utils.js';
 
 const EMPTY_META = { name: '', rows: 0, loadedAt: null };
+const CACHE_KEY  = 'mn_crosscheck_cache';
+
+// Campos mínimos de cada evento para exibição e filtro por transportadora.
+const slimEv = ev => ({
+  plateRaw:         ev.plateRaw         || '',
+  driverRaw:        ev.driverRaw        || '',
+  severityRaw:      ev.severityRaw      || '',
+  transportadora:   ev.transportadora   || '',
+  transportadoraRaw:ev.transportadoraRaw|| '',
+  dateRaw:          ev.dateRaw          || '',
+});
 
 export default function CrossCheck() {
   const toast = useToast();
@@ -39,6 +50,42 @@ export default function CrossCheck() {
   const [sortBy, setSortBy] = useState('ocorrencias');
   const [onlyDivergences, setOnlyDivergences] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [fromCache, setFromCache] = useState(false);
+  const [cacheTimestamp, setCacheTimestamp] = useState(null);
+
+  // Restaura resultados do cache ao montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const cache = JSON.parse(raw);
+      if (!cache.matches?.length) return;
+      setLeftMeta(cache.leftMeta  || EMPTY_META);
+      setRightMeta(cache.rightMeta || EMPTY_META);
+      setMatches(cache.matches);
+      setRightCarrier(cache.rightCarrier || '');
+      setCacheTimestamp(cache.savedAt);
+      setFromCache(true);
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persiste resultados no cache sempre que matches muda
+  useEffect(() => {
+    try {
+      if (matches.length === 0) { localStorage.removeItem(CACHE_KEY); return; }
+      const slim = matches.map(m => ({
+        key: m.key, by: m.by,
+        left:  m.left.map(slimEv),
+        right: m.right.map(slimEv),
+      }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        leftMeta, rightMeta, matches: slim, rightCarrier,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches]);
 
   const leftName = leftMeta.name ? leftMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 1';
   const rightName = rightMeta.name ? rightMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 2';
@@ -255,6 +302,8 @@ export default function CrossCheck() {
     setMatches([]); setLeftInputKey(k => k + 1); setRightInputKey(k => k + 1);
     setRightCarrier(''); setCarrierFilter(''); setCarrierFilterLabel('');
     setDateFrom(''); setDateTo(''); setFilterBy('todos'); setSortBy('ocorrencias'); setOnlyDivergences(false);
+    setFromCache(false); setCacheTimestamp(null);
+    try { localStorage.removeItem(CACHE_KEY); } catch {}
   }
 
   function swapSides() {
@@ -312,6 +361,15 @@ export default function CrossCheck() {
 
   return (
     <div>
+      {fromCache && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 14px', marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+          <i className="ti ti-device-floppy" style={{ color: 'var(--accent-500)', flexShrink: 0 }}></i>
+          <span>Resultados da sessão anterior carregados do cache{cacheTimestamp ? ` · ${formatLoadedAt(cacheTimestamp)}` : ''}. Faça upload das planilhas para recalcular.</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={clearAll} style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            <i className="ti ti-trash"></i> Limpar
+          </button>
+        </div>
+      )}
       <div className="card">
         <div className="card-header" style={{ gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>

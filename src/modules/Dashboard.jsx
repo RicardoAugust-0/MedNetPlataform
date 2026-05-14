@@ -36,6 +36,18 @@ export default function Dashboard() {
     return { days7, labels7, maxVal: Math.max(...days7, 1) };
   }, [atHistory]);
 
+  const transpStats = useMemo(() => {
+    const map = new Map();
+    drivers.forEach(d => {
+      if (!d.transportadora || d.alertas === 0) return;
+      const entry = map.get(d.transportadora) || { name: d.transportadora, alertas: 0, count: 0 };
+      entry.alertas += d.alertas;
+      entry.count   += 1;
+      map.set(d.transportadora, entry);
+    });
+    return [...map.values()].sort((a, b) => b.alertas - a.alertas).slice(0, 5);
+  }, [drivers]);
+
   const todayStr2 = new Date().toISOString().slice(0, 10);
   const sortedRem = [...reminders]
     .filter(r => r.date === todayStr2 && !r.done)
@@ -96,6 +108,40 @@ export default function Dashboard() {
             <button className="dash-hero-cta" onClick={() => setActivePanel('monitor')}>
               Ver fila <i className="ti ti-arrow-right"></i>
             </button>
+          </div>
+        </div>
+      )}
+
+      {transpStats.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header">
+            <div className="card-title">
+              <i className="ti ti-building-community" style={{ color: 'var(--accent-500)' }}></i>
+              Transportadoras com mais alertas
+            </div>
+            <button className="btn btn-sm btn-ghost" onClick={() => setActivePanel('monitor')}>
+              Ver no Monitor <i className="ti ti-arrow-right"></i>
+            </button>
+          </div>
+          <div style={{ padding: '0 0 8px' }}>
+            {transpStats.map((t, i) => {
+              const pct = (t.alertas / transpStats[0].alertas) * 100;
+              return (
+                <div key={t.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < transpStats.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>#{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</div>
+                    <div style={{ marginTop: 4, background: 'var(--surface-1)', borderRadius: 4, height: 4 }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: 'var(--danger-500)', borderRadius: 4, transition: 'width .3s' }} />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--danger-500)' }}>{t.alertas}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t.count} motorista{t.count !== 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
