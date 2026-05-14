@@ -110,16 +110,17 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
 
-  // Log diagnóstico: mostra distribuição de campos suspeitos nos primeiros 5 eventos.
-  console.log('[pull-sascar] amostra de campos (5 primeiros):', JSON.stringify(
-    alarms.slice(0, 5).map(a => ({
-      handleStatus: a.handleStatus,
-      valid:        a.valid,
-      state:        a.state,
-      dlState:      a.dlState,
-      alarmLevelId: a.alarmLevelId,
-    }))
-  ));
+  // Log diagnóstico: mostra TODOS os campos do primeiro item + distribuição handleStatus.
+  if (alarms.length > 0) {
+    console.log('[pull-sascar] keys do item[0]:', JSON.stringify(Object.keys(alarms[0])));
+    console.log('[pull-sascar] item[0] completo:', JSON.stringify(alarms[0]).slice(0, 1000));
+  }
+  const hsDistrib: Record<string, number> = {};
+  for (const a of alarms) {
+    const hs = String(a.handleStatus ?? 'null');
+    hsDistrib[hs] = (hsDistrib[hs] ?? 0) + 1;
+  }
+  console.log('[pull-sascar] handleStatus distribuição:', JSON.stringify(hsDistrib));
 
   const valid = alarms;
 
