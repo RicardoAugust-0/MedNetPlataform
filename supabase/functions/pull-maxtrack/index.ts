@@ -7,20 +7,28 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Autentica no portal Maxtrack e devolve o cookie de sessão.
-async function login(email: string, senha: string): Promise<string> {
+interface LoginResult {
+  cookie: string;
+  cco:    string;  // company/correlation object ID usado nos headers subsequentes
+}
+
+// Autentica no portal Maxtrack, devolve cookie de sessão + cco da empresa.
+async function login(email: string, senha: string): Promise<LoginResult> {
   const res = await fetch(`${BASE}/security/login`, {
     method: 'POST',
     headers: {
       'Content-Type':     'application/json; charset=utf-8',
       'X-Requested-With': 'XMLHttpRequest',
+      'Origin':           BASE,
+      'Referer':          `${BASE}/`,
       'tz':               'America/Sao_Paulo',
+      'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     },
     body: JSON.stringify({
       email,
       senha,
       so:        'Linux x86_64',
-      userAgent: 'Mozilla/5.0',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     }),
   });
 
@@ -30,7 +38,17 @@ async function login(email: string, senha: string): Promise<string> {
   const match     = setCookie.match(/PLAY_SESSION="([^"]+)"/);
   if (!match) throw new Error('Login Maxtrack falhou: credenciais incorretas ou sessão não retornada.');
 
-  return `PLAY_SESSION="${match[1]}"`;
+  const cookie = `PLAY_SESSION="${match[1]}"`;
+
+  // Extrai cco = empresa.uid do body do login (UUID obrigatório nas chamadas seguintes).
+  let cco = crypto.randomUUID();
+  try {
+    const body = await res.json();
+    const uid = body?.empresa?.uid;
+    if (uid) cco = uid;
+  } catch { /* ignora erro de parse — usa UUID gerado como fallback */ }
+
+  return { cookie, cco };
 }
 
 // Retorna {startDate, endDate} correspondendo ao dia atual em BRT (UTC-3).
@@ -140,19 +158,28 @@ Deno.serve(async (req) => {
     }
 
     // Autentica na Maxtrack com as credenciais do operador
-    const sessionCookie = await login(profileData.maxtrack_email, profileData.maxtrack_password);
+    const { cookie: sessionCookie, cco } = await login(profileData.maxtrack_email, profileData.maxtrack_password);
+
+    // Headers usados em todas as chamadas autenticadas — espelha o que o browser envia
+    const authHeaders = {
+      'Content-Type':     'application/json; charset=utf-8',
+      'Cookie':           sessionCookie,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Origin':           BASE,
+      'Referer':          `${BASE}/`,
+      'baseURL':          BASE,
+      'cm':               'MONITORING',
+      'cco':              cco,
+      'tz':               'America/Sao_Paulo',
+      'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
+    };
 
     // Busca eventos do dia
     const { startDate, endDate } = getTodayRangeBRT();
     const eventsRes = await fetch(`${BASE}/event/events/load`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':     'application/json; charset=utf-8',
-        'Cookie':           sessionCookie,
-        'X-Requested-With': 'XMLHttpRequest',
-        'tz':               'America/Sao_Paulo',
-      },
-      body: JSON.stringify(buildPayload(startDate, endDate)),
+      method:  'POST',
+      headers: authHeaders,
+      body:    JSON.stringify(buildPayload(startDate, endDate)),
     });
 
     if (!eventsRes.ok) {
