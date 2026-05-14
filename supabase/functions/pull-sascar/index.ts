@@ -85,7 +85,7 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
       labelIds:         '',
       mosaicFlag:       0,
       page:             String(page),
-      pageSize:         200,
+      pageSize:         500,
       startTime,
     });
 
@@ -99,7 +99,7 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
     const total = json?.data?.total ?? 0;
     all.push(...list);
 
-    if (all.length >= total || list.length < 200) break;
+    if (all.length >= total || list.length < 500) break;
     page++;
     if (page > 20) break; // cap de segurança
   }
@@ -110,10 +110,9 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
 
-  // handleStatus > 0 = evento já tratado/classificado pela Sascar (inclui falso positivo).
-  // Mantemos apenas handleStatus === 0 (novos, sem classificação), equivalente ao
-  // filtro Status !== 'Falso positivo' do parser de planilha.
-  const valid = alarms.filter(a => Number(a.handleStatus ?? 0) === 0);
+  // Filtra eventos sem nível atribuído (alarmLevelId null = evento inválido/falso positivo
+  // que não recebeu classificação de criticidade pela plataforma).
+  const valid = alarms.filter(a => a.alarmLevelId != null);
 
   // Agrupa por placa
   const byPlaca: Record<string, {
