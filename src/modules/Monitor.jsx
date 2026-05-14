@@ -14,6 +14,7 @@ import MonitorFilters from './monitor/MonitorFilters';
 import UploadArea from './monitor/UploadArea';
 import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
+import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 
 /* ── Google Sheets via Supabase Edge Function ── */
 async function postToSheets(payload, accessToken) {
@@ -53,8 +54,9 @@ export default function Monitor() {
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
-  const platform     = useMemo(() => getPlatform(platformId), [platformId]);
-  const allPlatforms = useMemo(() => listPlatforms({ includePlanned: true }), []);
+  const platform       = useMemo(() => getPlatform(platformId), [platformId]);
+  const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
+  const { resolveAlias } = useCarrierAliases();
 
   const [templateModal, setTemplateModal] = useState(null);
   const [dossieDriver, setDossieDriver] = useState(null);
@@ -243,7 +245,7 @@ export default function Monitor() {
     const classificacao = (sev === 'Gravíssimo' || sev === 'Grave') ? 'IMEDIATA' : 'PREVENTIVA';
     postToSheets({
       data,
-      empresa:         d.transportadora || '',
+      empresa:         resolveAlias(d.transportadora || ''),
       sistema:         platform.sistema,
       colaborador:     d.nome,
       placa:           d.placa || '',

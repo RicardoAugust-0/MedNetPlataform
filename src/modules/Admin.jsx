@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useProfiles } from '../hooks/useProfiles.jsx';
 import { useMaintenance } from '../hooks/useMaintenance.jsx';
+import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useToast } from '../hooks/useToast.jsx';
 import { supabase } from '../supabase.js';
@@ -10,6 +11,7 @@ import { iniciais } from '../utils.js';
 export default function Admin() {
   const { profiles, loading, updateRole, updateInfo } = useProfiles();
   const { maintenance, setMaintenance } = useMaintenance();
+  const { aliases, setAliases } = useCarrierAliases();
   const { profile: me } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState(null);
@@ -19,6 +21,25 @@ export default function Admin() {
   const [inviting, setInviting] = useState(false);
   const [maintMsg, setMaintMsg] = useState(maintenance.message || '');
   const [savingMaint, setSavingMaint] = useState(false);
+  const [aliasMonitor, setAliasMonitor] = useState('');
+  const [aliasSheet, setAliasSheet]     = useState('');
+
+  const addAlias = async () => {
+    const m = aliasMonitor.trim();
+    const s = aliasSheet.trim();
+    if (!m || !s) return;
+    await setAliases({ ...aliases, [m]: s });
+    setAliasMonitor('');
+    setAliasSheet('');
+    toast('Mapeamento adicionado', 'success');
+  };
+
+  const removeAlias = async (key) => {
+    const next = { ...aliases };
+    delete next[key];
+    await setAliases(next);
+    toast('Mapeamento removido', 'info');
+  };
 
   // Sincroniza o input quando a mensagem chega do servidor (load inicial ou
   // realtime update vindo de outro admin).
@@ -200,6 +221,70 @@ export default function Admin() {
               <i className="ti ti-device-floppy"></i> Salvar mensagem
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Mapeamento de transportadoras */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><i className="ti ti-replace"></i> Mapeamento de transportadoras</div>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+          Quando o nome da transportadora no Monitor difere do nome na planilha de intervenções, cadastre o par aqui.
+          O sistema aplicará a tradução automaticamente ao registrar atendimentos.
+        </div>
+
+        {Object.keys(aliases).length > 0 && (
+          <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, padding: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <span style={{ flex: 1 }}>Nome no Monitor</span>
+              <span style={{ width: 20 }}></span>
+              <span style={{ flex: 1 }}>Nome na planilha</span>
+              <span style={{ width: 28 }}></span>
+            </div>
+            {Object.entries(aliases).map(([monitor, sheet]) => (
+              <div key={monitor} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)' }}>
+                <span style={{ flex: 1, fontSize: 13 }}>{monitor}</span>
+                <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                <span style={{ flex: 1, fontSize: 13 }}>{sheet}</span>
+                <button className="btn-icon" onClick={() => removeAlias(monitor)} title="Remover mapeamento">
+                  <i className="ti ti-trash" style={{ color: 'var(--danger-500)' }}></i>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+            <label className="form-label">Nome no Monitor</label>
+            <input
+              className="form-control"
+              value={aliasMonitor}
+              onChange={e => setAliasMonitor(e.target.value)}
+              placeholder="Ex: LSL Transportes"
+              onKeyDown={e => e.key === 'Enter' && addAlias()}
+            />
+          </div>
+          <i className="ti ti-arrow-right" style={{ marginBottom: 10, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+          <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+            <label className="form-label">Nome na planilha</label>
+            <input
+              className="form-control"
+              value={aliasSheet}
+              onChange={e => setAliasSheet(e.target.value)}
+              placeholder="Ex: LSL 2W"
+              onKeyDown={e => e.key === 'Enter' && addAlias()}
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={addAlias}
+            disabled={!aliasMonitor.trim() || !aliasSheet.trim()}
+            style={{ flexShrink: 0 }}
+          >
+            <i className="ti ti-plus"></i> Adicionar
+          </button>
         </div>
       </div>
 

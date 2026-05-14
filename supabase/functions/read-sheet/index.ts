@@ -77,6 +77,17 @@ function isHeaderRow(row: string[]): boolean {
   return first === 'DATA' || first === 'DIA' || first === 'DATE';
 }
 
+// Limpa valores de célula: remove erros de fórmula e normaliza undefined/null.
+// Erros do Sheets chegam como strings (#N/A, #VALOR!, #REF!, etc.).
+const FORMULA_ERRORS = new Set(['#N/A','#VALOR!','#VALUE!','#REF!','#DIV/0!','#NUM!','#NOME?','#NAME?','#NULO!','#NULL!','#CALC!']);
+function cell(row: string[], index: number): string {
+  const v = row[index];
+  if (v === undefined || v === null) return '';
+  const s = String(v).trim();
+  if (FORMULA_ERRORS.has(s.toUpperCase())) return '';
+  return s;
+}
+
 // Converte "dd/mm" + "JANEIRO 2025" em timestamp para ordenação
 function rowTimestamp(data: string, mes: string): number {
   const [dStr, mStr] = data.split('/');
@@ -128,7 +139,7 @@ Deno.serve(async (req) => {
     for (const mes of meses) {
       const range = `${mes}!A:P`;
       const res = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`,
         { headers: { 'Authorization': `Bearer ${token}` } },
       );
       const data = await res.json();
@@ -143,25 +154,31 @@ Deno.serve(async (req) => {
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        if (!r || r.every((cell: string) => !cell?.trim())) continue; // linha vazia
+        if (!r) continue;
         if (i === 0 && isHeaderRow(r)) continue; // pula cabeçalho
+        // Detecta linhas sem dados reais pelos campos de identificação.
+        // Não usar r.every() pois a coluna I pode ter fórmula =SE(...) em linhas vazias.
+        const colaborador = cell(r, 3);
+        const placa = cell(r, 4);
+        const empresa = cell(r, 1);
+        if (!colaborador && !placa && !empresa) continue;
 
         allRows.push({
-          data:            r[0]  || '',
-          empresa:         r[1]  || '',
-          sistema:         r[2]  || '',
-          colaborador:     r[3]  || '',
-          placa:           r[4]  || '',
-          frota:           r[5]  || '',
-          criticidade:     r[6]  || '',
-          classificacao:   r[7]  || '',
-          realizado:       r[8]  || '',
-          motivo:          r[9]  || '',
-          solicitadoPor:   r[11] || '',
-          horaSolicitacao: r[12] || '',
-          realizadoPor:    r[13] || '',
-          horaRealizacao:  r[14] || '',
-          justificativa:   r[15] || '',
+          data:            cell(r, 0),
+          empresa:         cell(r, 1),
+          sistema:         cell(r, 2),
+          colaborador:     cell(r, 3),
+          placa:           cell(r, 4),
+          frota:           cell(r, 5),
+          criticidade:     cell(r, 6),
+          classificacao:   cell(r, 7),
+          realizado:       cell(r, 8),
+          motivo:          cell(r, 9),
+          solicitadoPor:   cell(r, 11),
+          horaSolicitacao: cell(r, 12),
+          realizadoPor:    cell(r, 13),
+          horaRealizacao:  cell(r, 14),
+          justificativa:   cell(r, 15),
           _mes:            mes,
         });
       }
