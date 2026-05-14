@@ -110,9 +110,9 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
 
-  // Filtra eventos sem nível atribuído (alarmLevelId null = evento inválido/falso positivo
-  // que não recebeu classificação de criticidade pela plataforma).
-  const valid = alarms.filter(a => a.alarmLevelId != null);
+  // O filtro server-side alarmLevelIds:'15,14,13' já exclui eventos sem nível válido.
+  // Falsos positivos classificados pela Sascar perdem o nível e saem da query.
+  const valid = alarms;
 
   // Agrupa por placa
   const byPlaca: Record<string, {
