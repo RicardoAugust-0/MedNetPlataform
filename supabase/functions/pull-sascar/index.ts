@@ -110,9 +110,10 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
 
-  // A plataforma Sascar já filtra eventos em baixa velocidade internamente.
-  // Não aplicamos filtro de speed aqui para não descartar eventos legítimos.
-  const valid = alarms;
+  // handleStatus > 0 = evento já tratado/classificado pela Sascar (inclui falso positivo).
+  // Mantemos apenas handleStatus === 0 (novos, sem classificação), equivalente ao
+  // filtro Status !== 'Falso positivo' do parser de planilha.
+  const valid = alarms.filter(a => Number(a.handleStatus ?? 0) === 0);
 
   // Agrupa por placa
   const byPlaca: Record<string, {
@@ -134,8 +135,9 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     const bucket        = ALARM_BUCKET[alarmType] ?? 'reportar';
     const nomeEvento    = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
     const severidade    = SEV_MAP[alarmLevelId] ?? 'Normal';
-    const hora          = happenTime ? happenTime.getHours() : 12;
-    const turno         = hora >= 6 && hora < 18 ? 'diurno' : 'noturno';
+    // getUTCHours() - 3 = hora BRT (UTC-3). % 24 para valores negativos (meia-noite BRT).
+    const horaBRT       = happenTime ? ((happenTime.getUTCHours() - 3) + 24) % 24 : 12;
+    const turno         = horaBRT >= 6 && horaBRT < 18 ? 'diurno' : 'noturno';
 
     if (!byPlaca[placa]) {
       byPlaca[placa] = { placa, nome: '', transportadora, frota: String(vi.deviceNo ?? ''), eventos: [], turnos: [] };
