@@ -253,6 +253,38 @@ export default function Monitor() {
     if (file) handleFile(file);
   };
 
+  /* ── Scraper (Maxtrack e futuras plataformas com modo 'scraper') ── */
+  const handleScrape = async () => {
+    if (!platform.scraper?.pull) return;
+    setLoading(true); setStatusKind('idle'); setStatusMsg(`Buscando eventos em ${platform.name}…`);
+    try {
+      const filterHistory = await loadAtendimentosForFilter(90);
+      const { drivers: newDrivers, stats } = await platform.scraper.pull({ history: filterHistory });
+      const loadedAt = new Date().toISOString();
+      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
+      const existingPlacas = new Set(drivers.map(d => d.placa));
+      const newPlacas = new Set(timestamped.map(d => d.placa));
+      const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
+      const atualizadas = timestamped.length - novas;
+      const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
+      setDrivers(merged);
+      localStorage.setItem('mn_sheet_loaded_at', loadedAt);
+      setSheetLoadedAt(loadedAt);
+      setSheetAgeMin(0);
+      setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
+      setStatusKind('active');
+      const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
+      const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
+      const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
+      setStatusMsg(`${platform.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar${velocidadeMsg}${filtroMsg}${mergeMsg}`);
+      setActiveTab('intervencao');
+      notificarCriticos(merged.filter(d => d.alertas >= 5));
+    } catch (err) {
+      setStatusKind('error');
+      setStatusMsg(`Erro ao buscar ${platform.name}: ${err.message}`);
+    } finally { setLoading(false); }
+  };
+
   /* ── Ações ── */
   const attend = async (d) => {
     if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
@@ -440,13 +472,60 @@ export default function Monitor() {
   const totalPages = activeTab !== 'historico' ? Math.ceil(activeList.length / pageSize) || 1 : 1;
   const paginate = (list) => list.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  /* ── Modal de credenciais ausentes (scraper sem login configurado) ── */
+  const needsCredentials = platform?.inputType === 'scraper' && !profile?.maxtrack_email;
+
   return (
     <div className="monitor-grid">
-      
+
+      {needsCredentials && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 900,
+          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            background: 'var(--surface-1)', borderRadius: 'var(--radius-lg)',
+            padding: '36px 32px', maxWidth: 420, width: '100%',
+            boxShadow: 'var(--shadow-xl)', textAlign: 'center',
+            border: '1px solid var(--border-md)',
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
+              background: 'rgba(var(--warning-rgb, 245,158,11),0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-lock" style={{ fontSize: 26, color: 'var(--warning-500)' }}></i>
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>
+              Credenciais Maxtrack não configuradas
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
+              Para usar a integração automática com a Maxtrack, configure seu login
+              de acesso ao portal em <strong>Meu Perfil</strong>.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => setActivePanel('perfil')}
+              >
+                <i className="ti ti-user"></i> Ir para Meu Perfil
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setPlatformId('sascar')}
+              >
+                Usar Sascar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <UploadArea
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
-        clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
+        clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />

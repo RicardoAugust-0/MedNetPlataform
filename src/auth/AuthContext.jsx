@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
     const syncProfile = async () => {
       const { data: existing } = await supabase
         .from('profiles')
-        .select('nome, cargo, role, avatar_url, telefone, bio')
+        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -69,9 +69,10 @@ export function AuthProvider({ children }) {
             nome: existing.nome || emailFallback,
             cargo: existing.cargo || 'Operador',
             role: existing.role || 'operador',
-            avatar_url: existing.avatar_url || null,
-            telefone:   existing.telefone   || '',
-            bio:        existing.bio        || '',
+            avatar_url:      existing.avatar_url      || null,
+            telefone:        existing.telefone        || '',
+            bio:             existing.bio             || '',
+            maxtrack_email:  existing.maxtrack_email  || '',
           });
         }
         return;
@@ -86,7 +87,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const { data: current } = await supabase
           .from('profiles')
-          .select('nome, cargo, role, avatar_url, telefone, bio')
+          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
           .eq('id', session.user.id)
           .maybeSingle();
 
@@ -97,9 +98,10 @@ export function AuthProvider({ children }) {
             nome: current.nome || emailFallback,
             cargo: current.cargo || 'Operador',
             role: current.role || 'operador',
-            avatar_url: current.avatar_url || null,
-            telefone:   current.telefone   || '',
-            bio:        current.bio        || '',
+            avatar_url:     current.avatar_url     || null,
+            telefone:       current.telefone       || '',
+            bio:            current.bio            || '',
+            maxtrack_email: current.maxtrack_email || '',
           });
         }
         return;
@@ -109,7 +111,7 @@ export function AuthProvider({ children }) {
         setProfile({
           id: session.user.id, email: session.user.email,
           nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
-          avatar_url: null, telefone: '', bio: '',
+          avatar_url: null, telefone: '', bio: '', maxtrack_email: '',
         });
       }
     };

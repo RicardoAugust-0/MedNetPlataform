@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { supabase } from '../supabase.js';
 import { uploadAvatar, removeAvatar } from '../lib/uploadAvatar';
 import { iniciais } from '../utils.js';
 
@@ -126,8 +127,104 @@ function AvatarSection({ profile, updateProfile }) {
   );
 }
 
+function MaxtrackSection({ profile, session, updateProfile }) {
+  const [email,    setEmail]    = useState('');
+  const [senha,    setSenha]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [msg,      setMsg]      = useState(null);
+
+  const configured = !!profile?.maxtrack_email;
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) { setMsg({ type: 'error', text: 'Informe o e-mail Maxtrack.' }); return; }
+    if (!senha.trim()) { setMsg({ type: 'error', text: 'Informe a senha Maxtrack.' }); return; }
+    setLoading(true); setMsg(null);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ maxtrack_email: email.trim(), maxtrack_password: senha })
+      .eq('id', session?.user?.id);
+    if (error) {
+      setMsg({ type: 'error', text: error.message });
+    } else {
+      updateProfile({ maxtrack_email: email.trim() });
+      setSenha('');
+      setMsg({ type: 'success', text: 'Credenciais Maxtrack salvas.' });
+    }
+    setLoading(false);
+  };
+
+  const handleRemove = async () => {
+    if (!window.confirm('Remover credenciais Maxtrack?')) return;
+    setLoading(true); setMsg(null);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ maxtrack_email: null, maxtrack_password: null })
+      .eq('id', session?.user?.id);
+    if (!error) {
+      updateProfile({ maxtrack_email: '' });
+      setEmail(''); setSenha('');
+      setMsg({ type: 'success', text: 'Credenciais removidas.' });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Section title={<><i className="ti ti-plug-connected" style={{ marginRight: 6 }}></i>Integrações</>}>
+      <div style={{ marginBottom: 12, fontSize: 12.5, color: 'var(--text-muted)' }}>
+        Credenciais usadas pela integração automática com o portal Maxtrack.
+        A senha é armazenada de forma segura e nunca exibida.
+      </div>
+
+      {configured && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          background: 'var(--success-bg, rgba(34,197,94,0.08))', borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(34,197,94,0.2)', marginBottom: 14, fontSize: 12.5,
+        }}>
+          <i className="ti ti-circle-check" style={{ color: 'var(--success-600, #16a34a)' }}></i>
+          <span style={{ flex: 1 }}>Maxtrack configurado: <strong>{profile.maxtrack_email}</strong></span>
+          <button type="button" className="btn btn-sm btn-danger" onClick={handleRemove} disabled={loading}>
+            <i className="ti ti-trash"></i> Remover
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSave}>
+        <div className="form-group">
+          <label className="form-label">E-mail Maxtrack</label>
+          <input
+            className="form-control"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder={configured ? profile.maxtrack_email : 'seu@email.com'}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">{configured ? 'Nova senha Maxtrack' : 'Senha Maxtrack'}</label>
+          <input
+            className="form-control"
+            type="password"
+            value={senha}
+            onChange={e => setSenha(e.target.value)}
+            placeholder={configured ? '••••••••  (deixe em branco para manter)' : '••••••••'}
+          />
+          {configured && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Só preencha se quiser alterar a senha.
+            </div>
+          )}
+        </div>
+        <Alert type={msg?.type} msg={msg?.text} />
+        <SaveBtn loading={loading} label={configured ? 'Atualizar credenciais' : 'Salvar credenciais'} />
+      </form>
+    </Section>
+  );
+}
+
 export default function Profile() {
-  const { profile, updateProfile, setPassword } = useAuth();
+  const { profile, session, updateProfile, setPassword } = useAuth();
 
   const [nome,     setNome]     = useState(profile?.nome     || '');
   const [cargo,    setCargo]    = useState(profile?.cargo    || '');
@@ -264,6 +361,8 @@ export default function Profile() {
           <SaveBtn loading={infoLoading} />
         </form>
       </Section>
+
+      <MaxtrackSection profile={profile} session={session} updateProfile={updateProfile} />
 
       <Section title={<><i className="ti ti-lock" style={{ marginRight: 6 }}></i>Alterar senha</>}>
         <form onSubmit={handleSenha}>

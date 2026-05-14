@@ -32,6 +32,7 @@ export default function UploadArea({
   clearQueue,
   handleDrop,
   handleFile,
+  handleScrape,
   loadStats,
   platform,
   platforms = [],
@@ -48,7 +49,8 @@ export default function UploadArea({
     : historyAgeMin < 10 ? 'var(--success-500, #22c55e)'
     : historyAgeMin < 30 ? 'var(--warning-500)'
     : 'var(--danger-500)';
-  const spreadsheet = platform?.spreadsheet;
+  const spreadsheet    = platform?.spreadsheet;
+  const supportsScraper = !!platform?.scraper;
   const supportsUpload = !!spreadsheet;
   const accept       = spreadsheet?.accept      || ".xlsx,.xls,.csv";
   const uploadTitle  = spreadsheet?.uploadTitle || `Solte aqui o relatório da plataforma ${platform?.name || ""}`.trim();
@@ -147,7 +149,7 @@ export default function UploadArea({
         )}
       </div>
 
-      {/* Upload */}
+      {/* Upload / Scraper */}
       {supportsUpload ? (
         <label
           className="upload-area"
@@ -173,12 +175,35 @@ export default function UploadArea({
             onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
           />
         </label>
+      ) : supportsScraper ? (
+        <div className="upload-area" style={{ cursor: "default", textAlign: "center" }}>
+          <div className="upload-icon">
+            <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}
+               style={loading ? { animation: "spin 1s linear infinite" } : {}}></i>
+          </div>
+          <div className="upload-text">
+            <div className="upload-title">
+              Integração automática com {platform?.name}
+            </div>
+            <div className="upload-hint">
+              Os eventos são buscados diretamente da plataforma — sem upload manual
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={handleScrape}
+            disabled={loading}
+          >
+            <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}></i>
+            {loading ? " Buscando…" : " Buscar eventos agora"}
+          </button>
+        </div>
       ) : (
         <div className="empty-state">
           <i className="ti ti-plug-connected"></i>
           A plataforma {platform?.name} não usa upload de planilha.
           {platform?.inputType === "api" && " A integração será via API (em breve)."}
-          {platform?.inputType === "scraper" && " A integração será via scraping (em breve)."}
         </div>
       )}
 
