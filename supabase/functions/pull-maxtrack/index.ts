@@ -51,18 +51,33 @@ async function login(email: string, senha: string): Promise<LoginResult> {
   return { cookie, cco };
 }
 
-// Retorna {startDate, endDate} correspondendo ao dia atual em BRT (UTC-3).
-function getTodayRangeBRT(): { startDate: string; endDate: string } {
-  const now     = new Date();
-  // 00:00 BRT = 03:00 UTC
-  const start   = new Date(now);
+// Retorna o início do dia atual em BRT (UTC-3) como Date UTC.
+// 00:00 BRT = 03:00 UTC.
+function getDayStartBRT(): Date {
+  const now   = new Date();
+  const start = new Date(now);
   start.setUTCHours(3, 0, 0, 0);
-  // Se ainda não chegamos em 03:00 UTC, ainda estamos no "dia anterior" BRT
   if (now < start) start.setDate(start.getDate() - 1);
-  const end     = new Date(start);
-  end.setDate(end.getDate() + 1);
-  end.setMilliseconds(-1);
-  return { startDate: start.toISOString(), endDate: end.toISOString() };
+  return start;
+}
+
+// Gera janelas de 30 min cobrindo o dia inteiro em BRT.
+// A API tem limite de ~30 eventos por chamada; janelas de 30 min garantem
+// que nenhuma janela estoure o limite mesmo em picos de alertas.
+function buildWindows(): Array<{ startDate: string; endDate: string }> {
+  const dayStart = getDayStartBRT();
+  const windows  = [];
+  for (let i = 0; i < 48; i++) {                // 48 x 30 min = 24 h
+    const wStart = new Date(dayStart.getTime() + i * 30 * 60 * 1000);
+    const wEnd   = new Date(wStart.getTime() + 30 * 60 * 1000 - 1);
+    // Não busca janelas futuras
+    if (wStart > new Date()) break;
+    windows.push({
+      startDate: wStart.toISOString(),
+      endDate:   wEnd.toISOString(),
+    });
+  }
+  return windows;
 }
 
 function buildPayload(startDate: string, endDate: string) {
@@ -112,7 +127,6 @@ function buildPayload(startDate: string, endDate: string) {
       operatorUnits:       [],
       operationTypes:      [],
     },
-    // Todos os estados abertos: novos + em tratativa + pendentes + reabertos
     stepEvents:         ['NEW', 'IN_PROCESS', 'PENDING', 'ATTACHMENT', 'REOPEN'],
     loadProcessingType: 'ALL',
     aggregatedType:     'N',
@@ -174,20 +188,39 @@ Deno.serve(async (req) => {
       'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     };
 
-    // Busca eventos do dia
-    const { startDate, endDate } = getTodayRangeBRT();
-    const eventsRes = await fetch(`${BASE}/event/events/load`, {
-      method:  'POST',
-      headers: authHeaders,
-      body:    JSON.stringify(buildPayload(startDate, endDate)),
-    });
+    // Busca todos os eventos do dia em janelas de 30 min em paralelo.
+    // A API limita ~30 eventos por chamada; janelas de 30 min evitam o teto.
+    const windows = buildWindows();
 
-    if (!eventsRes.ok) {
-      throw new Error(`Maxtrack /event/events/load retornou HTTP ${eventsRes.status}`);
+    const fetchWindow = async (startDate: string, endDate: string) => {
+      const res = await fetch(`${BASE}/event/events/load`, {
+        method:  'POST',
+        headers: authHeaders,
+        body:    JSON.stringify(buildPayload(startDate, endDate)),
+      });
+      if (!res.ok) throw new Error(`Maxtrack /event/events/load HTTP ${res.status} (${startDate})`);
+      const d = await res.json();
+      return (d.events ?? []) as Record<string, unknown>[];
+    };
+
+    const results = await Promise.all(
+      windows.map(({ startDate, endDate }) => fetchWindow(startDate, endDate))
+    );
+
+    // Deduplica por _id (janelas adjacentes podem ter o mesmo evento na borda)
+    const seen  = new Set<string>();
+    const events: Record<string, unknown>[] = [];
+    for (const batch of results) {
+      for (const ev of batch) {
+        const id = ev._id as string;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          events.push(ev);
+        }
+      }
     }
 
-    const data = await eventsRes.json();
-    return json(data);
+    return json({ events, isCompanyIntegrator: false, count: events.length });
 
   } catch (err) {
     console.error('[pull-maxtrack]', err);
