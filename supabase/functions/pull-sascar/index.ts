@@ -11,19 +11,28 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapeamento de alarmType → bucket canônico.
-// Validar com a equipe ao comparar com relatório CSV.
+// Mapeamento por categoryId (mais confiável que alarmType).
+// 100574 = Fadiga → intervenção imediata
+// 100575 = Distração/Comportamento → reportar
+// 100573 = Técnico → câmera/vídeo
+const CATEGORY_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = {
+  100574: 'intervencao',
+  100575: 'reportar',
+  100573: 'tecnico',
+};
+
+// Fallback por alarmType quando categoryId não disponível.
 const ALARM_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = {
   56001: 'intervencao', // Bocejo
   56003: 'intervencao', // Olho fechado
-  56016: 'intervencao', // Distração / Sonolência N2
+  56016: 'intervencao', // Sonolência N2
   56002: 'intervencao', // Sonolência
   56004: 'reportar',
   56010: 'reportar',
-  0:     'tecnico',     // Video Loss / Câmera
+  0:     'tecnico',
 };
 
-// Nomes de evento por alarmType (para exibição no DriverCard).
+// Nomes de evento por alarmType.
 const ALARM_NAMES: Record<number, string> = {
   56001: 'Bocejo',
   56003: 'Olho fechado',
@@ -108,21 +117,24 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
-  const SEV_MAP: Record<string, string> = { '15': 'Gravíssimo', '14': 'Grave', '13': 'Normal' };
+  const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
+  const MIN_SPEED_KMH = 10;
 
-  // Log diagnóstico: mostra TODOS os campos do primeiro item + distribuição handleStatus.
-  if (alarms.length > 0) {
-    console.log('[pull-sascar] keys do item[0]:', JSON.stringify(Object.keys(alarms[0])));
-    console.log('[pull-sascar] item[0] completo:', JSON.stringify(alarms[0]).slice(0, 1000));
-  }
-  const hsDistrib: Record<string, number> = {};
+  // Log distribuição de status → identifica valor dos falsos positivos.
+  const statusDistrib: Record<string, number> = {};
   for (const a of alarms) {
-    const hs = String(a.handleStatus ?? 'null');
-    hsDistrib[hs] = (hsDistrib[hs] ?? 0) + 1;
+    const s = String(a.status ?? 'null');
+    statusDistrib[s] = (statusDistrib[s] ?? 0) + 1;
   }
-  console.log('[pull-sascar] handleStatus distribuição:', JSON.stringify(hsDistrib));
+  console.log('[pull-sascar] status distribuição:', JSON.stringify(statusDistrib));
 
-  const valid = alarms;
+  // Velocidade: speed vem em 1/10 km/h (ex: 620 = 62 km/h).
+  let filtradosPorVelocidade = 0;
+  const valid = alarms.filter(a => {
+    const speedKmh = Number(a.speed ?? 0) / 10;
+    if (speedKmh < MIN_SPEED_KMH) { filtradosPorVelocidade++; return false; }
+    return true;
+  });
 
   // Agrupa por placa
   const byPlaca: Record<string, {
@@ -132,25 +144,38 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
   }> = {};
 
   for (const a of valid) {
-    const vi      = (a.vehicleInfo as Record<string, unknown>) ?? {};
-    const placa   = String(vi.vehicleNumber ?? a.vehicleId ?? '').trim();
+    const vi   = (a.vehicleInfo as Record<string, unknown>) ?? {};
+    const placa = String(vi.vehicleNumber ?? '').trim();
     if (!placa) continue;
 
-    const fleet         = (vi.fleetList as Array<Record<string,string>>)?.[0];
-    const transportadora = fleet?.fleetName ?? '—';
-    const alarmType     = Number(a.alarmType ?? -1);
-    const alarmLevelId  = String(a.alarmLevelId ?? '13');
-    const happenTime    = a.happenTime ? new Date(Number(a.happenTime) * 1000) : null;
-    const bucket        = ALARM_BUCKET[alarmType] ?? 'reportar';
-    const nomeEvento    = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
-    const severidade    = SEV_MAP[alarmLevelId] ?? 'Normal';
-    // getUTCHours() - 3 = hora BRT (UTC-3). % 24 para valores negativos (meia-noite BRT).
-    const horaBRT       = happenTime ? ((happenTime.getUTCHours() - 3) + 24) % 24 : 12;
-    const turno         = horaBRT >= 6 && horaBRT < 18 ? 'diurno' : 'noturno';
+    // Motorista: driverInfo.driverName
+    const driverInfo     = (a.driverInfo as Record<string, unknown>) ?? {};
+    const nome           = String(driverInfo.driverName ?? '').trim();
+
+    // Transportadora: carrierName direto
+    const transportadora = String(a.carrierName ?? '—').trim() || '—';
+
+    // Classificação: categoryId → bucket
+    const catList  = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
+    const catId    = Number(catList[0]?.categoryId ?? 0);
+    const alarmType = Number(a.alarmType ?? -1);
+    const bucket   = CATEGORY_BUCKET[catId] ?? ALARM_BUCKET[alarmType] ?? 'reportar';
+    const nomeEvento = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
+
+    // Severidade: levelInfo.levelId
+    const levelInfo  = (a.levelInfo as Record<string, unknown>) ?? {};
+    const levelId    = Number(levelInfo.levelId ?? 13);
+    const severidade = SEV_LEVEL[levelId] ?? 'Normal';
+
+    // Turno: startTime → hora BRT (UTC-3)
+    const happenTime = a.startTime ? new Date(Number(a.startTime) * 1000) : null;
+    const horaBRT    = happenTime ? ((happenTime.getUTCHours() - 3) + 24) % 24 : 12;
+    const turno      = horaBRT >= 6 && horaBRT < 18 ? 'diurno' : 'noturno';
 
     if (!byPlaca[placa]) {
-      byPlaca[placa] = { placa, nome: '', transportadora, frota: String(vi.deviceNo ?? ''), eventos: [], turnos: [] };
+      byPlaca[placa] = { placa, nome, transportadora, frota: String(vi.deviceNo ?? ''), eventos: [], turnos: [] };
     }
+    if (!byPlaca[placa].nome && nome) byPlaca[placa].nome = nome;
 
     byPlaca[placa].eventos.push({ bucket, nome: nomeEvento, severidade, ts: happenTime });
     byPlaca[placa].turnos.push(turno);
@@ -200,7 +225,7 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     soTecnico:              drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos:           valid.length,
     falsosPositivos:        0,
-    filtradosPorVelocidade: 0,
+    filtradosPorVelocidade,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
   };
