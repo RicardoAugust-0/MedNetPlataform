@@ -120,14 +120,6 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
   const MIN_SPEED_KMH = 10;
 
-  // Log distribuição de status → identifica valor dos falsos positivos.
-  const statusDistrib: Record<string, number> = {};
-  for (const a of alarms) {
-    const s = String(a.status ?? 'null');
-    statusDistrib[s] = (statusDistrib[s] ?? 0) + 1;
-  }
-  console.log('[pull-sascar] status distribuição:', JSON.stringify(statusDistrib));
-
   // Velocidade: speed vem em 1/10 km/h (ex: 620 = 62 km/h).
   let filtradosPorVelocidade = 0;
   const valid = alarms.filter(a => {
