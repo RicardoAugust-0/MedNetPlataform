@@ -127,6 +127,85 @@ function AvatarSection({ profile, updateProfile }) {
   );
 }
 
+function SascarSection({ profile, session, updateProfile }) {
+  const configured = !!profile?.sascar_token;
+
+  // Bookmarklet: lê AUTH_TOKEN do localStorage do portal Sascar e abre o MedNet
+  // com o token na URL hash. O App.jsx detecta e salva automaticamente.
+  const mednetUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const bookmarkletHref = `javascript:(function(){var t=localStorage.getItem('AUTH_TOKEN');if(!t){alert('Faça login no portal Sascar primeiro!');return;}window.open('${mednetUrl}/#sascar-token='+encodeURIComponent(t),'_blank');})()`;
+
+  return (
+    <Section title={<><i className="ti ti-building-factory-2" style={{ marginRight: 6 }}></i>Sascar — Busca automática</>}>
+      <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        Para buscar eventos da Sascar automaticamente, você precisa do <strong>Favorito Sascar</strong> instalado no seu navegador. Ele copia o token de acesso com um clique — sem precisar abrir console ou digitar nada.
+      </div>
+
+      {/* Status do token */}
+      {configured ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          background: 'var(--success-bg, rgba(34,197,94,0.08))', borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(34,197,94,0.2)', marginBottom: 14, fontSize: 12.5,
+        }}>
+          <i className="ti ti-circle-check" style={{ color: 'var(--success-600, #16a34a)' }}></i>
+          <span style={{ flex: 1 }}>Token Sascar configurado e pronto para uso.</span>
+        </div>
+      ) : (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(245,158,11,0.2)', marginBottom: 14, fontSize: 12.5,
+        }}>
+          <i className="ti ti-alert-triangle" style={{ color: 'var(--warning-500)' }}></i>
+          <span>Token não configurado. Instale o favorito abaixo e use-o no portal Sascar.</span>
+        </div>
+      )}
+
+      {/* Instrução do bookmarklet */}
+      <div style={{
+        background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+        padding: '14px 16px', marginBottom: 14,
+      }}>
+        <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 10 }}>
+          <i className="ti ti-bookmark" style={{ marginRight: 6 }}></i>Como instalar o Favorito Sascar
+        </div>
+        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 2 }}>
+          <li>Arraste o botão abaixo para a sua <strong>barra de favoritos</strong> do navegador</li>
+          <li>No início do turno, abra o <strong>portal Sascar</strong> e faça login normalmente</li>
+          <li>Com o Sascar aberto, clique no favorito <strong>"Sascar → MedNet"</strong></li>
+          <li>O MedNet abre automaticamente com o token salvo — pronto!</li>
+        </ol>
+        <div style={{ marginTop: 12 }}>
+          {/* eslint-disable-next-line jsx-a11y/anchor-has-content */}
+          <a
+            href={bookmarkletHref}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', background: 'var(--accent-500, #F26931)',
+              color: '#fff', borderRadius: 'var(--radius-md)', fontSize: 12.5,
+              fontWeight: 600, textDecoration: 'none', cursor: 'grab',
+              border: '2px dashed rgba(255,255,255,0.4)',
+            }}
+            onClick={e => e.preventDefault()}
+          >
+            <i className="ti ti-bookmark-plus"></i>
+            Sascar → MedNet
+          </a>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+            ↑ Arraste este botão para a barra de favoritos. Não clique — arraste.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+        <i className="ti ti-info-circle" style={{ marginRight: 4 }}></i>
+        O token expira em 30 minutos de inatividade. Enquanto você usar o MedNet, ele se renova automaticamente. Se aparecer um aviso de token expirado, basta clicar no favorito novamente.
+      </div>
+    </Section>
+  );
+}
+
 function MaxtrackSection({ profile, session, updateProfile }) {
   const [email,    setEmail]    = useState('');
   const [senha,    setSenha]    = useState('');
@@ -362,6 +441,7 @@ export default function Profile() {
         </form>
       </Section>
 
+      <SascarSection profile={profile} session={session} updateProfile={updateProfile} />
       <MaxtrackSection profile={profile} session={session} updateProfile={updateProfile} />
 
       <Section title={<><i className="ti ti-lock" style={{ marginRight: 6 }}></i>Alterar senha</>}>

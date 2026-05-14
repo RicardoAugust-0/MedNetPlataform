@@ -33,6 +33,7 @@ export default function UploadArea({
   handleDrop,
   handleFile,
   handleScrape,
+  hasSascarToken,
   loadStats,
   platform,
   platforms = [],
@@ -40,6 +41,7 @@ export default function UploadArea({
   historyAgeMin,
   reloadHistory,
   histLoading,
+  setActivePanel,
 }) {
   const historyAgeLabel = historyAgeMin == null ? null
     : historyAgeMin < 1  ? 'agora'
@@ -148,6 +150,44 @@ export default function UploadArea({
           </a>
         )}
       </div>
+
+      {/* Busca automática Sascar (quando token configurado) */}
+      {platform?.id === 'sascar' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+          background: hasSascarToken ? 'rgba(34,197,94,0.07)' : 'rgba(245,158,11,0.07)',
+          border: `1px solid ${hasSascarToken ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}`,
+          borderRadius: 'var(--radius-md)', marginBottom: 12, fontSize: 12.5, flexWrap: 'wrap', gap: 8,
+        }}>
+          <i className={`ti ${hasSascarToken ? 'ti-refresh' : 'ti-bookmark'}`}
+             style={{ color: hasSascarToken ? 'var(--success-600,#16a34a)' : 'var(--warning-500)', fontSize: 15 }}></i>
+          {hasSascarToken ? (
+            <>
+              <span style={{ flex: 1 }}>Busca automática disponível — sem precisar fazer upload da planilha.</span>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleScrape}
+                disabled={loading}
+              >
+                <i className={`ti ${loading ? 'ti-loader-2' : 'ti-refresh'}`}></i>
+                {loading ? ' Buscando…' : ' Buscar eventos agora'}
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1 }}>
+                <strong>Dica:</strong> instale o <strong>Favorito Sascar</strong> para buscar eventos automaticamente — sem upload de planilha.
+              </span>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => setActivePanel?.('perfil')}
+              >
+                <i className="ti ti-settings"></i> Configurar
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Upload / Scraper */}
       {supportsUpload ? (

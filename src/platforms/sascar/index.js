@@ -32,10 +32,37 @@ const sascar = {
     parse,
   },
 
-  // ── Modos futuros (api/scraper) ──
-  // Sascar não expõe API pública hoje; se ficar disponível, popular aqui.
-  api:     null,
-  scraper: null,
+  api: null,
+
+  // ── Modo scraper (busca automática via bookmarklet + Edge Function) ──
+  // Requer token configurado em Meu Perfil → Integrações → Sascar.
+  scraper: {
+    async pull() {
+      const { supabase } = await import('../../supabase.js');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pull-sascar`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const data = await res.json();
+      if (!res.ok) {
+        const err = new Error(data.error || `Erro Sascar: HTTP ${res.status}`);
+        if (data.code) err.code = data.code;
+        throw err;
+      }
+
+      return { drivers: data.drivers || [], stats: data.stats || {} };
+    },
+  },
 };
 
 export default sascar;

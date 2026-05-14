@@ -21,7 +21,51 @@ despachar parse/pull, sem precisar conhecer nenhum detalhe.
 | `api` | A plataforma tem API REST com credenciais. | O adapter expõe `api.pull(ctx)` — chamado em polling. |
 | `scraper` | Sem API; é preciso scrapear o portal. | O adapter expõe `scraper.pull(ctx)` que chama uma Edge Function dedicada. |
 
-Sascar é `spreadsheet`. Maxtrack provavelmente será `api` (se houver credenciais) ou `scraper`.
+Sascar é `spreadsheet` (modo padrão) e também suporta `scraper` via bookmarklet
+(modo beta). Maxtrack provavelmente será `api` (se houver credenciais) ou `scraper`.
+
+### 1.2. Sascar — modo duplo (spreadsheet + scraper)
+
+A Sascar é a única plataforma atualmente com dois modos de ingestão disponíveis:
+
+| Modo | Como funciona | Quando usar |
+|---|---|---|
+| `spreadsheet` | Operador exporta o relatório no portal e faz upload manual (xlsx/csv). | Sempre disponível; não requer configuração extra. |
+| `scraper` (beta) | O MedNet busca os alertas automaticamente usando o `AUTH_TOKEN` do portal Sascar. O operador clica o **bookmarklet** uma vez por turno para enviar o token. | Quando o operador quer eliminar o upload manual. |
+
+#### Por que bookmarklet e não login automático?
+
+O portal Sascar exige **CAPTCHA server-side** no endpoint de login
+(`/gateway/base-server-service/api/v1/user/login`). Isso torna inviável
+qualquer automação de credenciais. A solução é ler o `AUTH_TOKEN` que o portal
+já armazena em `localStorage` após o operador fazer login manualmente, e
+enviá-lo ao MedNet com um único clique em um favorito do navegador (bookmarklet).
+
+#### Fluxo resumido do modo scraper
+
+1. Operador faz login no portal Sascar normalmente (usuário + senha + CAPTCHA).
+2. Clica o bookmarklet salvo na barra de favoritos — o token é capturado e
+   enviado à Edge Function `sascar-token` do MedNet.
+3. O MedNet renova o token automaticamente via
+   `/gateway/base-server-service/api/v1/user/refresh` enquanto houver atividade.
+4. Se o token expirar (idle > 30 min), um banner no MedNet solicita um novo
+   clique no bookmarklet.
+
+O bookmarklet é exibido em **Meu Perfil → Integrações → Sascar** dentro do
+MedNet, pronto para arrastar até a barra de favoritos.
+
+#### Mapeamento de tipos de alarme (Sascar API)
+
+| `alarmType` | Evento (pt-BR) | Categoria MedNet |
+|---|---|---|
+| `56001` | Bocejo | INTERVENÇÃO |
+| `56003` | Olho Fechado | INTERVENÇÃO |
+| `56016` | Distração | INTERVENÇÃO |
+| `0` | Video Loss | TÉCNICO |
+| outros | — | REPORTAR |
+
+> Os mapeamentos acima são a melhor estimativa atual e devem ser validados com
+> dados reais de produção antes de promover o modo scraper para `'active'`.
 
 ---
 

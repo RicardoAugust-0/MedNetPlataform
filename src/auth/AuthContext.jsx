@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
     const syncProfile = async () => {
       const { data: existing } = await supabase
         .from('profiles')
-        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
+        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -73,6 +73,7 @@ export function AuthProvider({ children }) {
             telefone:        existing.telefone        || '',
             bio:             existing.bio             || '',
             maxtrack_email:  existing.maxtrack_email  || '',
+            sascar_token:    existing.sascar_token    || '',
           });
         }
         return;
@@ -87,7 +88,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const { data: current } = await supabase
           .from('profiles')
-          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
+          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token')
           .eq('id', session.user.id)
           .maybeSingle();
 
@@ -102,6 +103,7 @@ export function AuthProvider({ children }) {
             telefone:       current.telefone       || '',
             bio:            current.bio            || '',
             maxtrack_email: current.maxtrack_email || '',
+            sascar_token:   current.sascar_token   || '',
           });
         }
         return;
@@ -111,7 +113,7 @@ export function AuthProvider({ children }) {
         setProfile({
           id: session.user.id, email: session.user.email,
           nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
-          avatar_url: null, telefone: '', bio: '', maxtrack_email: '',
+          avatar_url: null, telefone: '', bio: '', maxtrack_email: '', sascar_token: '',
         });
       }
     };

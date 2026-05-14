@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useApp } from "./context.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
+import { supabase } from "./supabase.js";
 import { useReminders, RemindersProvider } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
 import { useMaintenance } from "./hooks/useMaintenance.jsx";
@@ -78,6 +79,39 @@ function ReminderNotifier() {
   return null;
 }
 
+// Detecta #sascar-token=... na URL (enviado pelo bookmarklet do portal Sascar).
+// Salva o token no perfil do operador e limpa o hash sem recarregar a página.
+function SascarTokenHandler() {
+  const { profile, updateProfile } = useAuth();
+  const toast = useToast();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.includes('sascar-token=')) return;
+
+    const raw   = hash.replace(/^#/, '');
+    const param = new URLSearchParams(raw);
+    const token = param.get('sascar-token');
+    if (!token || !profile?.id) return;
+
+    // Limpa o hash imediatamente para não ficar visível na URL
+    window.history.replaceState(null, '', window.location.pathname);
+
+    supabase
+      .from('profiles')
+      .update({ sascar_token: token })
+      .eq('id', profile.id)
+      .then(({ error }) => {
+        if (!error) {
+          updateProfile({ sascar_token: token });
+          toast('Token Sascar atualizado. Pode buscar os eventos agora.', 'success');
+        }
+      });
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
@@ -102,6 +136,7 @@ function AppShell() {
     <RemindersProvider>
       <div id="app">
         <ReminderNotifier />
+        <SascarTokenHandler />
         <Sidebar />
         <div className="main-area">
           <Topbar />

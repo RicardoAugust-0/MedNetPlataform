@@ -245,6 +245,65 @@ Nova Edge Function. Lê uma ou mais abas mensais (padrão: mês atual + anterior
 
 ---
 
+## 5.13. Integração automática Sascar (Bookmarklet)
+
+Além do upload manual de planilha (modo `spreadsheet`), a Sascar pode ser
+integrada de forma automática via **scraper com bookmarklet** — sem necessidade
+de instalar nada, sem alteração de rede corporativa.
+
+### Por que bookmarklet?
+
+O portal Sascar (`smartcamera.michelin.com`) exige CAPTCHA no login, o que
+impede qualquer automação de credenciais. A solução adotada é ler o
+`AUTH_TOKEN` que o portal já grava em `localStorage` após o operador fazer
+login normalmente. Esse token é enviado ao MedNet com um único clique.
+
+### Como funciona (visão do operador)
+
+1. **Início do turno** — o operador abre o portal Sascar no navegador e faz
+   login normalmente (usuário + senha + CAPTCHA).
+2. **Um clique no bookmarklet** — o favorito (salvo na barra do navegador) lê
+   o `AUTH_TOKEN` do `localStorage` do portal e o envia de forma segura à
+   Edge Function `sascar-token` do MedNet.
+3. **Pronto.** A partir daí o Monitor passa a buscar os alertas automaticamente,
+   sem mais uploads manuais durante aquele turno.
+
+### Como obter o bookmarklet
+
+Acesse **Meu Perfil → Integrações → Sascar** dentro do MedNet. O código do
+bookmarklet é exibido pronto para arrastar até a barra de favoritos do
+navegador (ou copiar e criar um favorito manualmente).
+
+### Renovação automática do token
+
+O `AUTH_TOKEN` da Sascar expira em **30 minutos de inatividade**. O MedNet
+chama automaticamente o endpoint de refresh
+(`/gateway/base-server-service/api/v1/user/refresh`) antes do vencimento,
+mantendo a sessão ativa enquanto o operador estiver trabalhando. Não é
+necessária nenhuma ação enquanto o turno estiver em andamento.
+
+### Token expirado (idle > 30 min)
+
+Se o operador ficar mais de 30 minutos sem nenhuma atividade no MedNet (e o
+refresh automático não for suficiente), o sistema exibe um **banner de aviso**
+solicitando que o bookmarklet seja clicado novamente. O processo é idêntico ao
+início do turno: abrir o portal Sascar (que mantém a sessão do navegador) e
+clicar o favorito.
+
+### Endpoints utilizados
+
+| Finalidade | Endpoint |
+|---|---|
+| Enviar token ao MedNet | Edge Function `sascar-token` (POST) |
+| Renovar token | `POST /gateway/base-server-service/api/v1/user/refresh` |
+| Listar alarmes | `POST /gateway/report/shipper/alarm/page` |
+| Detalhes de evidências | `POST /gateway/report/shipper/evidence/by/alarm/list` |
+
+> O login direto (`/gateway/base-server-service/api/v1/user/login`) **não é
+> usado** — é bloqueado por CAPTCHA server-side e não faz parte do fluxo.
+
+---
+
 ## 6. Modelo de dados (Supabase)
 
 | Tabela | Colunas principais | Observações |
@@ -439,7 +498,7 @@ npm run lint      # ESLint
 
 | Plataforma | Modo provável | Status |
 |---|---|---|
-| Sascar | spreadsheet | ✅ ativa |
+| Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper em beta |
 | Maxtrack | api ou scraper | 🔄 mais usada — primeira candidata |
 | Autotrack | a definir | 📋 planejada |
 | Trimble | a definir | 📋 planejada |

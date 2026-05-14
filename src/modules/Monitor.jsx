@@ -281,7 +281,14 @@ export default function Monitor() {
       notificarCriticos(merged.filter(d => d.alertas >= 5));
     } catch (err) {
       setStatusKind('error');
-      setStatusMsg(`Erro ao buscar ${platform.name}: ${err.message}`);
+      if (err.code === 'TOKEN_EXPIRED') {
+        setStatusMsg(`Token Sascar expirado. Clique no Favorito Sascar no portal para renovar e tente novamente.`);
+      } else if (err.code === 'NO_TOKEN') {
+        setStatusMsg(`Token Sascar não configurado. Acesse Meu Perfil → Integrações → Sascar.`);
+        setActivePanel('perfil');
+      } else {
+        setStatusMsg(`Erro ao buscar ${platform.name}: ${err.message}`);
+      }
     } finally { setLoading(false); }
   };
 
@@ -526,6 +533,7 @@ export default function Monitor() {
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
+        hasSascarToken={!!profile?.sascar_token} setActivePanel={setActivePanel}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />
