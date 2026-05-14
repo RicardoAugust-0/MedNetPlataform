@@ -15,6 +15,10 @@ import UploadArea from './monitor/UploadArea';
 import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
+import { useSheetHistory } from '../hooks/useSheetHistory.js';
+
+const normStr = s =>
+  String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
 
 /* ── Google Sheets via Supabase Edge Function ── */
 async function postToSheets(payload, accessToken) {
@@ -57,6 +61,24 @@ export default function Monitor() {
   const platform       = useMemo(() => getPlatform(platformId), [platformId]);
   const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
   const { resolveAlias } = useCarrierAliases();
+  const sheetHistory   = useSheetHistory();
+
+  // Carrega dados do Sheets em background ao montar o Monitor
+  useEffect(() => {
+    sheetHistory.load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mapa de lookup: nome normalizado → entrada mais recente no Sheets
+  const sheetsAttendedMap = useMemo(() => {
+    const map = new Map();
+    sheetHistory.rows.forEach(row => {
+      if (!row.colaborador) return;
+      const key = normStr(row.colaborador);
+      if (!map.has(key)) map.set(key, row); // rows já ordenadas do mais recente
+    });
+    return map;
+  }, [sheetHistory.rows]);
 
   const [templateModal, setTemplateModal] = useState(null);
   const [dossieDriver, setDossieDriver] = useState(null);
@@ -484,7 +506,7 @@ export default function Monitor() {
                     </div>
                   );
                 }
-                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} />);
+                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />);
                 return acc;
               }, [])}
             </div>
@@ -496,7 +518,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
               {paginate(reportarList).map(d => (
-                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} />
+                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />
               ))}
             </div>
       )}
@@ -507,7 +529,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum evento técnico isolado" />
           : <div className="driver-list">
               {paginate(tecList).map(d => (
-                <DriverCard key={d.placa} d={d} type="tecnicos" handlers={handlers} />
+                <DriverCard key={d.placa} d={d} type="tecnicos" handlers={handlers} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />
               ))}
             </div>
       )}

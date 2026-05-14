@@ -1,7 +1,7 @@
 import { iniciais } from '../../utils';
 import { sevClass, TiposBadge, ElapsedTimer } from './utils';
 
-export default function DriverCard({ d, type, handlers, daysSince }) {
+export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }) {
   const sev = sevClass(d);
   const isGravissimo = d.severidade === 'Gravíssimo';
 
@@ -44,6 +44,27 @@ export default function DriverCard({ d, type, handlers, daysSince }) {
               Reincidente {daysSince === 0 ? 'hoje' : `há ${daysSince}d`}
             </span>
           )}
+
+          {sheetsEntry && (() => {
+            const done = Boolean(sheetsEntry.realizadoPor?.trim());
+            const tip  = [
+              `Planilha · ${sheetsEntry.data}`,
+              sheetsEntry.solicitadoPor && `Solicitado por ${sheetsEntry.solicitadoPor}`,
+              done ? `Realizado por ${sheetsEntry.realizadoPor}` : 'Realização pendente',
+              sheetsEntry.horaSolicitacao && `às ${sheetsEntry.horaSolicitacao}`,
+            ].filter(Boolean).join(' · ');
+            return (
+              <span
+                className={`badge badge-${done ? 'success' : 'warning'}`}
+                title={tip}
+                style={{ fontSize: 9.5 }}
+              >
+                <i className="ti ti-table-column" style={{ marginRight: 2 }}></i>
+                Planilha · {sheetsEntry.data}
+                {done ? ' · Realizado' : ' · Pendente'}
+              </span>
+            );
+          })()}
 
           {type === 'intervencao' && d.ultimoEvento && (
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
