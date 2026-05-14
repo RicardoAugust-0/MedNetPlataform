@@ -60,9 +60,11 @@ async function tryRefresh(token: string): Promise<string | null> {
 }
 
 function getTodayRange(): { startTime: number; endTime: number } {
-  const now   = new Date();
+  const now = new Date();
+  // Meia-noite BRT = 03:00 UTC (UTC-3)
   const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(3, 0, 0, 0);
+  if (now < start) start.setDate(start.getDate() - 1);
   return { startTime: Math.floor(start.getTime() / 1000), endTime: Math.floor(now.getTime() / 1000) };
 }
 
