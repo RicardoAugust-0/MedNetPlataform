@@ -1,5 +1,65 @@
+import { useState } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../hooks/useToast.jsx';
+
+const EMPTY_META = { name: '', rows: 0, loadedAt: null };
+
+function normalizeText(v) {
+  if (!v && v !== 0) return '';
+  return String(v).normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toUpperCase();
+}
+
+function normalizePlate(v) {
+  if (!v && v !== 0) return '';
+  return String(v).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeKeyLabel(v) {
+  if (!v && v !== 0) return '';
+  return String(v)
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function pickFirst(row, keys) {
+  const rowKeys = Object.keys(row);
+  const normalizedMap = new Map();
+  rowKeys.forEach((rk) => {
+    const norm = normalizeKeyLabel(rk);
+    if (!normalizedMap.has(norm)) normalizedMap.set(norm, rk);
+  });
+
+  for (const searchKey of keys) {
+    const norm = normalizeKeyLabel(searchKey);
+    const found = normalizedMap.get(norm);
+    if (found && row[found] !== undefined && row[found] !== null && String(row[found]).trim() !== '') {
+      return String(row[found]);
+    }
+  }
+
+  return '';
+}
+
+function buildStats(events) {
+  const plates = new Set();
+  const drivers = new Set();
+  events.forEach((ev) => {
+    if (ev.plate) plates.add(ev.plate);
+    if (ev.driver) drivers.add(ev.driver);
+  });
+  return { rows: events.length, plates, drivers };
+}
+
+function formatLoadedAt(ts) {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleString('pt-BR');
+  } catch {
+    return '—';
+  }
+}
 import SideUploadCard from './crosscheck/SideUploadCard.jsx';
 import {
   normalizeText,
@@ -18,13 +78,40 @@ export default function CrossCheck() {
   const [leftEvents, setLeftEvents] = useState([]);
   const [rightEvents, setRightEvents] = useState([]);
   const [matches, setMatches] = useState([]);
-  const [leftMeta, setLeftMeta] = useState({ name: '', rows: 0, loadedAt: null });
-  const [rightMeta, setRightMeta] = useState({ name: '', rows: 0, loadedAt: null });
+  const [leftMeta, setLeftMeta] = useState(EMPTY_META);
+  const [rightMeta, setRightMeta] = useState(EMPTY_META);
   const [leftInputKey, setLeftInputKey] = useState(0);
   const [rightInputKey, setRightInputKey] = useState(0);
   const [filterBy, setFilterBy] = useState('todos');
   const [sortBy, setSortBy] = useState('ocorrencias');
   const [onlyDivergences, setOnlyDivergences] = useState(false);
+  const [loadingSide, setLoadingSide] = useState(null);
+
+  const leftName = leftMeta.name ? leftMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 1';
+  const rightName = rightMeta.name ? rightMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 2';
+
+  const leftStats = buildStats(leftEvents);
+  const rightStats = buildStats(rightEvents);
+  const totalPlates = new Set([...leftStats.plates, ...rightStats.plates]).size;
+  const totalDrivers = new Set([...leftStats.drivers, ...rightStats.drivers]).size;
+  const totalRows = leftStats.rows + rightStats.rows;
+  const plateMatches = matches.filter(m => m.by === 'placa').length;
+  const driverMatches = matches.filter(m => m.by === 'motorista').length;
+  const divergenceCount = matches.filter(m => m.left.length !== m.right.length).length;
+
+  const filteredMatches = matches
+    .filter(m => filterBy === 'todos' || m.by === filterBy)
+    .filter(m => !onlyDivergences || m.left.length !== m.right.length)
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'alfabetica') return String(a.key).localeCompare(String(b.key));
+      return (b.left.length + b.right.length) - (a.left.length + a.right.length);
+    });
+
+  const latestFile = [leftMeta, rightMeta]
+    .filter(m => m.loadedAt)
+    .sort((a, b) => new Date(b.loadedAt) - new Date(a.loadedAt))[0];
+  const latestLabel = latestFile ? `${latestFile.name} · ${formatLoadedAt(latestFile.loadedAt)}` : '—';
   const [rightCarrier, setRightCarrier] = useState('');
   const [carrierFilter, setCarrierFilter] = useState('');
   const [carrierFilterLabel, setCarrierFilterLabel] = useState('');
@@ -35,6 +122,17 @@ export default function CrossCheck() {
 
   async function parseFile(file) {
     if (!file) return [];
+    try {
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const plateKeys = ['Identificador/Placa', 'Placa', 'Plate', 'Veiculo', 'Identificador', 'Placa / Empurrador'];
+      const driverKeys = ['Motorista', 'Motorista / Comandante', 'Nome do Motorista', 'Nome', 'Driver'];
+      const severityKeys = ['Criticidade', 'Criticidade Original', 'Severidade', 'Prioridade', 'Categoria', 'Severity'];
     const xlsxModule = await import('xlsx');
     const XLSX = xlsxModule.default || xlsxModule;
     const data = await file.arrayBuffer();
@@ -49,6 +147,23 @@ export default function CrossCheck() {
     const dateKeys = ['Data', 'Data Chegada', 'Data/Hora', 'Data Hora', 'Timestamp', 'Data do Evento', 'Data de Chegada'];
     const severityKeys = ['Criticidade', 'Criticidade Original', 'Severidade', 'Prioridade', 'Categoria', 'Severity'];
 
+      return rows.map(r => {
+        const rawPlate = pickFirst(r, plateKeys);
+        const rawDriver = pickFirst(r, driverKeys);
+        const rawSeverity = pickFirst(r, severityKeys);
+        return {
+          raw: r,
+          plate: normalizePlate(rawPlate),
+          plateRaw: rawPlate || '',
+          driver: normalizeText(rawDriver),
+          driverRaw: rawDriver || '',
+          severityRaw: rawSeverity || '',
+        };
+      });
+    } catch {
+      toast(`Erro ao ler "${file.name}". Verifique se o arquivo é um xlsx, xls ou csv válido.`, 'error');
+      return null;
+    }
     return rows.map(r => {
       const rawPlate = pickFirst(r, plateKeys);
       const rawDriver = pickFirst(r, driverKeys);
@@ -74,7 +189,11 @@ export default function CrossCheck() {
 
   async function handleFile(file, side) {
     if (!file) return;
+    setLoadingSide(side);
     const parsed = await parseFile(file);
+    setLoadingSide(null);
+    if (!parsed) return;
+    const meta = { name: file.name, rows: parsed.length, loadedAt: new Date().toISOString() };
     const fallback = side === 'right' ? rightCarrier.trim() : '';
     const normalizedFallback = fallback ? normalizeText(fallback) : '';
     const withCarrier = fallback
@@ -91,9 +210,11 @@ export default function CrossCheck() {
     if (side === 'left') {
       setLeftEvents(withCarrier);
       setLeftMeta(meta);
+      computeMatches(parsed, rightEvents);
     } else {
       setRightEvents(withCarrier);
       setRightMeta(meta);
+      computeMatches(leftEvents, parsed);
     }
     computeMatches(side === 'left' ? withCarrier : leftEvents, side === 'right' ? withCarrier : rightEvents);
   }
@@ -134,8 +255,8 @@ export default function CrossCheck() {
 
   function computeMatches(left, right, options = {}) {
     const { silent = false } = options;
-    const L = left || leftEvents;
-    const R = right || rightEvents;
+    const L = left ?? leftEvents;
+    const R = right ?? rightEvents;
     const byPlateL = new Map();
     const byDriverL = new Map();
     const byPlateR = new Map();
@@ -146,7 +267,6 @@ export default function CrossCheck() {
 
     const found = [];
 
-    // match by plate
     for (const [plate, levents] of byPlateL) {
       if (!plate) continue;
       const revents = byPlateR.get(plate) || [];
@@ -155,11 +275,12 @@ export default function CrossCheck() {
       }
     }
 
-    // match by driver name (only if not already matched by plate)
+    // Evitar duplicar motoristas já cobertos integralmente por matches de placa
+    const matchedPlates = new Set(found.flatMap(f => [...f.left, ...f.right].map(ev => ev.plate)));
+
     for (const [driver, levents] of byDriverL) {
       if (!driver) continue;
-      const already = found.find(f => f.key === driver);
-      if (already) continue;
+      if (levents.every(ev => matchedPlates.has(ev.plate))) continue;
       const revents = byDriverR.get(driver) || [];
       if (levents.length && revents.length) {
         found.push({ key: driver, by: 'motorista', left: levents, right: revents });
@@ -176,27 +297,25 @@ export default function CrossCheck() {
     }
   }
 
-  const emptyMeta = { name: '', rows: 0, loadedAt: null };
-
   function clearSide(side) {
     if (side === 'left') {
       setLeftEvents([]);
-      setLeftMeta(emptyMeta);
+      setLeftMeta(EMPTY_META);
       setLeftInputKey((k) => k + 1);
       computeMatches([], rightEvents, { silent: true });
-      return;
+    } else {
+      setRightEvents([]);
+      setRightMeta(EMPTY_META);
+      setRightInputKey((k) => k + 1);
+      computeMatches(leftEvents, [], { silent: true });
     }
-    setRightEvents([]);
-    setRightMeta(emptyMeta);
-    setRightInputKey((k) => k + 1);
-    computeMatches(leftEvents, [], { silent: true });
   }
 
   function clearAll() {
     setLeftEvents([]);
     setRightEvents([]);
-    setLeftMeta(emptyMeta);
-    setRightMeta(emptyMeta);
+    setLeftMeta(EMPTY_META);
+    setRightMeta(EMPTY_META);
     setMatches([]);
     setLeftInputKey((k) => k + 1);
     setRightInputKey((k) => k + 1);
@@ -211,17 +330,13 @@ export default function CrossCheck() {
   }
 
   function swapSides() {
-    const leftData = leftEvents;
-    const rightData = rightEvents;
-    const leftInfo = leftMeta;
-    const rightInfo = rightMeta;
-    setLeftEvents(rightData);
-    setRightEvents(leftData);
-    setLeftMeta(rightInfo);
-    setRightMeta(leftInfo);
+    setLeftEvents(rightEvents);
+    setRightEvents(leftEvents);
+    setLeftMeta(rightMeta);
+    setRightMeta(leftMeta);
     setLeftInputKey((k) => k + 1);
     setRightInputKey((k) => k + 1);
-    computeMatches(rightData, leftData, { silent: true });
+    computeMatches(rightEvents, leftEvents, { silent: true });
   }
 
   function applyCarrierFilter(name) {
@@ -299,7 +414,7 @@ export default function CrossCheck() {
 
     const suffix = mode === 'divergencias' ? '-divergencias' : '';
     const csv = [header.join(';'), ...rows].join('\n');
-    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -434,21 +549,22 @@ export default function CrossCheck() {
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comparar alertas entre plataformas</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button className="btn btn-sm btn-ghost" onClick={swapSides} disabled={leftEvents.length === 0 && rightEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={swapSides} disabled={!!loadingSide || (leftEvents.length === 0 && rightEvents.length === 0)}>
               <i className="ti ti-switch-horizontal"></i> Trocar lados
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('left')} disabled={leftEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('left')} disabled={!!loadingSide || leftEvents.length === 0}>
               Limpar planilha 1
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('right')} disabled={rightEvents.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={() => clearSide('right')} disabled={!!loadingSide || rightEvents.length === 0}>
               Limpar planilha 2
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={clearAll} disabled={leftEvents.length === 0 && rightEvents.length === 0 && matches.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={clearAll} disabled={!!loadingSide || (leftEvents.length === 0 && rightEvents.length === 0 && matches.length === 0)}>
               Limpar tudo
             </button>
-            <button className="btn btn-sm btn-ghost" onClick={exportResults} disabled={filteredMatches.length === 0}>
+            <button className="btn btn-sm btn-ghost" onClick={exportResults} disabled={!!loadingSide || filteredMatches.length === 0}>
               <i className="ti ti-download"></i> Exportar resultados
             </button>
+            <button onClick={() => computeMatches()} className="btn btn-sm btn-primary" disabled={!!loadingSide || leftEvents.length === 0 || rightEvents.length === 0}>
             <button className="btn btn-sm btn-ghost" onClick={() => exportResults('divergencias')} disabled={divergentMatches.length === 0}>
               <i className="ti ti-download"></i> Exportar divergências
             </button>
@@ -487,6 +603,51 @@ export default function CrossCheck() {
           </div>
 
           <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            <div className="stat-box" style={{ padding: 16 }}>
+              <div className="stat-label">{leftName}</div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <div className="form-label" style={{ marginBottom: 4 }}>Planilha 1</div>
+                <label
+                  className="upload-area"
+                  style={{ padding: 16, gap: 12 }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add('drag-over');
+                  }}
+                  onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
+                  onDrop={(e) => handleDrop(e, 'left')}
+                >
+                  <div className="upload-icon">
+                    <i className={loadingSide === 'left' ? 'ti ti-loader-2 ti-spin' : 'ti ti-cloud-upload'}></i>
+                  </div>
+                  <div className="upload-text">
+                    <div className="upload-title">{loadingSide === 'left' ? 'Lendo arquivo…' : 'Arraste ou clique para selecionar'}</div>
+                    <div className="upload-hint">.xlsx · .xls · .csv</div>
+                  </div>
+                  <input
+                    key={`left-${leftInputKey}`}
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    hidden
+                    disabled={!!loadingSide}
+                    onChange={e => handleUpload(e, 'left')}
+                  />
+                </label>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {leftMeta.name ? (
+                  <>
+                    <div>Arquivo: {leftMeta.name}</div>
+                    <div>Linhas: {leftMeta.rows} · Placas: {leftStats.plates.size} · Motoristas: {leftStats.drivers.size}</div>
+                    <div>Carregado em: {formatLoadedAt(leftMeta.loadedAt)}</div>
+                  </>
+                ) : (
+                  <div>Nenhum arquivo carregado.</div>
+                )}
+              </div>
+            </div>
+            <div className="stat-box" style={{ padding: 16 }}>
+              <div className="stat-label">{rightName}</div>
             <SideUploadCard
               title={leftName}
               planilhaLabel="Planilha 1"
@@ -508,6 +669,44 @@ export default function CrossCheck() {
               stats={{ plates: rightStats.plates.size, drivers: rightStats.drivers.size }}
             >
               <div className="form-group" style={{ marginBottom: 12 }}>
+                <div className="form-label" style={{ marginBottom: 4 }}>Planilha 2</div>
+                <label
+                  className="upload-area"
+                  style={{ padding: 16, gap: 12 }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add('drag-over');
+                  }}
+                  onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
+                  onDrop={(e) => handleDrop(e, 'right')}
+                >
+                  <div className="upload-icon">
+                    <i className={loadingSide === 'right' ? 'ti ti-loader-2 ti-spin' : 'ti ti-cloud-upload'}></i>
+                  </div>
+                  <div className="upload-text">
+                    <div className="upload-title">{loadingSide === 'right' ? 'Lendo arquivo…' : 'Arraste ou clique para selecionar'}</div>
+                    <div className="upload-hint">.xlsx · .xls · .csv</div>
+                  </div>
+                  <input
+                    key={`right-${rightInputKey}`}
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    hidden
+                    disabled={!!loadingSide}
+                    onChange={e => handleUpload(e, 'right')}
+                  />
+                </label>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {rightMeta.name ? (
+                  <>
+                    <div>Arquivo: {rightMeta.name}</div>
+                    <div>Linhas: {rightMeta.rows} · Placas: {rightStats.plates.size} · Motoristas: {rightStats.drivers.size}</div>
+                    <div>Carregado em: {formatLoadedAt(rightMeta.loadedAt)}</div>
+                  </>
+                ) : (
+                  <div>Nenhum arquivo carregado.</div>
+                )}
                 <label className="form-label" style={{ marginBottom: 4 }}>Transportadora ({rightName})</label>
                 <input
                   className="form-control"
@@ -693,6 +892,10 @@ export default function CrossCheck() {
                 <p>Nenhuma correspondência encontrada para os filtros atuais.</p>
               </div>
             ) : (
+              filteredMatches.map((m) => (
+                <div key={`${m.by}-${m.key}`} className="stat-box" style={{ padding: 18, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                    {m.by === 'placa' ? <><i className="ti ti-car" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Placa: {m.key}</> : <><i className="ti ti-user" style={{color: 'var(--text-muted)', marginRight: 6}}></i>Motorista: {m.key}</>}
               filteredMatches.map((m, i) => (
                 <div key={i} className="stat-box" style={{ padding: 18, marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>

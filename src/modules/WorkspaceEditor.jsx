@@ -182,7 +182,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
     content: page.content || '',
     onUpdate: ({ editor }) => onUpdateRef.current?.(editor.getHTML()),
     editorProps: {
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items || []);
         const imageItem = items.find(i => ALLOWED_PASTE_TYPES.includes(i.type));
         if (!imageItem) return false;

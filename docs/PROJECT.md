@@ -85,6 +85,7 @@ supabase/
 |---|---|---|---|
 | `dashboard` | Dashboard | Operação | — |
 | `monitor`   | Monitor de Frota | Operação | — |
+| `crosscheck` | Cross-Check | Operação | — |
 | `agenda`    | Agenda | Operação | — |
 | `templates` | Templates | Conhecimento | — |
 | `workspace` | Workspace | Conhecimento | — |
@@ -129,38 +130,52 @@ Sub-arquivos:
 - `monitor/HistoryTab.jsx` — aba de histórico com filtros e CSV
 - `monitor/utils.jsx` — helpers (sevClass, applyTemplate, exportCSV)
 
-### 5.3. Agenda (`modules/Agenda.jsx`)
+### 5.3. Cross-Check (`modules/CrossCheck.jsx`)
+
+Ferramenta de comparação de alertas entre duas plataformas de monitoramento. O operador carrega duas planilhas (`.xlsx`, `.xls`, `.csv`) — uma por plataforma — e o módulo cruza os dados por **placa** e por **nome do motorista** (normalização de acentos, maiúsculas e separadores), exibindo:
+
+| Conceito | Descrição |
+|---|---|
+| Match por placa | Eventos cujas placas normalizadas coincidem nos dois arquivos |
+| Match por motorista | Eventos cujos nomes normalizados coincidem (somente se não cobertos pelo match de placa) |
+| Divergência | Matches onde o número de ocorrências difere entre as plataformas |
+
+Controles: swap de lados, limpar individual ou total, filtrar por tipo (placa/motorista), ordenar por ocorrências ou alfabético, filtro "somente divergências", exportação CSV com BOM UTF-8.
+
+Stats exibidos: linhas lidas, placas totais, motoristas totais, matches encontrados, divergências e último arquivo carregado.
+
+### 5.5. Agenda (`modules/Agenda.jsx`)
 Lembretes com data, hora, ícone, prioridade urgente e detalhes opcionais.
 Filtros: hoje, futuros, todos. Notificações via Notification API quando o
 horário chega.
 
-### 5.4. Templates (`modules/Templates.jsx`)
+### 5.6. Templates (`modules/Templates.jsx`)
 Scripts reutilizáveis para WhatsApp. Tags: `contato`, `questionario`, `alerta`,
 `encerramento`. Variáveis built-in: `[NOME]`, `[PLACA]`, `[TRANSPORTADORA]`,
 `[HORA]`, `[SAUDACAO]`. Variáveis customizadas em `localStorage`.
 Drag-reorder, copy-to-clipboard.
 
-### 5.5. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
+### 5.7. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
 Wiki interna com TipTap. Suporta upload de imagens para o bucket
 `workspace-images` (Supabase Storage). Categorias: `protocolos`, `sistemas`,
 `config`. Favoritos, busca e drag-reorder.
 
-### 5.6. Bloco de Notas (`modules/Notes.jsx`)
+### 5.8. Bloco de Notas (`modules/Notes.jsx`)
 Notas pessoais (privadas do operador) ou compartilhadas (toda a equipe).
 Auto-save com debounce de ~800ms.
 
-### 5.7. Links Rápidos (`modules/Links.jsx`)
+### 5.9. Links Rápidos (`modules/Links.jsx`)
 Atalhos para sistemas. Seções `interno` / `externo`. Personalização de ícone
 e paleta de cor por link. Drag-reorder.
 
-### 5.8. Meu Perfil (`modules/Profile.jsx`)
+### 5.10. Meu Perfil (`modules/Profile.jsx`)
 Edita `nome`, `cargo` e senha. E-mail é read-only.
 
-### 5.9. Administração (`modules/Admin.jsx`, admin-only)
+### 5.11. Administração (`modules/Admin.jsx`, admin-only)
 Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
 `invite-user`). Toggle de manutenção e edição de role/nome/cargo dos colegas.
 
-### 5.10. Analytics (`modules/Analytics.jsx`, admin-only)
+### 5.12. Analytics (`modules/Analytics.jsx`, admin-only)
 Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
 (pie), tendência de 14 dias intervenção × descarte (line).
 

@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
     }
 
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
     });
     return () => subscription.unsubscribe();

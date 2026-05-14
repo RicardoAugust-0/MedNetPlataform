@@ -36,4 +36,33 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false,
+        drop_debugger: true,
+        // Evita alguns problemas de hoisting/scoping em minificação agressiva
+        hoist_funs: true,
+        hoist_vars: false,
+        inline: false,
+      },
+      mangle: {
+        // Evita renomear variáveis para nomes que podem causar conflitos lexicais em closures complexas
+        safari10: true,
+      }
+    },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('recharts')) return 'recharts';
+            if (id.includes('xlsx')) return 'xlsx';
+            if (id.includes('@tiptap')) return 'tiptap';
+            return 'vendor';
+          }
+        }
+      }
+    }
+  }
 })
