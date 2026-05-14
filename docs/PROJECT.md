@@ -54,7 +54,13 @@ src/
 ├── hooks/                # 11 hooks de domínio (atendimentos, templates, notas, etc.)
 ├── lib/                  # uploadImage.js
 ├── modules/              # Painéis principais (Dashboard, Monitor, Agenda, ...)
-│   └── monitor/          # Subcomponentes do Monitor
+│   ├── monitor/          # Subcomponentes do Monitor
+│   └── crosscheck/       # Subcomponentes do Cross-Check
+│       ├── utils.js          # Funções puras: normalize, parsers, buildStats
+│       ├── SideUploadCard.jsx
+│       ├── MatchCard.jsx
+│       ├── CrossCheckFilters.jsx
+│       └── CarrierStats.jsx
 ├── platforms/            # ⭐ Camada de adapters de plataforma
 │   ├── base.js           # Contrato + helpers (emptyDriver/emptyStats)
 │   ├── index.js          # Registry, getPlatform, detectPlatform
@@ -130,52 +136,71 @@ Sub-arquivos:
 - `monitor/HistoryTab.jsx` — aba de histórico com filtros e CSV
 - `monitor/utils.jsx` — helpers (sevClass, applyTemplate, exportCSV)
 
-### 5.3. Cross-Check (`modules/CrossCheck.jsx`)
+### 5.3. Cross-Check (`modules/CrossCheck.jsx` + `modules/crosscheck/`)
 
-Ferramenta de comparação de alertas entre duas plataformas de monitoramento. O operador carrega duas planilhas (`.xlsx`, `.xls`, `.csv`) — uma por plataforma — e o módulo cruza os dados por **placa** e por **nome do motorista** (normalização de acentos, maiúsculas e separadores), exibindo:
+Ferramenta de comparação cruzada de alertas entre duas plataformas de monitoramento. O operador carrega uma planilha por plataforma (`.xlsx`, `.xls`, `.csv`) e o módulo cruza os registros automaticamente.
+
+**Motor de matching** (`crosscheck/utils.js`):
 
 | Conceito | Descrição |
 |---|---|
-| Match por placa | Eventos cujas placas normalizadas coincidem nos dois arquivos |
-| Match por motorista | Eventos cujos nomes normalizados coincidem (somente se não cobertos pelo match de placa) |
-| Divergência | Matches onde o número de ocorrências difere entre as plataformas |
+| Match por placa | Eventos cujas placas normalizadas coincidem nas duas fontes |
+| Match por motorista | Eventos cujos nomes normalizados coincidem e não estão cobertos por match de placa |
+| Divergência | Matches com contagem de ocorrências diferente entre as fontes |
 
-Controles: swap de lados, limpar individual ou total, filtrar por tipo (placa/motorista), ordenar por ocorrências ou alfabético, filtro "somente divergências", exportação CSV com BOM UTF-8.
+Normalização resistente a acentos, maiúsculas/minúsculas e separadores em todos os campos.
 
-Stats exibidos: linhas lidas, placas totais, motoristas totais, matches encontrados, divergências e último arquivo carregado.
+**Recursos:**
+- **Carrier fallback** — campo "Transportadora" na planilha da Fonte 2 pode ser preenchido manualmente quando a planilha não possui coluna própria; aplicado via `useEffect` ao alterar o campo.
+- **Filtro de período** — intervalo de datas (detecta automaticamente se as planilhas têm coluna de data).
+- **Filtro de transportadora** — clique em qualquer item da lista de transportadoras para filtrar os matches; badge ativo com botão de remoção.
+- **Estatísticas de transportadora** — ranking por plataforma (top 6 + contagem de outras).
+- **Duplicados internos** — detecta placas e motoristas que aparecem mais de uma vez dentro da mesma planilha (top 5).
+- **Export CSV** — dois modos: todos os resultados filtrados ou somente divergências; BOM UTF-8; colunas transportadora e data incluídas.
 
-### 5.5. Agenda (`modules/Agenda.jsx`)
+**Arquivos do módulo:**
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `CrossCheck.jsx` | Orquestrador: estado, `useMemo`, handlers, JSX estrutural |
+| `crosscheck/utils.js` | Funções puras: normalize, parsers de data, `buildStats`, `buildCarrierStats`, `buildDuplicateStats` |
+| `crosscheck/SideUploadCard.jsx` | Área de upload com spinner de loading e metadados do arquivo |
+| `crosscheck/MatchCard.jsx` | Card de resultado individual com colunas lado a lado e badge "Match perfeito" |
+| `crosscheck/CrossCheckFilters.jsx` | Barra de filtros: período, tipo, ordenação, divergências, badge de transportadora |
+| `crosscheck/CarrierStats.jsx` | Painéis de transportadoras e duplicados internos por plataforma |
+
+### 5.4. Agenda (`modules/Agenda.jsx`)
 Lembretes com data, hora, ícone, prioridade urgente e detalhes opcionais.
 Filtros: hoje, futuros, todos. Notificações via Notification API quando o
 horário chega.
 
-### 5.6. Templates (`modules/Templates.jsx`)
+### 5.5. Templates (`modules/Templates.jsx`)
 Scripts reutilizáveis para WhatsApp. Tags: `contato`, `questionario`, `alerta`,
 `encerramento`. Variáveis built-in: `[NOME]`, `[PLACA]`, `[TRANSPORTADORA]`,
 `[HORA]`, `[SAUDACAO]`. Variáveis customizadas em `localStorage`.
 Drag-reorder, copy-to-clipboard.
 
-### 5.7. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
+### 5.6. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
 Wiki interna com TipTap. Suporta upload de imagens para o bucket
 `workspace-images` (Supabase Storage). Categorias: `protocolos`, `sistemas`,
 `config`. Favoritos, busca e drag-reorder.
 
-### 5.8. Bloco de Notas (`modules/Notes.jsx`)
+### 5.7. Bloco de Notas (`modules/Notes.jsx`)
 Notas pessoais (privadas do operador) ou compartilhadas (toda a equipe).
 Auto-save com debounce de ~800ms.
 
-### 5.9. Links Rápidos (`modules/Links.jsx`)
+### 5.8. Links Rápidos (`modules/Links.jsx`)
 Atalhos para sistemas. Seções `interno` / `externo`. Personalização de ícone
 e paleta de cor por link. Drag-reorder.
 
-### 5.10. Meu Perfil (`modules/Profile.jsx`)
+### 5.9. Meu Perfil (`modules/Profile.jsx`)
 Edita `nome`, `cargo` e senha. E-mail é read-only.
 
-### 5.11. Administração (`modules/Admin.jsx`, admin-only)
+### 5.10. Administração (`modules/Admin.jsx`, admin-only)
 Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
 `invite-user`). Toggle de manutenção e edição de role/nome/cargo dos colegas.
 
-### 5.12. Analytics (`modules/Analytics.jsx`, admin-only)
+### 5.11. Analytics (`modules/Analytics.jsx`, admin-only)
 Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
 (pie), tendência de 14 dias intervenção × descarte (line).
 

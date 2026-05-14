@@ -10,6 +10,7 @@ export default function SideUploadCard({
   onDrop,
   meta,
   stats,
+  loading = false,
   children,
 }) {
   const hasFile = Boolean(meta?.name);
@@ -23,18 +24,15 @@ export default function SideUploadCard({
         <label
           className="upload-area"
           style={{ padding: 16, gap: 12 }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.currentTarget.classList.add('drag-over');
-          }}
+          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
           onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
           onDrop={onDrop}
         >
           <div className="upload-icon">
-            <i className="ti ti-cloud-upload"></i>
+            <i className={loading ? 'ti ti-loader-2 ti-spin' : 'ti ti-cloud-upload'}></i>
           </div>
           <div className="upload-text">
-            <div className="upload-title">{uploadTitle}</div>
+            <div className="upload-title">{loading ? 'Lendo arquivo…' : uploadTitle}</div>
             <div className="upload-hint">{uploadHint}</div>
           </div>
           <input
@@ -42,6 +40,7 @@ export default function SideUploadCard({
             type="file"
             accept=".csv,.xls,.xlsx"
             hidden
+            disabled={loading}
             onChange={onUpload}
           />
         </label>
