@@ -15,7 +15,12 @@ export default function Sidebar() {
   const paletteRef = useRef(null);
   const { isInstallable, install } = usePWA();
 
-  const alertCount = drivers.filter(d => d.alertas > 0).length;
+  // Maxtrack: só conta no badge se o motorista acumulou 8+ alertas
+  // (intervenção não é solicitada diretamente pela plataforma).
+  // Demais plataformas: qualquer alerta conta.
+  const alertCount = drivers.filter(d =>
+    d._platformId === 'maxtrack' ? d.alertas >= 8 : d.alertas > 5
+  ).length;
 
   // Fecha ao clicar fora
   useEffect(() => {
