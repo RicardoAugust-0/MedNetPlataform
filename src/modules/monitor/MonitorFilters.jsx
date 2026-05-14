@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 export default function MonitorFilters({
   profile,
   filters,
@@ -5,9 +7,22 @@ export default function MonitorFilters({
   transps,
   resetFilters,
   platform,
+  presets,
+  onSavePreset,
+  onLoadPreset,
+  onDeletePreset,
 }) {
   const taxonomy    = platform?.taxonomy    || { intervencao: [], reportar: [], tecnico: [] };
   const severidades = platform?.severidades || ['Gravíssimo', 'Grave', 'Normal'];
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState('');
+
+  const handleSave = () => {
+    if (!presetName.trim()) return;
+    onSavePreset(presetName.trim());
+    setPresetName('');
+    setSavingPreset(false);
+  };
 
   return (
     <>
@@ -79,6 +94,52 @@ export default function MonitorFilters({
         <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento && !filters.busca}>
           Limpar
         </button>
+
+        {/* Presets */}
+        <div className="filter-group" style={{ marginLeft: 'auto', gap: 6 }}>
+          <label><i className="ti ti-bookmark"></i> Presets</label>
+          {presets.map(p => (
+            <span key={p.id} style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => onLoadPreset(p)}
+                title={`Turno: ${p.filters.turno || 'todos'} · Transportadora: ${p.filters.empresa || 'todas'} · Severidade: ${p.filters.prioridade || 'todas'}`}
+              >
+                {p.name}
+              </button>
+              <button
+                className="btn btn-sm btn-icon-only"
+                onClick={() => onDeletePreset(p.id)}
+                title="Remover preset"
+                style={{ padding: '1px 4px', fontSize: 10 }}
+              >
+                <i className="ti ti-x"></i>
+              </button>
+            </span>
+          ))}
+
+          {savingPreset ? (
+            <>
+              <input
+                className="form-control"
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
+                placeholder="Nome do preset"
+                style={{ fontSize: 12, padding: '2px 6px', minWidth: 120 }}
+                onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setSavingPreset(false); }}
+                autoFocus
+              />
+              <button className="btn btn-sm btn-primary" onClick={handleSave} disabled={!presetName.trim()}>OK</button>
+              <button className="btn btn-sm" onClick={() => { setSavingPreset(false); setPresetName(''); }}>✕</button>
+            </>
+          ) : (
+            presets.length < 5 && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setSavingPreset(true)} title="Salvar filtros atuais como preset">
+                <i className="ti ti-plus"></i> Salvar
+              </button>
+            )
+          )}
+        </div>
       </div>
     </>
   );

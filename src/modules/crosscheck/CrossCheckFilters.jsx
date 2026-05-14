@@ -6,6 +6,8 @@ export default function CrossCheckFilters({
   sortBy,
   onlyDivergences,
   carrierFilterLabel,
+  searchQuery,
+  onSearchChange,
   onDateFromChange,
   onDateToChange,
   onFilterByChange,
@@ -82,6 +84,20 @@ export default function CrossCheckFilters({
           </button>
         </span>
       )}
+
+      <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
+        <label className="form-label" style={{ marginBottom: 4 }}>
+          <i className="ti ti-search" style={{ marginRight: 4 }}></i>Buscar resultado
+        </label>
+        <input
+          type="search"
+          className="form-control"
+          value={searchQuery}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder="Placa ou motorista…"
+          style={{ fontSize: 13 }}
+        />
+      </div>
 
       <button type="button" className="btn btn-sm btn-ghost" onClick={onClearFilters}>
         Limpar filtros

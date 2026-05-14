@@ -60,6 +60,32 @@ export default function Monitor() {
   const [dossieDriver, setDossieDriver] = useState(null);
   const [dossieData, setDossieData] = useState([]);
   const [dossieLoading, setDossieLoading] = useState(false);
+  const [discardModal, setDiscardModal] = useState(null);
+
+  // Presets de filtro
+  const [presets, setPresets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mn_filter_presets') || '[]'); } catch { return []; }
+  });
+
+  // Reincidência: motoristas atendidos (intervencao/reportar) nos últimos 30 dias.
+  // nowMs via useState initializer para evitar Date.now() em render.
+  const [nowMs] = useState(() => Date.now());
+  const reincidenteMap = useMemo(() => {
+    const cutoffISO = new Date(nowMs - 30 * 86400000).toISOString();
+    const map = new Map(); // nome → { date: ISO string, daysSince: number }
+    history.forEach(h => {
+      if ((h.tipo === 'intervencao' || h.tipo === 'reportar') && h.created_at > cutoffISO) {
+        const existing = map.get(h.motorista);
+        if (!existing || h.created_at > existing.date) {
+          map.set(h.motorista, {
+            date: h.created_at,
+            daysSince: Math.floor((nowMs - new Date(h.created_at).getTime()) / 86400000),
+          });
+        }
+      }
+    });
+    return map;
+  }, [history, nowMs]);
 
   useEffect(() => {
     if (!templateModal) return;
@@ -236,39 +262,30 @@ export default function Monitor() {
     setDrivers(drivers.map(x => x === d ? { ...x, reportaveis: 0, tiposReportar: [] } : x));
   };
 
-  const deleteAlert = async (d, tipo = 'intervencao') => {
+  const deleteAlert = (d, tipo = 'intervencao') => {
+    setDiscardModal({ driver: d, tipo });
+  };
+
+  const performDiscard = async (d, tipo, reason) => {
+    setDiscardModal(null);
     const isIntervencao = tipo === 'intervencao';
     const isReportar = tipo === 'reportar';
     const isTecnico = tipo === 'tecnico';
-    const tipoLabel = {
-      intervencao: 'intervenção',
-      reportar: 'reportar',
-      tecnico: 'técnico'
-    }[tipo] || 'intervenção';
-    const descarteObs = {
-      intervencao: `Alerta descartado · ${d.alertas} evento(s) removidos`,
-      reportar: `Alerta para reportar descartado · ${d.reportaveis} evento(s) removidos`,
-      tecnico: `Alerta técnico descartado · ${d.tecnicos} evento(s) removidos`
-    }[tipo] || `Alerta descartado · ${d.alertas} evento(s) removidos`;
-    if (!(await confirm({
-      title: 'Descartar alerta',
-      message: `Descartar alerta ${tipoLabel} de ${d.nome}?`,
-      danger: true
-    }))) return;
+    const countStr = isIntervencao ? `${d.alertas} evento(s)`
+                   : isReportar   ? `${d.reportaveis} evento(s) reportáveis`
+                   :                `${d.tecnicos} evento(s) técnicos`;
     await registrar({
-      motorista: d.nome,
-      placa: d.placa,
-      transportadora: d.transportadora,
+      motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
       tipo: 'descarte',
-      obs: descarteObs
+      obs: `Alerta descartado · ${countStr} · Motivo: ${reason}`,
     });
-    setDrivers(drivers.map(x => x === d ? {
+    setDrivers(prev => prev.map(x => x === d ? {
       ...x,
-      alertas: isIntervencao ? 0 : x.alertas,
-      tipos: isIntervencao ? [] : x.tipos,
-      reportaveis: isReportar ? 0 : x.reportaveis,
-      tiposReportar: isReportar ? [] : x.tiposReportar,
-      tecnicos: isTecnico ? 0 : x.tecnicos
+      alertas:       isIntervencao ? 0  : x.alertas,
+      tipos:         isIntervencao ? [] : x.tipos,
+      reportaveis:   isReportar    ? 0  : x.reportaveis,
+      tiposReportar: isReportar    ? [] : x.tiposReportar,
+      tecnicos:      isTecnico     ? 0  : x.tecnicos,
     } : x));
   };
 
@@ -326,6 +343,43 @@ export default function Monitor() {
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '', busca: '' });
 
+  const savePreset = (name) => {
+    const preset = { id: crypto.randomUUID(), name, filters: { ...filters } };
+    const next = [preset, ...presets].slice(0, 5);
+    setPresets(next);
+    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch {}
+  };
+
+  const loadPreset = (preset) => setFilters({ ...preset.filters });
+
+  const deletePreset = (id) => {
+    const next = presets.filter(p => p.id !== id);
+    setPresets(next);
+    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch {}
+  };
+
+  const exportActiveTab = () => {
+    const list = activeTab === 'intervencao' ? intervencaoList
+               : activeTab === 'reportar'    ? reportarList
+               : activeTab === 'tecnicos'    ? tecList : [];
+    if (list.length === 0) return;
+    const esc = v => { const s = String(v ?? ''); return `"${s.replace(/"/g, '""')}"`; };
+    const header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento'];
+    const rows = list.map(d => {
+      const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
+      const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
+                  : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
+                  : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
+      return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos].map(esc).join(',');
+    });
+    const csv = [header.map(esc).join(','), ...rows].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `monitor-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const openDossie = async (nome) => {
     setDossieDriver(nome);
     setDossieLoading(true);
@@ -377,6 +431,7 @@ export default function Monitor() {
         profile={profile} filters={filters} setFilters={setFilters}
         transps={transps} resetFilters={resetFilters}
         platform={platform}
+        presets={presets} onSavePreset={savePreset} onLoadPreset={loadPreset} onDeletePreset={deletePreset}
       />
 
       {/* Tabs */}
@@ -393,15 +448,23 @@ export default function Monitor() {
           </div>
         ))}
         {activeTab !== 'historico' && activeList.length > 0 && (
-          <button
-            className="btn btn-sm"
-            onClick={bulkDiscard}
-            disabled={loading}
-            style={{ marginLeft: 'auto' }}
-            title={`Descartar todos os ${activeList.length} alerta(s) visíveis na aba`}
-          >
-            <i className="ti ti-trash-x"></i> Descartar todos ({activeList.length})
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={exportActiveTab}
+              title="Exportar aba atual como CSV"
+            >
+              <i className="ti ti-download"></i> Exportar
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={bulkDiscard}
+              disabled={loading}
+              title={`Descartar todos os ${activeList.length} alerta(s) visíveis na aba`}
+            >
+              <i className="ti ti-trash-x"></i> Descartar todos ({activeList.length})
+            </button>
+          </div>
         )}
       </div>
 
@@ -419,7 +482,7 @@ export default function Monitor() {
                     </div>
                   );
                 }
-                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} />);
+                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} />);
                 return acc;
               }, [])}
             </div>
@@ -431,7 +494,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
               {paginate(reportarList).map(d => (
-                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} />
+                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} />
               ))}
             </div>
       )}
@@ -469,11 +532,12 @@ export default function Monitor() {
         </div>
       )}
 
-      <MonitorModals 
+      <MonitorModals
         templateModal={templateModal} setTemplateModal={setTemplateModal}
         templates={templates} applyTemplate={applyTemplate} setActivePanel={setActivePanel}
         dossieDriver={dossieDriver} setDossieDriver={setDossieDriver}
         dossieLoading={dossieLoading} dossieData={dossieData}
+        discardModal={discardModal} setDiscardModal={setDiscardModal} onDiscardConfirm={performDiscard}
       />
 
     </div>

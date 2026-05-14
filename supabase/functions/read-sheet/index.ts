@@ -1,0 +1,179 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SPREADSHEET_ID = '1Zk8iMPnTw-GkjcK3tHvR4oMFrzqXFaUocF6VWn0yC7s';
+
+const MESES = [
+  'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+  'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO',
+];
+
+const MES_NUM: Record<string, number> = Object.fromEntries(
+  MESES.map((m, i) => [m, i + 1])
+);
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+function getMesLabel(date: Date): string {
+  return `${MESES[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+async function getAccessToken(sa: Record<string, string>): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const b64url = (obj: unknown) =>
+    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const claim  = {
+    iss:   sa.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    aud:   'https://oauth2.googleapis.com/token',
+    exp:   now + 3600,
+    iat:   now,
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(claim)}`;
+
+  const pemContent = sa.private_key
+    .replace(/\\n/g, '\n')
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\s/g, '');
+
+  const binaryDer = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    'pkcs8', binaryDer.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign'],
+  );
+
+  const sig = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput),
+  );
+
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  const jwt = `${signingInput}.${sigB64}`;
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) throw new Error(`Google token error: ${JSON.stringify(tokenData)}`);
+  return tokenData.access_token;
+}
+
+// Detecta se a linha é um cabeçalho (valores como "DATA", "EMPRESA" etc.)
+function isHeaderRow(row: string[]): boolean {
+  const first = (row[0] || '').trim().toUpperCase();
+  return first === 'DATA' || first === 'DIA' || first === 'DATE';
+}
+
+// Converte "dd/mm" + "JANEIRO 2025" em timestamp para ordenação
+function rowTimestamp(data: string, mes: string): number {
+  const [dStr, mStr] = data.split('/');
+  const year = parseInt(mes.split(' ')[1] || '0');
+  const month = parseInt(mStr || '0') || MES_NUM[mes.split(' ')[0]] || 1;
+  const day = parseInt(dStr || '1');
+  return new Date(year, month - 1, day).getTime();
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+
+  try {
+    // Autenticação do usuário
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json({ error: 'Não autorizado' }, 401);
+
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: 'Não autorizado' }, 401);
+
+    // Quais abas ler (padrão: mês atual + anterior)
+    const url = new URL(req.url);
+    const mesParam = url.searchParams.get('meses');
+    const now = new Date();
+    const meses: string[] = mesParam
+      ? mesParam.split(',').map(m => m.trim()).filter(Boolean)
+      : [getMesLabel(new Date(now.getFullYear(), now.getMonth() - 1, 1)), getMesLabel(now)];
+
+    // Carregar service account e obter token
+    const saJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT');
+    if (!saJson) throw new Error('GOOGLE_SERVICE_ACCOUNT não configurado nos secrets do Supabase');
+    const sa = JSON.parse(saJson);
+    const token = await getAccessToken(sa);
+
+    // Ler cada aba
+    type SheetRow = Record<string, string>;
+    const allRows: SheetRow[] = [];
+
+    for (const mes of meses) {
+      const range = `${mes}!A:P`;
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`,
+        { headers: { 'Authorization': `Bearer ${token}` } },
+      );
+      const data = await res.json();
+
+      if (data.error) {
+        // Aba não existe (mês futuro ou sem dados)
+        console.warn(`[read-sheet] Aba "${mes}" não encontrada:`, data.error.message);
+        continue;
+      }
+
+      const rows: string[][] = data.values || [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.every((cell: string) => !cell?.trim())) continue; // linha vazia
+        if (i === 0 && isHeaderRow(r)) continue; // pula cabeçalho
+
+        allRows.push({
+          data:            r[0]  || '',
+          empresa:         r[1]  || '',
+          sistema:         r[2]  || '',
+          colaborador:     r[3]  || '',
+          placa:           r[4]  || '',
+          frota:           r[5]  || '',
+          criticidade:     r[6]  || '',
+          classificacao:   r[7]  || '',
+          realizado:       r[8]  || '',
+          motivo:          r[9]  || '',
+          solicitadoPor:   r[11] || '',
+          horaSolicitacao: r[12] || '',
+          realizadoPor:    r[13] || '',
+          horaRealizacao:  r[14] || '',
+          justificativa:   r[15] || '',
+          _mes:            mes,
+        });
+      }
+    }
+
+    // Ordenar do mais recente para o mais antigo
+    allRows.sort((a, b) => rowTimestamp(b.data, b._mes) - rowTimestamp(a.data, a._mes));
+
+    return json({ ok: true, rows: allRows, meses });
+
+  } catch (err) {
+    console.error('[read-sheet]', err);
+    return json({ error: (err as Error).message }, 500);
+  }
+});

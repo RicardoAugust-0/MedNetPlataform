@@ -1,7 +1,7 @@
 import { iniciais } from '../../utils';
 import { sevClass, TiposBadge, ElapsedTimer } from './utils';
 
-export default function DriverCard({ d, type, handlers }) {
+export default function DriverCard({ d, type, handlers, daysSince }) {
   const sev = sevClass(d);
   const isGravissimo = d.severidade === 'Gravíssimo';
 
@@ -33,6 +33,17 @@ export default function DriverCard({ d, type, handlers }) {
           )}
 
           <ElapsedTimer since={d._loadedAt} />
+
+          {daysSince !== undefined && (
+            <span
+              className={`badge badge-${daysSince < 7 ? 'danger' : 'warning'}`}
+              title={`Último atendimento: há ${daysSince} dia(s)`}
+              style={{ fontSize: 9.5 }}
+            >
+              <i className="ti ti-repeat" style={{ marginRight: 2 }}></i>
+              Reincidente {daysSince === 0 ? 'hoje' : `há ${daysSince}d`}
+            </span>
+          )}
 
           {type === 'intervencao' && d.ultimoEvento && (
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>

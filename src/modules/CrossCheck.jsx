@@ -38,6 +38,7 @@ export default function CrossCheck() {
   const [filterBy, setFilterBy] = useState('todos');
   const [sortBy, setSortBy] = useState('ocorrencias');
   const [onlyDivergences, setOnlyDivergences] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const leftName = leftMeta.name ? leftMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 1';
   const rightName = rightMeta.name ? rightMeta.name.replace(/\.[^.]+$/, '') : 'Planilha 2';
@@ -122,6 +123,11 @@ export default function CrossCheck() {
     .filter(m => m.loadedAt)
     .sort((a, b) => new Date(b.loadedAt) - new Date(a.loadedAt))[0];
   const latestLabel = latestFile ? `${latestFile.name} · ${formatLoadedAt(latestFile.loadedAt)}` : '—';
+
+  const searchNorm = searchQuery.trim().toLowerCase();
+  const displayedMatches = searchNorm
+    ? filteredMatches.filter(m => m.key.toLowerCase().includes(searchNorm))
+    : filteredMatches;
 
   async function parseFile(file) {
     if (!file) return [];
@@ -391,11 +397,12 @@ export default function CrossCheck() {
             dateFrom={dateFrom} dateTo={dateTo} hasDateData={hasDateData}
             filterBy={filterBy} sortBy={sortBy} onlyDivergences={onlyDivergences}
             carrierFilterLabel={carrierFilterLabel}
+            searchQuery={searchQuery} onSearchChange={setSearchQuery}
             onDateFromChange={setDateFrom} onDateToChange={setDateTo}
             onFilterByChange={setFilterBy} onSortByChange={setSortBy}
             onToggleDivergences={() => setOnlyDivergences(v => !v)}
             onClearCarrierFilter={() => { setCarrierFilter(''); setCarrierFilterLabel(''); }}
-            onClearFilters={() => { setFilterBy('todos'); setSortBy('ocorrencias'); setOnlyDivergences(false); }}
+            onClearFilters={() => { setFilterBy('todos'); setSortBy('ocorrencias'); setOnlyDivergences(false); setSearchQuery(''); }}
           />
 
           <CarrierStats
@@ -407,7 +414,7 @@ export default function CrossCheck() {
 
           <div style={{ marginTop: 24 }}>
             <h3 style={{ marginTop: 0, fontSize: 16, marginBottom: 16 }}>
-              Resultados: {filteredMatches.length} matches{filteredMatches.length !== derivedMatches.length ? ` (de ${derivedMatches.length})` : ''}
+              Resultados: {displayedMatches.length} matches{displayedMatches.length !== derivedMatches.length ? ` (de ${derivedMatches.length})` : ''}
             </h3>
             {filteredMatches.length === 0 ? (
               <div className="empty-state" style={{ padding: '40px 20px' }}>
@@ -415,7 +422,7 @@ export default function CrossCheck() {
                 <p>Nenhuma correspondência encontrada para os filtros atuais.</p>
               </div>
             ) : (
-              filteredMatches.map(m => (
+              displayedMatches.map(m => (
                 <MatchCard key={`${m.by}-${m.key}`} match={m} leftName={leftName} rightName={rightName} />
               ))
             )}
