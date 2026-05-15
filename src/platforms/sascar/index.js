@@ -5,10 +5,11 @@
 // Lógica do parser e regras de negócio: ./parser.js
 // Mapeamento de colunas e taxonomia: ./columns.js
 
-import { TAXONOMY } from './columns.js';
+import { TAXONOMY, DINON_CARRIERS_NORM } from './columns.js';
 import { parse, detect } from './parser.js';
 import { supabase } from '../../supabase.js';
 import { buildClearMap, isAfterClear } from '../shared/history.js';
+import { normalize } from '../shared/normalize.js';
 
 const sascar = {
   // ── Metadata ──
@@ -95,16 +96,33 @@ const sascar = {
         return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
       }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
 
+      // Regra Dinon: auto-descarte de eventos de fumo para transportadoras Dinon.
+      // Mesmo comportamento aplicado pelo parser de planilha.
+      const isFumo = tipo => /\bfum(o|ando|ante|ar)\b/i.test(tipo);
+      const autoDescartes = [];
+      const driversPos = drivers.map(d => {
+        const tNorm = normalize(d.transportadora || '');
+        if (!DINON_CARRIERS_NORM.some(n => tNorm.includes(n))) return d;
+        const fumoEvs = (d.eventosDetalhados || []).filter(e => e.bucket === 'reportar' && isFumo(e.tipo));
+        if (fumoEvs.length === 0) return d;
+        autoDescartes.push({ nome: d.nome, placa: d.placa, transportadora: d.transportadora, count: fumoEvs.length, motivo: 'Regra Dinon · eventos de fumo' });
+        const reportaveis = Math.max(0, d.reportaveis - fumoEvs.length);
+        const tiposReportar = (d.tiposReportar || []).filter(t => !isFumo(t));
+        const eventosDetalhados = (d.eventosDetalhados || []).filter(e => !(e.bucket === 'reportar' && isFumo(e.tipo)));
+        return { ...d, reportaveis, tiposReportar, eventosDetalhados };
+      }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
+
       const stats = {
         ...rawStats,
-        total:           drivers.length,
-        comIntervencao:  drivers.filter(d => d.alertas > 0).length,
-        soReportar:      drivers.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
-        soTecnico:       drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
+        total:           driversPos.length,
+        comIntervencao:  driversPos.filter(d => d.alertas > 0).length,
+        soReportar:      driversPos.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
+        soTecnico:       driversPos.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
         filtradosPorHistorico,
+        autoDescartes,
       };
 
-      return { drivers, stats };
+      return { drivers: driversPos, stats };
     },
   },
 };
