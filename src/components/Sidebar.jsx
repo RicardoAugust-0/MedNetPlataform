@@ -17,9 +17,9 @@ export default function Sidebar() {
 
   // Maxtrack: só conta no badge se o motorista acumulou 8+ alertas
   // (intervenção não é solicitada diretamente pela plataforma).
-  // Demais plataformas: qualquer alerta conta.
+  // Demais plataformas: conta a partir de 5 alertas (mesmo limiar do Monitor).
   const alertCount = drivers.filter(d =>
-    d._platformId === 'maxtrack' ? d.alertas >= 8 : d.alertas > 5
+    d._platformId === 'maxtrack' ? d.alertas >= 8 : d.alertas >= 5
   ).length;
 
   // Fecha ao clicar fora
