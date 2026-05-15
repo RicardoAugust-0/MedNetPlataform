@@ -97,13 +97,14 @@ function SascarTokenHandler() {
     // Limpa o hash imediatamente para não ficar visível na URL
     window.history.replaceState(null, '', window.location.pathname);
 
+    const savedAt = new Date().toISOString();
     supabase
       .from('profiles')
-      .update({ sascar_token: token })
+      .update({ sascar_token: token, sascar_token_saved_at: savedAt })
       .eq('id', profile.id)
       .then(({ error }) => {
         if (!error) {
-          updateProfile({ sascar_token: token });
+          updateProfile({ sascar_token: token, sascar_token_saved_at: savedAt });
           toast('Token Sascar atualizado. Pode buscar os eventos agora.', 'success');
         }
       });
