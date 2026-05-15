@@ -116,25 +116,14 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
   return all;
 }
 
-// Verifica todos os campos candidatos a indicador de falso positivo.
-// O campo correto será confirmado via _debug na resposta.
+// handleStatus: 0 = pendente, 1 = confirmado, 2 = falso positivo
 function isFalsoPositivo(a: Record<string, unknown>): boolean {
-  const FP_VALUE = 2;
-  const candidates = [
-    'handleResult', 'handleState', 'reviewResult', 'alarmStatus',
-    'isProcess', 'eventStatus', 'processState', 'auditState',
-    'checkResult', 'verifyResult', 'disposeResult', 'disposeState',
-  ];
-  return candidates.some(k => a[k] === FP_VALUE || a[k] === String(FP_VALUE));
+  return a.handleStatus === 2 || a.handleStatus === '2';
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
   const MIN_SPEED_KMH = 10;
-
-  // Coleta amostra diagnóstica: campos e valores de um alarme de cada tipo
-  // (retornada em stats._debug para inspeção via browser DevTools).
-  const debugSample = alarms.slice(0, 3).map(a => ({ keys: Object.keys(a), values: a }));
 
   // Filtra falsos positivos antes de qualquer outro processamento.
   let falsosPositivos = 0;
@@ -170,11 +159,14 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     // Transportadora: carrierName direto
     const transportadora = String(a.carrierName ?? '—').trim() || '—';
 
-    // Classificação: categoryId → bucket
-    const catList  = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
-    const catId    = Number(catList[0]?.categoryId ?? 0);
+    // Classificação: alarmType tem precedência para eventos de fadiga conhecidos;
+    // para os demais usa categoryId como fonte primária.
+    const catList   = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
+    const catId     = Number(catList[0]?.categoryId ?? 0);
     const alarmType = Number(a.alarmType ?? -1);
-    const bucket   = CATEGORY_BUCKET[catId] ?? ALARM_BUCKET[alarmType] ?? 'reportar';
+    const bucket    = ALARM_BUCKET[alarmType] !== undefined
+      ? ALARM_BUCKET[alarmType]
+      : (CATEGORY_BUCKET[catId] ?? 'reportar');
     const nomeEvento = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
 
     // Severidade: levelInfo.levelId
@@ -244,7 +236,6 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     filtradosPorVelocidade,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
-    _debug:                 debugSample,
   };
 
   return { drivers, stats };
