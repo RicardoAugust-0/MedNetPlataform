@@ -117,11 +117,16 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
 }
 
 // handleStatus: 0 = pendente (exibir), 1 = já tratado na plataforma (filtrar), 2 = falso positivo (filtrar)
+// Eventos técnicos (categoryId=100573) são isentos do filtro jaTratados — falhas de câmera
+// podem ser auto-processadas na plataforma mas ainda precisam ser monitoradas.
 function isFalsoPositivo(a: Record<string, unknown>): boolean {
   return a.handleStatus === 2 || a.handleStatus === '2';
 }
 function isJaTratado(a: Record<string, unknown>): boolean {
-  return a.handleStatus === 1 || a.handleStatus === '1';
+  if (a.handleStatus !== 1 && a.handleStatus !== '1') return false;
+  const catList = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
+  const catId   = Number(catList[0]?.categoryId ?? 0);
+  return catId !== 100573; // técnicos sempre exibidos
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
