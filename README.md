@@ -8,7 +8,7 @@ Plataforma operacional da equipe **Fadiga Zero** do GRUPO MedNet. Centraliza o m
 
 ### Acesso
 
-Abra o navegador e acesse **`[https://mednetplataform.vercel.app/]`**. Faça login com o e-mail e senha fornecidos pelo administrador. No primeiro acesso, use o link recebido por e-mail para definir sua senha.
+Abra o navegador e acesse **`https://mednetplataform.vercel.app/`**. Faça login com o e-mail e senha fornecidos pelo administrador. No primeiro acesso, use o link recebido por e-mail para definir sua senha.
 
 > Caso a plataforma exiba a tela de manutenção, aguarde o administrador reativá-la.
 
