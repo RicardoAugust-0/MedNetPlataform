@@ -22,7 +22,6 @@
 
 import { normalize, containsAll } from '../shared/normalize.js';
 import { parseSpeed, parseEventDate, parseTurno, maxSeveridade } from '../shared/parsers.js';
-import { buildClearMap, isAfterClear } from '../shared/history.js';
 import {
   COLUMNS,
   INTERVENCAO_EVENTOS,
@@ -65,9 +64,8 @@ export function detect({ fileName = '', headers = [] } = {}) {
   return Math.min(1, score);
 }
 
-export async function parse(file, { history = [] } = {}) {
+export async function parse(file) {
   const XLSX = await import('xlsx');
-  const clearMap = buildClearMap(history);
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -136,9 +134,6 @@ export async function parse(file, { history = [] } = {}) {
           entry.turnos.push(parseTurno(r[COLUMNS.hora]));
         });
 
-        let filtradosPorHistorico = 0;
-        const autoDescartes = [];
-
         const drivers = Object.values(byPlaca).map((d) => {
           const isIntervencao = (e) =>
             INTERVENCAO_EVENTOS_NORM.includes(e._eventoNorm) || isDistracaoGenerica(e);
@@ -147,26 +142,12 @@ export async function parse(file, { history = [] } = {}) {
             TECNICO_EVENTOS_NORM.includes(e._eventoNorm);
           const isReportar = (e) => !isIntervencao(e) && !isTecnico(e);
 
-          const clear = clearMap[d.placa] || {};
-
-          const evIntervencaoRaw = d.eventos.filter(isIntervencao);
-          const evIntervencao    = evIntervencaoRaw.filter((e) => isAfterClear(e._eventDate, clear.lastIntervencao));
-          filtradosPorHistorico += evIntervencaoRaw.length - evIntervencao.length;
-
-          const evReportarRaw = d.eventos.filter(isReportar);
-          const evReportar    = evReportarRaw.filter((e) => isAfterClear(e._eventDate, clear.lastReportar));
-          filtradosPorHistorico += evReportarRaw.length - evReportar.length;
-
-          const evTecnico = d.eventos.filter(isTecnico);
-
-          // Regra Dinon: eventos de fumo são auto-descartados.
-          const transportadoraNorm = normalize(d.transportadora);
-          const isDinonCarrier     = DINON_CARRIERS_NORM.some((n) => transportadoraNorm.includes(n));
-          const evReportarAutoDesc = isDinonCarrier ? evReportar.filter(isFumoEvento) : [];
-          const evReportarFinal    = isDinonCarrier ? evReportar.filter((e) => !isFumoEvento(e)) : evReportar;
+          const evIntervencao = d.eventos.filter(isIntervencao);
+          const evReportar    = d.eventos.filter(isReportar);
+          const evTecnico     = d.eventos.filter(isTecnico);
 
           const tiposIntervencao = [...new Set(evIntervencao.map((e) => e[COLUMNS.evento]))];
-          const tiposReportar    = [...new Set(evReportarFinal.map((e) => e[COLUMNS.evento]))];
+          const tiposReportar    = [...new Set(evReportar.map((e) => e[COLUMNS.evento]))];
 
           const tiposTecnico = {};
           evTecnico.forEach((e) => {
@@ -174,36 +155,25 @@ export async function parse(file, { history = [] } = {}) {
             tiposTecnico[tipo] = (tiposTecnico[tipo] || 0) + 1;
           });
 
-          const evIntervencaoDates  = evIntervencao.map((e) => e._eventDate).filter(Boolean);
-          const evReportarDates     = evReportarFinal.map((e) => e._eventDate).filter(Boolean);
-          const ultimoEvento        = evIntervencaoDates.length > 0
+          const evIntervencaoDates = evIntervencao.map((e) => e._eventDate).filter(Boolean);
+          const evReportarDates    = evReportar.map((e) => e._eventDate).filter(Boolean);
+          const ultimoEvento       = evIntervencaoDates.length > 0
             ? new Date(Math.max(...evIntervencaoDates.map((dt) => dt.getTime()))) : null;
           const ultimoEventoReportar = evReportarDates.length > 0
             ? new Date(Math.max(...evReportarDates.map((dt) => dt.getTime()))) : null;
 
           const severidadeMax = maxSeveridade(
-            [...evIntervencao, ...evReportarFinal].map((e) => e[COLUMNS.severidade])
+            [...evIntervencao, ...evReportar].map((e) => e[COLUMNS.severidade])
           );
 
-          // Turno predominante
           const turnoCount = {};
           d.turnos.forEach((t) => { turnoCount[t] = (turnoCount[t] || 0) + 1; });
           const turno = Object.entries(turnoCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'diurno';
 
-          if (evReportarAutoDesc.length > 0) {
-            autoDescartes.push({
-              nome:           d.nome || d.placa,
-              placa:          d.placa,
-              transportadora: d.transportadora,
-              count:          evReportarAutoDesc.length,
-              motivo:         'Regra Dinon · eventos de fumo',
-            });
-          }
-
           const eventosDetalhados = [
-            ...evIntervencao.map(e  => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'intervencao', severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
-            ...evReportarFinal.map(e => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'reportar',    severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
-            ...evTecnico.map(e       => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'tecnico',     severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
+            ...evIntervencao.map(e => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'intervencao', severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
+            ...evReportar.map(e    => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'reportar',    severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
+            ...evTecnico.map(e     => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'tecnico',     severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
           ];
 
           return {
@@ -215,7 +185,7 @@ export async function parse(file, { history = [] } = {}) {
             alertas:              evIntervencao.length,
             tipos:                tiposIntervencao,
             ultimoEvento,
-            reportaveis:          evReportarFinal.length,
+            reportaveis:          evReportar.length,
             tiposReportar,
             ultimoEventoReportar,
             tecnicos:             evTecnico.length,
@@ -234,8 +204,8 @@ export async function parse(file, { history = [] } = {}) {
           totalEventos:           valid.length,
           falsosPositivos,
           filtradosPorVelocidade,
-          filtradosPorHistorico,
-          autoDescartes,
+          filtradosPorHistorico:  0,
+          autoDescartes:          [],
         };
 
         resolve({ drivers, stats });

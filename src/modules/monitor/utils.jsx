@@ -72,6 +72,7 @@ function csvEscape(value) {
 }
 
 export function exportCSV(rows) {
+  const SEP = ';';
   const header = ['Data', 'Hora', 'Motorista', 'Placa', 'Transportadora', 'Tipo', 'Operador', 'Observação'];
   const lines = rows.map(r => [
     new Date(r.created_at).toLocaleDateString('pt-BR'),
@@ -82,8 +83,8 @@ export function exportCSV(rows) {
     { intervencao: 'Intervenção', reportar: 'Reportar', descarte: 'Descarte', limpeza: 'Limpeza' }[r.tipo] || r.tipo,
     r.operador || '',
     r.obs || '',
-  ].map(csvEscape).join(','));
-  const csv = [header.map(csvEscape).join(','), ...lines].join('\r\n');
+  ].map(csvEscape).join(SEP));
+  const csv = [header.map(csvEscape).join(SEP), ...lines].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `atendimentos_${new Date().toISOString().slice(0,10)}.csv`;

@@ -45,22 +45,27 @@
 //       // Recebe { fileName, headers: string[] } e devolve número (0..1) de confiança.
 //       detect({ fileName, headers }) { ... return 0..1 },
 //
-//       // Parser principal: recebe (file, ctx) e devolve Promise<{ drivers, stats }>.
-//       // ctx = { history: array de atendimentos prévios }.
-//       parse(file, ctx) { ... },
+//       // Parser principal: recebe o File e devolve Promise<{ drivers, stats }>.
+//       // NÃO aplica filtro de histórico — isso é responsabilidade do Monitor via
+//       // applyHistoryFilter() em src/platforms/shared/history.js.
+//       parse(file) { ... },
 //     },
 //
-//     // (Futuro) Bloco do modo 'api'
+//     // Bloco do modo 'api' (REST polling)
 //     api: {
 //       pollIntervalMs: 60_000,
-//       pull(ctx) { ... return Promise<{ drivers, stats }> },
+//       pull() { ... return Promise<{ drivers, stats }> },
 //     },
 //
-//     // (Futuro) Bloco do modo 'scraper'
+//     // Bloco do modo 'scraper' (Edge Function ou bookmarklet)
 //     scraper: {
-//       endpoint: '/functions/v1/scrape-maxtrack',
-//       pull(ctx) { ... return Promise<{ drivers, stats }> },
+//       pull() { ... return Promise<{ drivers, stats }> },
 //     },
+//
+//     // (Opcional) Regras de negócio pós-processamento aplicadas pelo Monitor
+//     // APÓS o filtro de histórico. Útil para auto-descartes específicos da plataforma
+//     // (ex: regra Dinon no Sascar). Recebe os drivers já filtrados.
+//     postProcess(drivers) { ... return { drivers, autoDescartes } },
 //   }
 //
 // ────────────────────────────────────────────────────────────────────────────
@@ -83,6 +88,8 @@
 //     // Eventos técnicos (não acionáveis pelo operador)
 //     tecnicos:             number,
 //     tiposTecnico:         Record<string, number>,
+//     // Detalhamento individual de eventos (usado para export e filtro de histórico granular)
+//     eventosDetalhados:    Array<{ tipo: string, bucket: 'intervencao'|'reportar'|'tecnico', severidade: string, ts: Date|null }>,
 //     // Outros
 //     severidade:           'Gravíssimo'|'Grave'|'Normal',
 //     intervencoes:         number,          // legado, sempre 0 no parser
@@ -118,6 +125,7 @@ export function emptyDriver(overrides = {}) {
     ultimoEventoReportar: null,
     tecnicos:             0,
     tiposTecnico:         {},
+    eventosDetalhados:    [],
     severidade:           'Normal',
     intervencoes:         0,
     ...overrides,
