@@ -439,17 +439,42 @@ export default function Monitor() {
       return dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     };
 
-    const header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento', 'Último Evento'];
-    const rows = list.map(d => {
-      const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
-      const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
-                  : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
-                  : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
-      const ultimoEvt = activeTab === 'intervencao' ? fmtDate(d.ultimoEvento)
-                      : activeTab === 'reportar'    ? fmtDate(d.ultimoEventoReportar)
-                      : '';
-      return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos, ultimoEvt].map(esc).join(SEP);
-    });
+    const bucketAtivo = activeTab === 'intervencao' ? 'intervencao'
+                      : activeTab === 'reportar'    ? 'reportar'
+                      : 'tecnico';
+
+    // Se qualquer driver tiver eventosDetalhados, exporta uma linha por evento.
+    // Caso contrário (plataforma sem suporte) cai no resumo por motorista.
+    const temDetalhados = list.some(d => d.eventosDetalhados?.length > 0);
+
+    let header, rows;
+    if (temDetalhados) {
+      header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade do Motorista', 'Tipo de Evento', 'Categoria', 'Severidade do Evento', 'Data/Hora'];
+      rows = list.flatMap(d => {
+        const eventos = (d.eventosDetalhados || []).filter(e => e.bucket === bucketAtivo);
+        if (eventos.length === 0) return [];
+        return eventos
+          .slice()
+          .sort((a, b) => (a.ts ? new Date(a.ts) : 0) - (b.ts ? new Date(b.ts) : 0))
+          .map(e => [
+            d.nome, d.placa, d.transportadora, d.turno, d.severidade,
+            e.tipo, e.bucket, e.severidade, fmtDate(e.ts),
+          ].map(esc).join(SEP));
+      });
+    } else {
+      header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento', 'Último Evento'];
+      rows = list.map(d => {
+        const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
+        const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
+                    : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
+                    : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
+        const ultimoEvt = activeTab === 'intervencao' ? fmtDate(d.ultimoEvento)
+                        : activeTab === 'reportar'    ? fmtDate(d.ultimoEventoReportar)
+                        : '';
+        return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos, ultimoEvt].map(esc).join(SEP);
+      });
+    }
+
     const csv = [header.map(esc).join(SEP), ...rows].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));

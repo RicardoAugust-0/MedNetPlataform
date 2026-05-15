@@ -207,6 +207,7 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
       tiposTecnico,
       severidade:           maxSev([...evIntervencao, ...evReportar].map(e => e.severidade)),
       intervencoes:         0,
+      eventosDetalhados:    d.eventos.map(e => ({ tipo: e.nome, bucket: e.bucket, severidade: e.severidade, ts: e.ts })),
     };
   });
 

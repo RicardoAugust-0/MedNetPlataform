@@ -77,17 +77,22 @@ const sascar = {
         const uER = d.ultimoEventoReportar  ? new Date(d.ultimoEventoReportar) : null;
 
         let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar } = d;
+        let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
+          ...e, ts: e.ts ? new Date(e.ts) : null,
+        }));
 
         if (!isAfterClear(uE, clear.lastIntervencao)) {
           filtradosPorHistorico += alertas;
           alertas = 0; tipos = []; ultimoEvento = null;
+          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'intervencao');
         }
         if (!isAfterClear(uER, clear.lastReportar)) {
           filtradosPorHistorico += reportaveis;
           reportaveis = 0; tiposReportar = []; ultimoEventoReportar = null;
+          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'reportar');
         }
 
-        return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar };
+        return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
       }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
 
       const stats = {
