@@ -122,6 +122,12 @@ export function parseApiResponse(apiData, { history = [] } = {}) {
     d.turnos.forEach((t) => { turnoCount[t] = (turnoCount[t] || 0) + 1; });
     const turno = Object.entries(turnoCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'diurno';
 
+    const eventosDetalhados = [
+      ...evIntervencao.map(e => ({ tipo: e._nome, bucket: 'intervencao', severidade: e._severidade, ts: e._eventDate })),
+      ...evReportar.map(e    => ({ tipo: e._nome, bucket: 'reportar',    severidade: e._severidade, ts: e._eventDate })),
+      ...evTecnico.map(e     => ({ tipo: e._nome, bucket: 'tecnico',     severidade: e._severidade, ts: e._eventDate })),
+    ];
+
     return {
       ...emptyDriver(),
       nome:                 d.nome || d.placa,
@@ -138,6 +144,7 @@ export function parseApiResponse(apiData, { history = [] } = {}) {
       tecnicos:             evTecnico.length,
       tiposTecnico,
       severidade:           severidadeMax,
+      eventosDetalhados,
     };
   });
 
