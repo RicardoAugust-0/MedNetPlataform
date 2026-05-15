@@ -25,7 +25,7 @@ const CATEGORY_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = 
 const ALARM_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = {
   56001: 'intervencao', // Bocejo
   56003: 'intervencao', // Olho fechado
-  56016: 'intervencao', // Sonolência N2
+  56016: 'intervencao', // Distração Genérica
   56002: 'intervencao', // Sonolência
   56004: 'reportar',
   56010: 'reportar',

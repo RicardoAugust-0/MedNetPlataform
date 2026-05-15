@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
     const syncProfile = async () => {
       const { data: existing } = await supabase
         .from('profiles')
-        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token')
+        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token, sascar_token_saved_at')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -69,11 +69,12 @@ export function AuthProvider({ children }) {
             nome: existing.nome || emailFallback,
             cargo: existing.cargo || 'Operador',
             role: existing.role || 'operador',
-            avatar_url:      existing.avatar_url      || null,
-            telefone:        existing.telefone        || '',
-            bio:             existing.bio             || '',
-            maxtrack_email:  existing.maxtrack_email  || '',
-            sascar_token:    existing.sascar_token    || '',
+            avatar_url:             existing.avatar_url             || null,
+            telefone:               existing.telefone               || '',
+            bio:                    existing.bio                    || '',
+            maxtrack_email:         existing.maxtrack_email         || '',
+            sascar_token:           existing.sascar_token           || '',
+            sascar_token_saved_at:  existing.sascar_token_saved_at  || null,
           });
         }
         return;
@@ -88,7 +89,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const { data: current } = await supabase
           .from('profiles')
-          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token')
+          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token, sascar_token_saved_at')
           .eq('id', session.user.id)
           .maybeSingle();
 
@@ -99,11 +100,12 @@ export function AuthProvider({ children }) {
             nome: current.nome || emailFallback,
             cargo: current.cargo || 'Operador',
             role: current.role || 'operador',
-            avatar_url:     current.avatar_url     || null,
-            telefone:       current.telefone       || '',
-            bio:            current.bio            || '',
-            maxtrack_email: current.maxtrack_email || '',
-            sascar_token:   current.sascar_token   || '',
+            avatar_url:            current.avatar_url            || null,
+            telefone:              current.telefone              || '',
+            bio:                   current.bio                   || '',
+            maxtrack_email:        current.maxtrack_email        || '',
+            sascar_token:          current.sascar_token          || '',
+            sascar_token_saved_at: current.sascar_token_saved_at || null,
           });
         }
         return;
