@@ -159,14 +159,16 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     // Transportadora: carrierName direto
     const transportadora = String(a.carrierName ?? '—').trim() || '—';
 
-    // Classificação: alarmType tem precedência para eventos de fadiga conhecidos;
-    // para os demais usa categoryId como fonte primária.
+    // Classificação: categoryId é fonte primária.
+    // Exceção: tipos de fadiga/distração (56001-56003, 56016) às vezes chegam com
+    // categoryId=100573 (técnico) por erro da API — nesses casos alarmType prevalece.
     const catList   = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
     const catId     = Number(catList[0]?.categoryId ?? 0);
     const alarmType = Number(a.alarmType ?? -1);
-    const bucket    = ALARM_BUCKET[alarmType] !== undefined
-      ? ALARM_BUCKET[alarmType]
-      : (CATEGORY_BUCKET[catId] ?? 'reportar');
+    const FATIGUE_TYPES = new Set([56001, 56002, 56003, 56016]);
+    const bucket    = FATIGUE_TYPES.has(alarmType)
+      ? 'intervencao'
+      : (CATEGORY_BUCKET[catId] ?? ALARM_BUCKET[alarmType] ?? 'reportar');
     const nomeEvento = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
 
     // Severidade: levelInfo.levelId
