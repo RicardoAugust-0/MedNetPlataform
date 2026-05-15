@@ -263,15 +263,32 @@ export default function UploadArea({
               Os eventos são buscados diretamente da plataforma — sem upload manual
             </div>
           </div>
-          <button
-            className="btn btn-primary"
-            style={{ marginTop: 12 }}
-            onClick={handleScrape}
-            disabled={loading}
-          >
-            <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}></i>
-            {loading ? " Buscando…" : " Buscar eventos agora"}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleScrape}
+              disabled={loading}
+            >
+              <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}></i>
+              {loading ? " Buscando…" : " Buscar eventos agora"}
+            </button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={!!autoRefresh}
+                onChange={e => onAutoRefreshChange?.(e.target.checked)}
+              />
+              Auto a cada
+            </label>
+            <select
+              value={autoRefreshMin}
+              onChange={e => onAutoRefreshMinChange?.(Number(e.target.value))}
+              disabled={!autoRefresh}
+              style={{ fontSize: 12, padding: '2px 4px' }}
+            >
+              {[5, 10, 15, 30].map(m => <option key={m} value={m}>{m} min</option>)}
+            </select>
+          </div>
         </div>
       ) : (
         <div className="empty-state">

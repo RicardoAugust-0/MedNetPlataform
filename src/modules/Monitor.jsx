@@ -156,11 +156,11 @@ export default function Monitor() {
   const handleScrapeRef = useRef(null);
 
   useEffect(() => {
-    if (!autoRefresh || !platform?.scraper?.pull || !profile?.sascar_token) return;
+    if (!autoRefresh || !platform?.scraper?.pull) return;
     const id = setInterval(() => { if (!loading) handleScrapeRef.current?.(); }, autoRefreshMin * 60 * 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, autoRefreshMin, platform?.id, profile?.sascar_token]);
+  }, [autoRefresh, autoRefreshMin, platform?.id]);
 
   /* ── Filtros fila ── */
   const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
