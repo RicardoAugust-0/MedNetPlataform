@@ -314,7 +314,7 @@ export default function Monitor() {
       criticidade,
       classificacao,
       motivo:          'FADIGA',
-      solicitadoPor:   profile?.nome || '',
+      solicitadoPor:   (profile?.nome || '').split(' ')[0],
       horaSolicitacao: hora,
     }, session?.access_token);
   };

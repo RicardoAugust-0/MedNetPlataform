@@ -19,8 +19,8 @@
  * COLUNAS DA PLANILHA (ordem exata):
  * A: DATA | B: EMPRESA | C: SISTEMA | D: COLABORADOR | E: PLACA
  * F: FROTA | G: CRITICIDADE | H: CLASSIFICAÇÃO | I: REALIZADO?
- * J: MOTIVO | K: (vazia) | L: SOLICITADO POR | M: DE SOLICITAÇÃO
- * N: REALIZADO POR | O: DE REALIZAÇÃO | P: JUSTIFICATIVA PARA NÃO REALIZAÇÃO
+ * J: MOTIVO | K: SOLICITADO POR | L: HORA SOLICITAÇÃO
+ * M: REALIZADO POR | N: HORA REALIZAÇÃO | O: JUSTIFICATIVA PARA NÃO REALIZAÇÃO
  */
 
 function doPost(e) {
@@ -32,7 +32,7 @@ function doPost(e) {
     const mesAtual = getMesAtual();
     const sheet = ss.getSheetByName(mesAtual) || ss.getSheets()[0];
 
-    // Linha a inserir — colunas A até P (16 colunas), K fica vazia
+    // Linha a inserir — colunas A até O (15 colunas)
     const row = [
       payload.data            || '',   // A: DATA
       payload.empresa         || '',   // B: EMPRESA
@@ -44,19 +44,18 @@ function doPost(e) {
       payload.classificacao   || '',   // H: CLASSIFICAÇÃO
       '',                              // I: REALIZADO? (operador preenche)
       payload.motivo          || '',   // J: MOTIVO
-      '',                              // K: (coluna vazia)
-      payload.solicitadoPor   || '',   // L: SOLICITADO POR
-      payload.horaSolicitacao || '',   // M: DE SOLICITAÇÃO
-      '',                              // N: REALIZADO POR (operador preenche)
-      '',                              // O: DE REALIZAÇÃO (operador preenche)
-      '',                              // P: JUSTIFICATIVA (operador preenche)
+      payload.solicitadoPor   || '',   // K: SOLICITADO POR
+      payload.horaSolicitacao || '',   // L: HORA SOLICITAÇÃO
+      '',                              // M: REALIZADO POR (operador preenche)
+      '',                              // N: HORA REALIZAÇÃO (operador preenche)
+      '',                              // O: JUSTIFICATIVA (operador preenche)
     ];
 
     sheet.appendRow(row);
 
     // Colorir a linha conforme CRITICIDADE
     const lastRow = sheet.getLastRow();
-    const range   = sheet.getRange(lastRow, 1, 1, 16);
+    const range   = sheet.getRange(lastRow, 1, 1, 15);
     const crit    = (payload.criticidade || '').toUpperCase();
     if (crit === 'GRAVÍSSIMO' || crit === 'GRAVISSIMO') {
       sheet.getRange(lastRow, 7).setBackground('#FF9999').setFontWeight('bold');
