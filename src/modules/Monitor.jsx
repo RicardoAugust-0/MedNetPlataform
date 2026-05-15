@@ -533,7 +533,7 @@ export default function Monitor() {
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
-        hasSascarToken={!!profile?.sascar_token} setActivePanel={setActivePanel}
+        hasSascarToken={!!profile?.sascar_token && !!profile?.sascar_token_saved_at && (Date.now() - new Date(profile.sascar_token_saved_at).getTime()) < 30 * 60 * 1000} setActivePanel={setActivePanel}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />

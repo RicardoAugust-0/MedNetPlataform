@@ -129,6 +129,9 @@ function AvatarSection({ profile, updateProfile }) {
 
 function SascarSection({ profile }) {
   const configured  = !!profile?.sascar_token;
+  const savedAt     = profile?.sascar_token_saved_at ? new Date(profile.sascar_token_saved_at) : null;
+  const ageMin      = savedAt ? Math.floor((Date.now() - savedAt.getTime()) / 60000) : null;
+  const tokenValid  = configured && ageMin !== null && ageMin < 30;
   const bookmarkRef = useRef(null);
 
   // React bloqueia javascript: em href — setamos direto no DOM via ref.
@@ -146,14 +149,27 @@ function SascarSection({ profile }) {
       </div>
 
       {/* Status do token */}
-      {configured ? (
+      {tokenValid ? (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
           background: 'var(--success-bg, rgba(34,197,94,0.08))', borderRadius: 'var(--radius-md)',
           border: '1px solid rgba(34,197,94,0.2)', marginBottom: 14, fontSize: 12.5,
         }}>
           <i className="ti ti-circle-check" style={{ color: 'var(--success-600, #16a34a)' }}></i>
-          <span style={{ flex: 1 }}>Token Sascar configurado e pronto para uso.</span>
+          <span style={{ flex: 1 }}>
+            Token configurado e válido
+            {ageMin === 0 ? ' — salvo agora' : ageMin === 1 ? ' — salvo há 1 min' : ` — salvo há ${ageMin} min`}
+            {' '}· expira em {30 - ageMin} min.
+          </span>
+        </div>
+      ) : configured ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          background: 'rgba(239,68,68,0.08)', borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(239,68,68,0.2)', marginBottom: 14, fontSize: 12.5,
+        }}>
+          <i className="ti ti-clock-x" style={{ color: 'var(--danger-500, #ef4444)' }}></i>
+          <span style={{ flex: 1 }}>Token expirado (mais de 30 min). Clique no favorito no portal Sascar para renovar.</span>
         </div>
       ) : (
         <div style={{
