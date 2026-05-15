@@ -426,16 +426,31 @@ export default function Monitor() {
                : activeTab === 'reportar'    ? reportarList
                : activeTab === 'tecnicos'    ? tecList : [];
     if (list.length === 0) return;
+
+    // Ponto e vírgula como separador para abrir corretamente no Excel/LibreOffice
+    // com locale pt-BR (onde a vírgula é separador decimal).
+    const SEP = ';';
     const esc = v => { const s = String(v ?? ''); return `"${s.replace(/"/g, '""')}"`; };
-    const header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento'];
+
+    const fmtDate = (d) => {
+      if (!d) return '';
+      const dt = d instanceof Date ? d : new Date(d);
+      if (isNaN(dt.getTime())) return '';
+      return dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+
+    const header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento', 'Último Evento'];
     const rows = list.map(d => {
       const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
       const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
                   : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
                   : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
-      return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos].map(esc).join(',');
+      const ultimoEvt = activeTab === 'intervencao' ? fmtDate(d.ultimoEvento)
+                      : activeTab === 'reportar'    ? fmtDate(d.ultimoEventoReportar)
+                      : '';
+      return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos, ultimoEvt].map(esc).join(SEP);
     });
-    const csv = [header.map(esc).join(','), ...rows].join('\r\n');
+    const csv = [header.map(esc).join(SEP), ...rows].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `monitor-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
