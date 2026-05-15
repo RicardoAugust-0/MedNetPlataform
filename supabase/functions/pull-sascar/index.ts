@@ -116,29 +116,25 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
   return all;
 }
 
-// handleResult valores conhecidos: 1 = confirmado, 2 = falso positivo.
-// Campo alternativo observado: handleState com mesma semântica.
+// Verifica todos os campos candidatos a indicador de falso positivo.
+// O campo correto será confirmado via _debug na resposta.
 function isFalsoPositivo(a: Record<string, unknown>): boolean {
-  const hr = a.handleResult;
-  if (hr === 2 || hr === '2') return true;
-  const hs = a.handleState;
-  if (hs === 2 || hs === '2') return true;
-  return false;
+  const FP_VALUE = 2;
+  const candidates = [
+    'handleResult', 'handleState', 'reviewResult', 'alarmStatus',
+    'isProcess', 'eventStatus', 'processState', 'auditState',
+    'checkResult', 'verifyResult', 'disposeResult', 'disposeState',
+  ];
+  return candidates.some(k => a[k] === FP_VALUE || a[k] === String(FP_VALUE));
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
   const MIN_SPEED_KMH = 10;
 
-  // Log de diagnóstico: exibe campos de status do primeiro alarme para verificar o nome correto do campo.
-  if (alarms.length > 0) {
-    const s = alarms[0];
-    console.log('[pull-sascar] alarm keys:', Object.keys(s).join(', '));
-    console.log('[pull-sascar] status fields — handleResult:', s.handleResult,
-      '| handleState:', s.handleState, '| reviewResult:', s.reviewResult,
-      '| alarmStatus:', s.alarmStatus, '| isProcess:', s.isProcess,
-      '| eventStatus:', s.eventStatus);
-  }
+  // Coleta amostra diagnóstica: campos e valores de um alarme de cada tipo
+  // (retornada em stats._debug para inspeção via browser DevTools).
+  const debugSample = alarms.slice(0, 3).map(a => ({ keys: Object.keys(a), values: a }));
 
   // Filtra falsos positivos antes de qualquer outro processamento.
   let falsosPositivos = 0;
@@ -248,6 +244,7 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     filtradosPorVelocidade,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
+    _debug:                 debugSample,
   };
 
   return { drivers, stats };
