@@ -74,7 +74,7 @@ function ReminderNotifier() {
     check();
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return null;
 }

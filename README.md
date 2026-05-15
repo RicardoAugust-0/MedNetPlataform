@@ -17,7 +17,9 @@ Abra o navegador e acesse **`[https://mednetplataform.vercel.app/]`**. Faça log
 ### Fluxo de trabalho diário
 
 ```
-1. Monitor de Frota  →  faça upload da planilha Sascar
+1. Monitor de Frota  →  faça upload da planilha Sascar OU clique "Buscar eventos agora"
+                        (Sascar: use o bookmarklet uma vez por turno para ativar a busca automática)
+                        (Maxtrack: configure e-mail e senha em Meu Perfil → Integrações)
 2. Aba Intervenção   →  ligue ou envie mensagem ao motorista
 3. Templates         →  copie o script de WhatsApp adequado
 4. Confirme a ação   →  "Inserir na planilha" registra o atendimento no Google Sheets
@@ -41,7 +43,7 @@ Abra o navegador e acesse **`[https://mednetplataform.vercel.app/]`**. Faça log
 | **Workspace** | Wiki interna da equipe: protocolos, configurações e procedimentos. |
 | **Bloco de Notas** | Notas pessoais (só você vê) ou compartilhadas com toda a equipe. |
 | **Links Rápidos** | Atalhos para sistemas externos usados no dia a dia. |
-| **Meu Perfil** | Edite seu nome, cargo e senha. |
+| **Meu Perfil** | Edite seu nome, cargo e senha. Configure integrações (Sascar bookmarklet, credenciais Maxtrack). |
 | **Administração** *(admin)* | Gerencie a equipe, convide operadores e ative/desative modo de manutenção. |
 | **Analytics** *(admin)* | Métricas de 30 dias: reincidentes, transportadoras e tendência de atendimentos. |
 
@@ -104,7 +106,7 @@ O Cross-Check compara relatórios de alertas de **duas plataformas diferentes** 
 |---|---|
 | Frontend | React 19, Vite 8, Recharts, TipTap, `vite-plugin-pwa` |
 | Backend | Supabase (Auth + Postgres + Realtime + Storage) |
-| Edge Functions | Deno — `append-sheet`, `invite-user` |
+| Edge Functions | Deno — `append-sheet`, `invite-user`, `pull-sascar`, `pull-maxtrack` |
 | Integração externa | Google Sheets (audit trail de atendimentos) |
 
 SPA sem roteamento de URL — navegação via `activePanel` no contexto global.
@@ -129,7 +131,7 @@ npm run dev
 
 ```
 src/
-├── App.jsx               # Shell principal, auth, painel ativo
+├── App.jsx               # Shell principal, auth, painel ativo, SascarTokenHandler
 ├── context.jsx           # AppProvider — UI state, fila, preferências
 ├── data.js               # Constantes (NAV_ITEMS, defaults)
 ├── auth/                 # AuthContext, LoginPage, SetPasswordPage
@@ -142,22 +144,25 @@ src/
     ├── base.js           # Contrato + emptyDriver/emptyStats
     ├── index.js          # Registry
     ├── shared/           # normalize, parsers, history
-    ├── sascar/           # Adapter ativo (spreadsheet)
+    ├── sascar/           # Adapter Sascar (spreadsheet + scraper)
+    ├── maxtrack/         # Adapter Maxtrack (scraper via Edge Function)
     └── _template/        # Esqueleto para novas plataformas
 
 supabase/
-├── migration*.sql
+├── migration*.sql        # v2..v10 — schemas e integrações
 └── functions/
-    ├── append-sheet/
-    └── invite-user/
+    ├── append-sheet/     # Append no Google Sheets
+    ├── invite-user/      # Convite de operadores
+    ├── pull-sascar/      # Busca automática de alarmes Sascar
+    └── pull-maxtrack/    # Busca automática de eventos Maxtrack
 ```
 
 ### Plataformas de monitoramento
 
 | Plataforma | Modo | Status |
 |---|---|---|
-| Sascar | spreadsheet | ✅ ativa |
-| Maxtrack | api / scraper | 🔄 candidata |
+| Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper beta |
+| Maxtrack | scraper (Edge Function + credenciais) | 🧪 beta |
 | Autotrack | a definir | 📋 planejada |
 | Trimble | a definir | 📋 planejada |
 | Cobli | a definir | 📋 planejada |

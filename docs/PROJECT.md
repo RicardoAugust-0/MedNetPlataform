@@ -15,8 +15,8 @@ agenda, base de conhecimento e administração da equipe.
 | Produto | SPA React/Vite com PWA |
 | Backend | Supabase (Auth + Postgres + Storage + Edge Functions) |
 | Integração externa | Google Sheets (compliance/audit trail) |
-| Plataformas de monitoramento atuais | **Sascar** (Michelin Smart Camera) |
-| Plataformas futuras (planejadas) | Maxtrack, Autotrack, Trimble, Cobli, Horizon |
+| Plataformas de monitoramento ativas | **Sascar** (Michelin Smart Camera) · **Maxtrack** (Telemetria + IA) |
+| Plataformas futuras (planejadas) | Autotrack, Trimble, Cobli, Horizon |
 
 A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
 `activePanel` no contexto global, alternando os painéis.
@@ -33,6 +33,8 @@ A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
 - **Edge Functions (Deno):**
   - `append-sheet`: registra atendimento em planilha Google.
   - `invite-user`: envia convite a novos operadores (apenas admin).
+  - `pull-sascar`: busca alarmes do dia via API Sascar usando token do operador (bookmarklet).
+  - `pull-maxtrack`: autentica no portal Maxtrack com credenciais do operador e busca eventos do dia em janelas de 15 min paralelas.
 - **Google Apps Script:** Webhook de backup que reaproveita o payload da
   `append-sheet`.
 
@@ -42,7 +44,7 @@ A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
 
 ```
 src/
-├── App.jsx               # Shell, autenticação, painel ativo, notifier de lembretes
+├── App.jsx               # Shell, autenticação, painel ativo, notifier, SascarTokenHandler
 ├── main.jsx              # Bootstrap React + providers globais
 ├── context.jsx           # AppProvider — UI state, fila, preferências, platformId
 ├── data.js               # Constantes estáticas (NAV, títulos, defaults, mocks)
@@ -68,19 +70,25 @@ src/
 │   │   ├── normalize.js
 │   │   ├── parsers.js
 │   │   └── history.js
-│   ├── sascar/           # Adapter Sascar (planilha)
-│   │   ├── index.js
-│   │   ├── columns.js
-│   │   └── parser.js
+│   ├── sascar/           # Adapter Sascar (spreadsheet + scraper)
+│   │   ├── index.js      # Metadata + blocos spreadsheet e scraper
+│   │   ├── columns.js    # Mapa de colunas e taxonomia
+│   │   └── parser.js     # Parser xlsx/csv comentado
+│   ├── maxtrack/         # Adapter Maxtrack (scraper)
+│   │   ├── index.js      # Metadata + bloco scraper (chama pull-maxtrack)
+│   │   ├── columns.js    # Categorias, severidades e taxonomia
+│   │   └── parser.js     # parseApiResponse — transforma resposta da Edge Function
 │   └── _template/        # Esqueleto para novas plataformas
 │       └── index.js
 └── styles/               # CSS tokens + layout + módulos
 
 supabase/
-├── migration*.sql        # Histórico de schemas (v2..v8 e workspace_images)
+├── migration*.sql        # Histórico de schemas (v2..v10, workspace_images)
 └── functions/
-    ├── append-sheet/index.ts
-    └── invite-user/index.ts
+    ├── append-sheet/index.ts   # Append Google Sheets
+    ├── invite-user/index.ts    # Convite de operadores
+    ├── pull-sascar/index.ts    # Busca automática Sascar (alarm/page)
+    └── pull-maxtrack/index.ts  # Busca automática Maxtrack (event/events/load)
 ```
 
 ---
@@ -209,6 +217,15 @@ e paleta de cor por link. Drag-reorder.
 ### 5.9. Meu Perfil (`modules/Profile.jsx`)
 Edita `nome`, `cargo` e senha. E-mail é read-only.
 
+**Seção Integrações** — configuração por operador das plataformas automáticas:
+
+| Integração | O que armazena | Como configurar |
+|---|---|---|
+| Sascar | `sascar_token` em `profiles` | Arrastar o **bookmarklet** até a barra de favoritos; clicar uma vez por turno após login no portal |
+| Maxtrack | `maxtrack_email` + `maxtrack_password` em `profiles` | Preencher e-mail e senha do portal Maxtrack no formulário |
+
+Senha Maxtrack nunca é carregada em estado React — gravada direto no Supabase via `service_role` e lida exclusivamente pela Edge Function `pull-maxtrack`. O token Sascar é enviado via URL hash (`#sascar-token=…`) pelo bookmarklet e capturado por `SascarTokenHandler` em `App.jsx`.
+
 ### 5.10. Administração (`modules/Admin.jsx`, admin-only)
 Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
 `invite-user`). Toggle de manutenção e edição de role/nome/cargo dos colegas.
@@ -294,7 +311,7 @@ clicar o favorito.
 
 | Finalidade | Endpoint |
 |---|---|
-| Enviar token ao MedNet | Edge Function `sascar-token` (POST) |
+| Salvar token no MedNet | Edge Function `pull-sascar` (o token é capturado via `#sascar-token=…` na URL e salvo por `SascarTokenHandler` em `profiles.sascar_token`) |
 | Renovar token | `POST /gateway/base-server-service/api/v1/user/refresh` |
 | Listar alarmes | `POST /gateway/report/shipper/alarm/page` |
 | Detalhes de evidências | `POST /gateway/report/shipper/evidence/by/alarm/list` |
@@ -302,13 +319,86 @@ clicar o favorito.
 > O login direto (`/gateway/base-server-service/api/v1/user/login`) **não é
 > usado** — é bloqueado por CAPTCHA server-side e não faz parte do fluxo.
 
+### Mapeamento de alarmes (Sascar API)
+
+A classificação usa `categoryInfoList[0].categoryId` (mais confiável que `alarmType`):
+
+| `categoryId` | Categoria MedNet |
+|---|---|
+| `100574` | INTERVENÇÃO (Fadiga) |
+| `100575` | REPORTAR (Distração / Comportamento) |
+| `100573` | TÉCNICO (câmera/vídeo) |
+
+Severidade via `levelInfo.levelId`:
+
+| `levelId` | Severidade |
+|---|---|
+| `15` | Gravíssimo |
+| `14` | Grave |
+| `13` | Normal |
+
+Velocidade: campo `speed` em **1/10 km/h** (ex: `620` → 62 km/h). Eventos com `speed < 100` (< 10 km/h) são filtrados.
+
+Turno em BRT: `((startTime_utcHour - 3) + 24) % 24` — diurno 06–18 h, noturno demais.
+
+Falsos positivos: **excluídos pelo servidor** via filtro `alarmLevelIds: '15,14,13'` no payload; `stats.falsosPositivos` sempre retorna 0.
+
+---
+
+## 5.14. Integração automática Maxtrack (Scraper)
+
+A Maxtrack é integrada via **scraper server-side** — sem bookmarklet. O operador cadastra suas credenciais uma única vez em **Meu Perfil → Integrações → Maxtrack** e o MedNet faz login automaticamente a cada busca.
+
+### Como funciona
+
+1. Operador salva e-mail e senha Maxtrack em **Meu Perfil → Integrações**.
+2. No Monitor, seleciona a aba Maxtrack e clica **"Buscar eventos"**.
+3. A Edge Function `pull-maxtrack` autentica em `POST /security/login` (sem CAPTCHA), extrai `PLAY_SESSION` cookie e `empresa.uid` (`cco`) da resposta.
+4. Divide o dia em **96 janelas de 15 minutos** e busca todas em paralelo (`Promise.all`) via `POST /event/events/load`.
+5. Deduplica eventos por `_id` (bordas de janelas adjacentes podem repetir).
+6. Devolve o payload ao adapter `maxtrack/parser.js` para transformação no formato canônico.
+
+### Por que janelas de 15 min?
+
+A API `/event/events/load` retorna no máximo ~30 eventos por chamada. Janelas de 15 min garantem que nenhuma janela estoure esse limite mesmo nos horários de pico.
+
+### Endpoints utilizados
+
+| Finalidade | Endpoint |
+|---|---|
+| Autenticação | `POST /security/login` |
+| Eventos do dia | `POST /event/events/load` |
+
+### Categorias de evento (Maxtrack)
+
+| `categoryId` | Categoria |
+|---|---|
+| `57` | Análise de Fadiga (Global) → INTERVENÇÃO |
+| `63` | Análise desatenção/fadiga (Global) → INTERVENÇÃO |
+
+Severidade via `criticalityLevel.id`:
+
+| `id` | Severidade |
+|---|---|
+| `4` | Gravíssimo |
+| `3` | Grave |
+| `2` | Normal (Médio) |
+
+### Modal de credenciais não configuradas
+
+Se o operador tentar buscar eventos Maxtrack sem ter configurado e-mail/senha, um **modal bloqueante** aparece redirecionando para Meu Perfil → Integrações. A busca não pode ser iniciada sem credenciais.
+
+### Sidebar badge
+
+Motoristas Maxtrack aparecem no badge de alertas da sidebar com limiar **≥ 8 alertas** (vs > 5 para Sascar), pois o volume de eventos Maxtrack tende a ser maior.
+
 ---
 
 ## 6. Modelo de dados (Supabase)
 
 | Tabela | Colunas principais | Observações |
 |---|---|---|
-| `profiles` | `id`, `nome`, `cargo`, `role`, `last_seen`, `created_at` | `role ∈ {operador, admin}` |
+| `profiles` | `id`, `nome`, `cargo`, `role`, `last_seen`, `created_at`, `maxtrack_email`, `maxtrack_password`, `sascar_token` | `role ∈ {operador, admin}` · credenciais lidas só via `service_role` |
 | `atendimentos` | `id`, `motorista`, `placa`, `transportadora`, `operador_id`, `operador_nome`, `tipo`, `obs`, `hora`, `created_at` | `tipo ∈ {intervencao, reportar, descarte, limpeza}` |
 | `templates` | `id`, `tag`, `tag_label`, `title`, `body`, `position`, `created_at` | — |
 | `notes` | `id`, `title`, `body`, `is_personal`, `author_id`, timestamps | `is_personal = true` ⇒ só o autor vê |
@@ -449,9 +539,9 @@ está ativo.
 A pasta `src/platforms/` introduz o padrão **Adapter** para encapsular cada
 plataforma de monitoramento. O contrato suporta três modos de ingestão:
 
-- `spreadsheet` (Sascar hoje): operador faz upload de xlsx/csv.
-- `api` (futuro): polling em endpoint REST.
-- `scraper` (futuro): scraping via Edge Function.
+- `spreadsheet` (Sascar): operador faz upload de xlsx/csv.
+- `scraper` (Sascar bookmarklet + Maxtrack): busca automática via Edge Function.
+- `api` (futuro): polling em endpoint REST com autenticação pública.
 
 O Monitor consulta o **registry** (`platforms/index.js`) para descobrir
 plataformas, exibe um seletor quando há mais de uma cadastrada, e despacha
@@ -496,10 +586,10 @@ npm run lint      # ESLint
 
 ## 17. Roadmap / Plataformas futuras
 
-| Plataforma | Modo provável | Status |
+| Plataforma | Modo | Status |
 |---|---|---|
-| Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper em beta |
-| Maxtrack | api ou scraper | 🔄 mais usada — primeira candidata |
+| Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper beta |
+| Maxtrack | scraper (credenciais por operador) | 🧪 beta |
 | Autotrack | a definir | 📋 planejada |
 | Trimble | a definir | 📋 planejada |
 | Cobli | a definir | 📋 planejada |

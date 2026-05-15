@@ -21,8 +21,7 @@ despachar parse/pull, sem precisar conhecer nenhum detalhe.
 | `api` | A plataforma tem API REST com credenciais. | O adapter expõe `api.pull(ctx)` — chamado em polling. |
 | `scraper` | Sem API; é preciso scrapear o portal. | O adapter expõe `scraper.pull(ctx)` que chama uma Edge Function dedicada. |
 
-Sascar é `spreadsheet` (modo padrão) e também suporta `scraper` via bookmarklet
-(modo beta). Maxtrack provavelmente será `api` (se houver credenciais) ou `scraper`.
+Sascar suporta `spreadsheet` (padrão) e `scraper` via bookmarklet (beta). Maxtrack usa `scraper` com credenciais por operador (beta).
 
 ### 1.2. Sascar — modo duplo (spreadsheet + scraper)
 
@@ -54,18 +53,39 @@ enviá-lo ao MedNet com um único clique em um favorito do navegador (bookmarkle
 O bookmarklet é exibido em **Meu Perfil → Integrações → Sascar** dentro do
 MedNet, pronto para arrastar até a barra de favoritos.
 
-#### Mapeamento de tipos de alarme (Sascar API)
+#### Mapeamento de alarmes (Sascar API)
 
-| `alarmType` | Evento (pt-BR) | Categoria MedNet |
-|---|---|---|
-| `56001` | Bocejo | INTERVENÇÃO |
-| `56003` | Olho Fechado | INTERVENÇÃO |
-| `56016` | Distração | INTERVENÇÃO |
-| `0` | Video Loss | TÉCNICO |
-| outros | — | REPORTAR |
+A classificação usa `categoryInfoList[0].categoryId` (campo mais estável que `alarmType`):
 
-> Os mapeamentos acima são a melhor estimativa atual e devem ser validados com
-> dados reais de produção antes de promover o modo scraper para `'active'`.
+| `categoryId` | Categoria MedNet |
+|---|---|
+| `100574` | INTERVENÇÃO (Fadiga) |
+| `100575` | REPORTAR (Distração / Comportamento) |
+| `100573` | TÉCNICO (câmera/vídeo) |
+
+Severidade via `levelInfo.levelId`:
+
+| `levelId` | Severidade |
+|---|---|
+| `15` | Gravíssimo |
+| `14` | Grave |
+| `13` | Normal |
+
+Velocidade: campo `speed` em **1/10 km/h** (620 → 62 km/h). Filtro: `speed < 100` (< 10 km/h) descarta o evento.
+
+Falsos positivos: excluídos pelo servidor via `alarmLevelIds: '15,14,13'` — `stats.falsosPositivos` sempre retorna 0.
+
+Nomes de evento (`alarmType` como fallback quando `categoryId` indisponível):
+
+| `alarmType` | Nome exibido |
+|---|---|
+| `56001` | Bocejo |
+| `56003` | Olho fechado |
+| `56016` | Distração Genérica |
+| `56002` | Sonolência |
+| `56004` | Comportamento indevido |
+| `56010` | Evento reportável |
+| `0` | Perda de vídeo |
 
 ---
 
@@ -258,6 +278,28 @@ A Edge Function correspondente deve:
 
 ---
 
+## 5.1. Maxtrack — implementação de referência (modo scraper com credenciais)
+
+A Maxtrack é a implementação de referência do modo `scraper` com credenciais por operador. Pode ser usada como modelo para plataformas similares.
+
+**Arquivos:**
+- `src/platforms/maxtrack/index.js` — `inputType: 'scraper'`, bloco `scraper.pull()` que chama `pull-maxtrack`
+- `src/platforms/maxtrack/columns.js` — `SEV_MAP`, `FATIGUE_CATEGORIES`, `CRITICALITY_LEVELS`, `TAXONOMY`
+- `src/platforms/maxtrack/parser.js` — `parseApiResponse(apiData, {history})`, usa `buildClearMap`/`isAfterClear`
+- `supabase/functions/pull-maxtrack/index.ts` — login, `buildWindows()`, `Promise.all()`, deduplicação por `_id`
+
+**Fluxo da Edge Function:**
+1. Autentica requisição MedNet (JWT do operador).
+2. Lê `maxtrack_email` + `maxtrack_password` de `profiles` via `service_role`.
+3. Faz `POST /security/login` no portal Maxtrack — extrai `PLAY_SESSION` cookie e `empresa.uid` (`cco`).
+4. Gera 96 janelas de 15 min cobrindo o dia BRT até agora.
+5. Busca todas as janelas em paralelo via `Promise.all`.
+6. Deduplica por `_id` e retorna `{ events, count }`.
+
+**Modal bloqueante:** se credenciais não configuradas, o Monitor exibe modal impedindo busca e redirecionando para **Meu Perfil → Integrações**.
+
+---
+
 ## 6. Formato canônico de saída
 
 Independente do modo, o parser/puller devolve:
@@ -367,10 +409,14 @@ src/platforms/
 │   ├── normalize.js        # normalize, containsAll
 │   ├── parsers.js          # parseSpeed, parseEventDate, parseTurno, maxSeveridade
 │   └── history.js          # buildClearMap, isAfterClear
-├── sascar/                 # Adapter de referência
-│   ├── index.js            # Metadata + bloco spreadsheet
+├── sascar/                 # Adapter de referência (spreadsheet + scraper)
+│   ├── index.js            # Metadata + blocos spreadsheet e scraper
 │   ├── columns.js          # Mapa de colunas e taxonomia
-│   └── parser.js           # Parser totalmente comentado
+│   └── parser.js           # Parser xlsx/csv totalmente comentado
+├── maxtrack/               # Adapter scraper (implementação real)
+│   ├── index.js            # Metadata + bloco scraper (chama pull-maxtrack)
+│   ├── columns.js          # Categorias, severidades e taxonomia Maxtrack
+│   └── parser.js           # parseApiResponse — transforma resposta da Edge Function
 └── _template/              # Esqueleto para copiar
     └── index.js
 ```
