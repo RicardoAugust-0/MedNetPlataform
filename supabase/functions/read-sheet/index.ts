@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     const allRows: SheetRow[] = [];
 
     for (const mes of meses) {
-      const range = `${mes}!A:P`;
+      const range = `${mes}!A:O`;
       const res = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`,
         { headers: { 'Authorization': `Bearer ${token}` } },
@@ -177,11 +177,11 @@ Deno.serve(async (req) => {
           classificacao:   cell(r, 7),
           realizado:       cell(r, 8),
           motivo:          cell(r, 9),
-          solicitadoPor:   cell(r, 11),
-          horaSolicitacao: cell(r, 12),
-          realizadoPor:    cell(r, 13),
-          horaRealizacao:  cell(r, 14),
-          justificativa:   cell(r, 15),
+          solicitadoPor:   cell(r, 10),
+          horaSolicitacao: cell(r, 11),
+          realizadoPor:    cell(r, 12),
+          horaRealizacao:  cell(r, 13),
+          justificativa:   cell(r, 14),
           _mes:            mes,
         });
       }
