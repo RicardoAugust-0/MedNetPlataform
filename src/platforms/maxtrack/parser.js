@@ -12,7 +12,6 @@
 
 import { normalize } from '../shared/normalize.js';
 import { parseSpeed, parseTurno, maxSeveridade } from '../shared/parsers.js';
-import { buildClearMap, isAfterClear } from '../shared/history.js';
 import { emptyDriver, emptyStats } from '../base.js';
 import {
   INTERVENCAO_EVENTOS,
@@ -28,10 +27,9 @@ function mapSeveridade(raw) {
   return SEV_MAP[raw] || 'Normal';
 }
 
-// Recebe o objeto { events: [...] } retornado pela Edge Function + contexto { history }.
-export function parseApiResponse(apiData, { history = [] } = {}) {
-  const clearMap = buildClearMap(history);
-  const events   = apiData?.events || [];
+// Recebe o objeto { events: [...] } retornado pela Edge Function pull-maxtrack.
+export function parseApiResponse(apiData) {
+  const events = apiData?.events || [];
 
   let filtradosPorVelocidade = 0;
 
@@ -79,24 +77,14 @@ export function parseApiResponse(apiData, { history = [] } = {}) {
     entry.turnos.push(eventDate ? parseTurno(eventDate) : 'diurno');
   });
 
-  let filtradosPorHistorico = 0;
-
   const drivers = Object.values(byPlaca).map((d) => {
     const isIntervencao = (e) => INTERVENCAO_NORM.includes(e._nomeNorm);
     const isTecnico     = (e) => TECNICO_NORM.includes(e._nomeNorm);
     const isReportar    = (e) => !isIntervencao(e) && !isTecnico(e);
 
-    const clear = clearMap[d.placa] || {};
-
-    const evIntervencaoRaw = d.eventos.filter(isIntervencao);
-    const evIntervencao    = evIntervencaoRaw.filter((e) => isAfterClear(e._eventDate, clear.lastIntervencao));
-    filtradosPorHistorico += evIntervencaoRaw.length - evIntervencao.length;
-
-    const evReportarRaw = d.eventos.filter(isReportar);
-    const evReportar    = evReportarRaw.filter((e) => isAfterClear(e._eventDate, clear.lastReportar));
-    filtradosPorHistorico += evReportarRaw.length - evReportar.length;
-
-    const evTecnico = d.eventos.filter(isTecnico);
+    const evIntervencao = d.eventos.filter(isIntervencao);
+    const evReportar    = d.eventos.filter(isReportar);
+    const evTecnico     = d.eventos.filter(isTecnico);
 
     const tiposIntervencao = [...new Set(evIntervencao.map((e) => e._nome))];
     const tiposReportar    = [...new Set(evReportar.map((e) => e._nome))];
@@ -156,7 +144,7 @@ export function parseApiResponse(apiData, { history = [] } = {}) {
     soTecnico:              drivers.filter((d) => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos:           valid.length,
     filtradosPorVelocidade,
-    filtradosPorHistorico,
+    filtradosPorHistorico:  0,
   };
 
   return { drivers, stats };

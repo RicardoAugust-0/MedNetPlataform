@@ -37,3 +37,65 @@ export function isAfterClear(eventDate, clearAt) {
   if (!eventDate) return true;
   return eventDate > clearAt;
 }
+
+// Aplica o filtro de histórico sobre um array de drivers no formato canônico.
+// Deve ser chamado pelo Monitor após receber dados de qualquer plataforma —
+// os adaptadores NÃO devem mais fazer esse filtro internamente.
+//
+// Quando o driver tem eventosDetalhados, usa filtro granular (por evento individual).
+// Quando não tem, usa filtro conservador (por bucket — zera o bucket se o evento
+// mais recente for anterior ao último atendimento).
+//
+// Retorna { drivers, filtradosPorHistorico }.
+export function applyHistoryFilter(drivers, history) {
+  const clearMap = buildClearMap(history);
+  let filtradosPorHistorico = 0;
+  const maxTs = arr => {
+    const times = arr.map(e => e.ts?.getTime()).filter(Boolean);
+    return times.length ? new Date(Math.max(...times)) : null;
+  };
+
+  const filtered = drivers.map(d => {
+    const clear = clearMap[d.placa] || {};
+    let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar } = d;
+
+    let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
+      ...e, ts: e.ts ? new Date(e.ts) : null,
+    }));
+
+    if (eventosDetalhados.length > 0) {
+      // Filtro granular: cada evento tem seu próprio timestamp
+      const evI = eventosDetalhados.filter(e => e.bucket === 'intervencao' && isAfterClear(e.ts, clear.lastIntervencao));
+      const evR = eventosDetalhados.filter(e => e.bucket === 'reportar'    && isAfterClear(e.ts, clear.lastReportar));
+      const evT = eventosDetalhados.filter(e => e.bucket === 'tecnico');
+
+      filtradosPorHistorico +=
+        eventosDetalhados.filter(e => e.bucket === 'intervencao').length - evI.length +
+        eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length;
+
+      alertas              = evI.length;
+      tipos                = [...new Set(evI.map(e => e.tipo))];
+      ultimoEvento         = maxTs(evI);
+      reportaveis          = evR.length;
+      tiposReportar        = [...new Set(evR.map(e => e.tipo))];
+      ultimoEventoReportar = maxTs(evR);
+      eventosDetalhados    = [...evI, ...evR, ...evT];
+    } else {
+      // Filtro conservador: usa o timestamp mais recente do bucket
+      const uE  = ultimoEvento         ? new Date(ultimoEvento)         : null;
+      const uER = ultimoEventoReportar  ? new Date(ultimoEventoReportar) : null;
+      if (!isAfterClear(uE, clear.lastIntervencao)) {
+        filtradosPorHistorico += alertas;
+        alertas = 0; tipos = []; ultimoEvento = null;
+      }
+      if (!isAfterClear(uER, clear.lastReportar)) {
+        filtradosPorHistorico += reportaveis;
+        reportaveis = 0; tiposReportar = []; ultimoEventoReportar = null;
+      }
+    }
+
+    return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
+  }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
+
+  return { drivers: filtered, filtradosPorHistorico };
+}

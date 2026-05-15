@@ -8,8 +8,9 @@
 import { TAXONOMY, DINON_CARRIERS_NORM } from './columns.js';
 import { parse, detect } from './parser.js';
 import { supabase } from '../../supabase.js';
-import { buildClearMap, isAfterClear } from '../shared/history.js';
 import { normalize } from '../shared/normalize.js';
+
+const isFumo = tipo => /\bfum(o|ando|ante|ar)\b/i.test(tipo);
 
 const sascar = {
   // ── Metadata ──
@@ -40,7 +41,7 @@ const sascar = {
   // ── Modo scraper (busca automática via bookmarklet + Edge Function) ──
   // Requer token configurado em Meu Perfil → Integrações → Sascar.
   scraper: {
-    async pull({ history = [] } = {}) {
+    async pull() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
@@ -62,68 +63,32 @@ const sascar = {
         throw err;
       }
 
-      const rawDrivers = data.drivers || [];
-      const rawStats   = data.stats   || {};
-
-      // Filtra eventos já atendidos com base no histórico de 90 dias.
-      // Compara o último evento de cada bucket com o último atendimento registrado
-      // para a mesma placa — se todos os eventos são anteriores ao atendimento,
-      // o bucket é zerado (mesmo comportamento do parser de planilha).
-      const clearMap = buildClearMap(history);
-      let filtradosPorHistorico = 0;
-
-      const drivers = rawDrivers.map(d => {
-        const clear = clearMap[d.placa] || {};
-        const uE  = d.ultimoEvento         ? new Date(d.ultimoEvento)         : null;
-        const uER = d.ultimoEventoReportar  ? new Date(d.ultimoEventoReportar) : null;
-
-        let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar } = d;
-        let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
-          ...e, ts: e.ts ? new Date(e.ts) : null,
-        }));
-
-        if (!isAfterClear(uE, clear.lastIntervencao)) {
-          filtradosPorHistorico += alertas;
-          alertas = 0; tipos = []; ultimoEvento = null;
-          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'intervencao');
-        }
-        if (!isAfterClear(uER, clear.lastReportar)) {
-          filtradosPorHistorico += reportaveis;
-          reportaveis = 0; tiposReportar = []; ultimoEventoReportar = null;
-          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'reportar');
-        }
-
-        return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
-      }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
-
-      // Regra Dinon: auto-descarte de eventos de fumo para transportadoras Dinon.
-      // Mesmo comportamento aplicado pelo parser de planilha.
-      const isFumo = tipo => /\bfum(o|ando|ante|ar)\b/i.test(tipo);
-      const autoDescartes = [];
-      const driversPos = drivers.map(d => {
-        const tNorm = normalize(d.transportadora || '');
-        if (!DINON_CARRIERS_NORM.some(n => tNorm.includes(n))) return d;
-        const fumoEvs = (d.eventosDetalhados || []).filter(e => e.bucket === 'reportar' && isFumo(e.tipo));
-        if (fumoEvs.length === 0) return d;
-        autoDescartes.push({ nome: d.nome, placa: d.placa, transportadora: d.transportadora, count: fumoEvs.length, motivo: 'Regra Dinon · eventos de fumo' });
-        const reportaveis = Math.max(0, d.reportaveis - fumoEvs.length);
-        const tiposReportar = (d.tiposReportar || []).filter(t => !isFumo(t));
-        const eventosDetalhados = (d.eventosDetalhados || []).filter(e => !(e.bucket === 'reportar' && isFumo(e.tipo)));
-        return { ...d, reportaveis, tiposReportar, eventosDetalhados };
-      }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
-
-      const stats = {
-        ...rawStats,
-        total:           driversPos.length,
-        comIntervencao:  driversPos.filter(d => d.alertas > 0).length,
-        soReportar:      driversPos.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
-        soTecnico:       driversPos.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
-        filtradosPorHistorico,
-        autoDescartes,
-      };
-
-      return { drivers: driversPos, stats };
+      return { drivers: data.drivers || [], stats: data.stats || {} };
     },
+  },
+
+  // ── Regra Dinon: auto-descarte de eventos de fumo para transportadoras Dinon.
+  // Chamado pelo Monitor após o filtro de histórico, antes de exibir a fila.
+  postProcess(drivers) {
+    const autoDescartes = [];
+    const result = drivers.map(d => {
+      const tNorm = normalize(d.transportadora || '');
+      if (!DINON_CARRIERS_NORM.some(n => tNorm.includes(n))) return d;
+
+      const fumoEvs = (d.eventosDetalhados || []).filter(e => e.bucket === 'reportar' && isFumo(e.tipo));
+      if (fumoEvs.length === 0) return d;
+
+      autoDescartes.push({
+        nome: d.nome, placa: d.placa, transportadora: d.transportadora,
+        count: fumoEvs.length, motivo: 'Regra Dinon · eventos de fumo',
+      });
+      const reportaveis      = Math.max(0, d.reportaveis - fumoEvs.length);
+      const tiposReportar    = (d.tiposReportar || []).filter(t => !isFumo(t));
+      const eventosDetalhados = (d.eventosDetalhados || []).filter(e => !(e.bucket === 'reportar' && isFumo(e.tipo)));
+      return { ...d, reportaveis, tiposReportar, eventosDetalhados };
+    }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
+
+    return { drivers: result, autoDescartes };
   },
 };
 

@@ -29,7 +29,7 @@ const maxtrack = {
 
   // ── Modo scraper ──
   scraper: {
-    async pull({ history = [] } = {}) {
+    async pull() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
@@ -50,7 +50,7 @@ const maxtrack = {
       }
 
       const apiData = await res.json();
-      return parseApiResponse(apiData, { history });
+      return parseApiResponse(apiData);
     },
   },
 };

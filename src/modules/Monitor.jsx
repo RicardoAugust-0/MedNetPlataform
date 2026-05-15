@@ -6,6 +6,7 @@ import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPlatform, listPlatforms } from '../platforms';
+import { applyHistoryFilter } from '../platforms/shared/history.js';
 
 // Monitor Subcomponents
 import { EmptyState, applyTemplate } from './monitor/utils';
@@ -19,6 +20,19 @@ import { useSheetHistory } from '../hooks/useSheetHistory.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+// Reconstrói os campos derivados de stats após filtro de histórico e postProcess.
+function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes) {
+  return {
+    ...rawStats,
+    total:                 drivers.length,
+    comIntervencao:        drivers.filter(d => d.alertas > 0).length,
+    soReportar:            drivers.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
+    soTecnico:             drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
+    filtradosPorHistorico,
+    autoDescartes,
+  };
+}
 
 /* ── Google Sheets via Supabase Edge Function ── */
 async function postToSheets(payload, accessToken) {
@@ -221,7 +235,12 @@ export default function Monitor() {
         try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch {}
       }
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: newDrivers, stats } = await platform.spreadsheet.parse(file, { history: filterHistory });
+      const { drivers: rawDrivers, stats: rawStats } = await platform.spreadsheet.parse(file);
+      const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
+      const postProcessed = platform.postProcess?.(histFiltered);
+      const newDrivers    = postProcessed?.drivers    ?? histFiltered;
+      const autoDescartes = postProcessed?.autoDescartes ?? [];
+      const stats = recomputeStats(rawStats, newDrivers, filtradosPorHistorico, autoDescartes);
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
       const existingPlacas = new Set(drivers.map(d => d.placa));
@@ -272,7 +291,12 @@ export default function Monitor() {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Buscando eventos em ${platform.name}…`);
     try {
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: newDrivers, stats } = await platform.scraper.pull({ history: filterHistory });
+      const { drivers: rawDrivers, stats: rawStats } = await platform.scraper.pull();
+      const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
+      const postProcessed = platform.postProcess?.(histFiltered);
+      const newDrivers    = postProcessed?.drivers    ?? histFiltered;
+      const autoDescartes = postProcessed?.autoDescartes ?? [];
+      const stats = recomputeStats(rawStats, newDrivers, filtradosPorHistorico, autoDescartes);
       const loadedAt = new Date().toISOString();
       const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
       const existingPlacas = new Set(drivers.map(d => d.placa));
