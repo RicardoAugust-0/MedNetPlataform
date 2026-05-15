@@ -426,16 +426,56 @@ export default function Monitor() {
                : activeTab === 'reportar'    ? reportarList
                : activeTab === 'tecnicos'    ? tecList : [];
     if (list.length === 0) return;
+
+    // Ponto e vírgula como separador para abrir corretamente no Excel/LibreOffice
+    // com locale pt-BR (onde a vírgula é separador decimal).
+    const SEP = ';';
     const esc = v => { const s = String(v ?? ''); return `"${s.replace(/"/g, '""')}"`; };
-    const header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento'];
-    const rows = list.map(d => {
-      const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
-      const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
-                  : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
-                  : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
-      return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos].map(esc).join(',');
-    });
-    const csv = [header.map(esc).join(','), ...rows].join('\r\n');
+
+    const fmtDate = (d) => {
+      if (!d) return '';
+      const dt = d instanceof Date ? d : new Date(d);
+      if (isNaN(dt.getTime())) return '';
+      return dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+
+    const bucketAtivo = activeTab === 'intervencao' ? 'intervencao'
+                      : activeTab === 'reportar'    ? 'reportar'
+                      : 'tecnico';
+
+    // Se qualquer driver tiver eventosDetalhados, exporta uma linha por evento.
+    // Caso contrário (plataforma sem suporte) cai no resumo por motorista.
+    const temDetalhados = list.some(d => d.eventosDetalhados?.length > 0);
+
+    let header, rows;
+    if (temDetalhados) {
+      header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade do Motorista', 'Tipo de Evento', 'Categoria', 'Severidade do Evento', 'Data/Hora'];
+      rows = list.flatMap(d => {
+        const eventos = (d.eventosDetalhados || []).filter(e => e.bucket === bucketAtivo);
+        if (eventos.length === 0) return [];
+        return eventos
+          .slice()
+          .sort((a, b) => (a.ts ? new Date(a.ts) : 0) - (b.ts ? new Date(b.ts) : 0))
+          .map(e => [
+            d.nome, d.placa, d.transportadora, d.turno, d.severidade,
+            e.tipo, e.bucket, e.severidade, fmtDate(e.ts),
+          ].map(esc).join(SEP));
+      });
+    } else {
+      header = ['Nome', 'Placa', 'Transportadora', 'Turno', 'Severidade', 'Qtd. Eventos', 'Tipos de Evento', 'Último Evento'];
+      rows = list.map(d => {
+        const count = activeTab === 'intervencao' ? d.alertas : activeTab === 'reportar' ? d.reportaveis : d.tecnicos;
+        const tipos = activeTab === 'intervencao' ? (d.tipos?.join(', ') || '')
+                    : activeTab === 'reportar'    ? (d.tiposReportar?.join(', ') || '')
+                    : Object.entries(d.tiposTecnico || {}).map(([t, n]) => `${t} (${n})`).join(', ');
+        const ultimoEvt = activeTab === 'intervencao' ? fmtDate(d.ultimoEvento)
+                        : activeTab === 'reportar'    ? fmtDate(d.ultimoEventoReportar)
+                        : '';
+        return [d.nome, d.placa, d.transportadora, d.turno, d.severidade, count, tipos, ultimoEvt].map(esc).join(SEP);
+      });
+    }
+
+    const csv = [header.map(esc).join(SEP), ...rows].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `monitor-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -533,7 +573,7 @@ export default function Monitor() {
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
-        hasSascarToken={!!profile?.sascar_token && !!profile?.sascar_token_saved_at && (Date.now() - new Date(profile.sascar_token_saved_at).getTime()) < 30 * 60 * 1000} setActivePanel={setActivePanel}
+        hasSascarToken={!!profile?.sascar_token} setActivePanel={setActivePanel}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
       />
