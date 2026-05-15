@@ -116,19 +116,24 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
   return all;
 }
 
-// handleStatus: 0 = pendente, 1 = confirmado, 2 = falso positivo
+// handleStatus: 0 = pendente (exibir), 1 = já tratado na plataforma (filtrar), 2 = falso positivo (filtrar)
 function isFalsoPositivo(a: Record<string, unknown>): boolean {
   return a.handleStatus === 2 || a.handleStatus === '2';
+}
+function isJaTratado(a: Record<string, unknown>): boolean {
+  return a.handleStatus === 1 || a.handleStatus === '1';
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
   const MIN_SPEED_KMH = 10;
 
-  // Filtra falsos positivos antes de qualquer outro processamento.
+  // Filtra falsos positivos e eventos já tratados na plataforma.
   let falsosPositivos = 0;
+  let jaTratados = 0;
   const semFP = alarms.filter(a => {
     if (isFalsoPositivo(a)) { falsosPositivos++; return false; }
+    if (isJaTratado(a))     { jaTratados++;      return false; }
     return true;
   });
 
@@ -235,6 +240,7 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     soTecnico:              drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos:           valid.length,
     falsosPositivos,
+    jaTratados,
     filtradosPorVelocidade,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
