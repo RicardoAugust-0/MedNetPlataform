@@ -41,7 +41,7 @@ const sascar = {
   // ── Modo scraper (busca automática via bookmarklet + Edge Function) ──
   // Requer token configurado em Meu Perfil → Integrações → Sascar.
   scraper: {
-    async pull({ history = [] } = {}) {
+    async pull() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
@@ -63,50 +63,7 @@ const sascar = {
         throw err;
       }
 
-      const rawDrivers = data.drivers || [];
-      const rawStats   = data.stats   || {};
-
-      // Filtra eventos já atendidos com base no histórico de 90 dias.
-      // Compara o último evento de cada bucket com o último atendimento registrado
-      // para a mesma placa — se todos os eventos são anteriores ao atendimento,
-      // o bucket é zerado (mesmo comportamento do parser de planilha).
-      const clearMap = buildClearMap(history);
-      let filtradosPorHistorico = 0;
-
-      const drivers = rawDrivers.map(d => {
-        const clear = clearMap[d.placa] || {};
-        const uE  = d.ultimoEvento         ? new Date(d.ultimoEvento)         : null;
-        const uER = d.ultimoEventoReportar  ? new Date(d.ultimoEventoReportar) : null;
-
-        let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar } = d;
-        let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
-          ...e, ts: e.ts ? new Date(e.ts) : null,
-        }));
-
-        if (!isAfterClear(uE, clear.lastIntervencao)) {
-          filtradosPorHistorico += alertas;
-          alertas = 0; tipos = []; ultimoEvento = null;
-          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'intervencao');
-        }
-        if (!isAfterClear(uER, clear.lastReportar)) {
-          filtradosPorHistorico += reportaveis;
-          reportaveis = 0; tiposReportar = []; ultimoEventoReportar = null;
-          eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'reportar');
-        }
-
-        return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
-      }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
-
-      const stats = {
-        ...rawStats,
-        total:           drivers.length,
-        comIntervencao:  drivers.filter(d => d.alertas > 0).length,
-        soReportar:      drivers.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
-        soTecnico:       drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
-        filtradosPorHistorico,
-      };
-
-      return { drivers, stats };
+      return { drivers: data.drivers || [], stats: data.stats || {} };
     },
   },
 
