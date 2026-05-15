@@ -239,10 +239,14 @@ function MaxtrackSection({ profile, session, updateProfile }) {
     if (!email.trim()) { setMsg({ type: 'error', text: 'Informe o e-mail Maxtrack.' }); return; }
     if (!senha.trim()) { setMsg({ type: 'error', text: 'Informe a senha Maxtrack.' }); return; }
     setLoading(true); setMsg(null);
-    const { error } = await supabase
+    const { error: emailError } = await supabase
       .from('profiles')
-      .update({ maxtrack_email: email.trim(), maxtrack_password: senha })
+      .update({ maxtrack_email: email.trim() })
       .eq('id', session?.user?.id);
+    const { error: passError } = await supabase
+      .from('profile_credentials')
+      .upsert({ id: session?.user?.id, maxtrack_password: senha, updated_at: new Date().toISOString() });
+    const error = emailError || passError;
     if (error) {
       setMsg({ type: 'error', text: error.message });
     } else {
@@ -256,11 +260,15 @@ function MaxtrackSection({ profile, session, updateProfile }) {
   const handleRemove = async () => {
     if (!window.confirm('Remover credenciais Maxtrack?')) return;
     setLoading(true); setMsg(null);
-    const { error } = await supabase
+    const { error: emailError } = await supabase
       .from('profiles')
-      .update({ maxtrack_email: null, maxtrack_password: null })
+      .update({ maxtrack_email: null })
       .eq('id', session?.user?.id);
-    if (!error) {
+    const { error: passError } = await supabase
+      .from('profile_credentials')
+      .delete()
+      .eq('id', session?.user?.id);
+    if (!emailError && !passError) {
       updateProfile({ maxtrack_email: '' });
       setEmail(''); setSenha('');
       setMsg({ type: 'success', text: 'Credenciais removidas.' });
