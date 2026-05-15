@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as XLSX from 'xlsx';
 import { parse } from './parser.js';
+import { applyHistoryFilter } from '../shared/history.js';
 
 // node >= 20 ships File globally; vitest's default environment is node, which
 // lacks FileReader. We polyfill the minimal surface used by parse().
@@ -129,9 +130,10 @@ describe('Sascar parser · parse() integration', () => {
     const clearISO = new Date(local0900.getTime() + 60 * 60 * 1000).toISOString(); // 10h local
     history[0].created_at = clearISO;
 
-    const { drivers, stats } = await parse(file, { history });
+    const { drivers: raw } = await parse(file);
+    const { drivers, filtradosPorHistorico } = applyHistoryFilter(raw, history);
     expect(drivers[0].alertas).toBe(1); // só o de 11h
-    expect(stats.filtradosPorHistorico).toBe(1);
+    expect(filtradosPorHistorico).toBe(1);
     // sanity check para evitar warning de unused-var em alguns linters
     expect(local1100).toBeInstanceOf(Date);
   });

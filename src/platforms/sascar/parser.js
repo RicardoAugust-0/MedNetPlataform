@@ -176,12 +176,6 @@ export async function parse(file) {
             ...evTecnico.map(e     => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'tecnico',     severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
           ];
 
-          const eventosDetalhados = [
-            ...evIntervencao.map(e  => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'intervencao', severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
-            ...evReportarFinal.map(e => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'reportar',    severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
-            ...evTecnico.map(e       => ({ tipo: e[COLUMNS.evento] || '—', bucket: 'tecnico',     severidade: e[COLUMNS.severidade] || '', ts: e._eventDate })),
-          ];
-
           return {
             nome:                 d.nome || d.placa,
             placa:                d.placa,
