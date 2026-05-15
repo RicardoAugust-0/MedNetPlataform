@@ -236,6 +236,18 @@
   color: var(--text-muted);
 }
 
+/* Maxtrack auto-fetch option */
+.cc-maxtrack-fetch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cc-maxtrack-or {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 /* File loaded state */
 .cc-file-loaded {
   display: flex;

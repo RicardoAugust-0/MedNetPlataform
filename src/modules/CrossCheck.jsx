@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../hooks/useToast.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { supabase } from '../supabase.js';
 import {
   normalizeText,
   normalizePlate,
@@ -24,7 +26,38 @@ const slimEv = ev => ({
   dateRaw:           ev.dateRaw           || '',
 });
 
-function UploadPanel({ label, sublabel, meta, transportadora, onTranspChange, inputKey, onUpload, onDrop, onRemove, accent, loading }) {
+// Transforma eventos brutos da API Maxtrack no formato flat do CrossCheck.
+function transformMaxtrackEvents(rawEvents) {
+  return rawEvents
+    .filter(ev => {
+      const speed = parseFloat(ev.speed);
+      return isNaN(speed) || speed >= 10;
+    })
+    .filter(ev => ev.identifier)
+    .map(ev => {
+      const plateRaw   = String(ev.identifier || '');
+      const driverRaw  = ev.driver?.name || '';
+      const carrierRaw = ev.company?.name || '';
+      const eventName  = ev.event?.name || '';
+      const sevRaw     = ev.event?.criticalityLevel?.name || '';
+      const startDate  = ev.startDate ? new Date(ev.startDate * 1000) : null;
+      return {
+        plate:            normalizePlate(plateRaw),
+        plateRaw,
+        driver:           normalizeText(driverRaw),
+        driverRaw,
+        severityRaw:      sevRaw || eventName,
+        critical:         isCriticalLabel(sevRaw),
+        transportadora:   normalizeText(carrierRaw),
+        transportadoraRaw: carrierRaw,
+        carrierSource:    carrierRaw ? 'file' : '',
+        dateRaw:          startDate ? startDate.toLocaleString('pt-BR') : '',
+        dateValue:        startDate,
+      };
+    });
+}
+
+function UploadPanel({ label, sublabel, meta, transportadora, onTranspChange, inputKey, onUpload, onDrop, onRemove, accent, loading, onFetchMaxtrack }) {
   return (
     <div className="cc-upload-panel">
       <div className="cc-upload-panel-header">
@@ -47,21 +80,31 @@ function UploadPanel({ label, sublabel, meta, transportadora, onTranspChange, in
       </div>
 
       {!meta?.name ? (
-        <label
-          className="cc-dropzone"
-          onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
-          onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
-          onDrop={onDrop}
-        >
-          <div className="cc-dropzone-icon">
-            <i className={loading ? 'ti ti-loader-2 cc-spin' : 'ti ti-cloud-upload'}></i>
-          </div>
-          <div className="cc-dropzone-text">
-            <span className="cc-dropzone-title">{loading ? 'Lendo arquivo…' : 'Arraste ou clique para selecionar'}</span>
-            <span className="cc-dropzone-hint">.xlsx · .xls · .csv</span>
-          </div>
-          <input key={inputKey} type="file" accept=".csv,.xls,.xlsx" hidden disabled={loading} onChange={onUpload} />
-        </label>
+        <>
+          <label
+            className="cc-dropzone"
+            onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+            onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
+            onDrop={onDrop}
+          >
+            <div className="cc-dropzone-icon">
+              <i className={loading ? 'ti ti-loader-2 cc-spin' : 'ti ti-cloud-upload'}></i>
+            </div>
+            <div className="cc-dropzone-text">
+              <span className="cc-dropzone-title">{loading ? 'Buscando dados…' : 'Arraste ou clique para selecionar'}</span>
+              <span className="cc-dropzone-hint">.xlsx · .xls · .csv</span>
+            </div>
+            <input key={inputKey} type="file" accept=".csv,.xls,.xlsx" hidden disabled={loading} onChange={onUpload} />
+          </label>
+          {onFetchMaxtrack && (
+            <div className="cc-maxtrack-fetch">
+              <span className="cc-maxtrack-or">ou</span>
+              <button type="button" className="btn btn-sm" onClick={onFetchMaxtrack} disabled={loading}>
+                <i className="ti ti-cloud-download"></i> Buscar da Maxtrack
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <div className="cc-file-loaded">
           <div className="cc-file-icon"><i className="ti ti-file-spreadsheet"></i></div>
@@ -134,6 +177,7 @@ function TransportadorasView({ data }) {
 
 export default function CrossCheck() {
   const toast = useToast();
+  const { profile } = useAuth();
 
   const [leftEvents,   setLeftEvents]   = useState([]);
   const [rightEvents,  setRightEvents]  = useState([]);
@@ -399,6 +443,55 @@ export default function CrossCheck() {
     if (file) handleFile(file, side);
   }
 
+  async function handleFetchMaxtrack(side) {
+    if (!profile?.maxtrack_email) {
+      toast('Configure suas credenciais Maxtrack em Meu Perfil → Integrações para usar essa função.', 'info');
+      return;
+    }
+    setLoadingSide(side);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pull-maxtrack`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ao buscar dados Maxtrack: HTTP ${res.status}`);
+      }
+
+      const apiData = await res.json();
+      const events  = transformMaxtrackEvents(apiData?.events || []);
+
+      if (events.length === 0) {
+        toast('Nenhum evento encontrado na Maxtrack no momento.', 'info');
+        return;
+      }
+
+      const meta = { name: 'Maxtrack (hoje)', rows: events.length, loadedAt: new Date().toISOString() };
+      if (side === 'left') {
+        setLeftEvents(events); setLeftMeta(meta);
+        computeMatches(events, rightEvents);
+      } else {
+        setRightEvents(events); setRightMeta(meta);
+        computeMatches(leftEvents, events);
+      }
+    } catch (err) {
+      toast(err.message || 'Erro ao buscar dados da Maxtrack.', 'error');
+    } finally {
+      setLoadingSide(null);
+    }
+  }
+
   function computeMatches(left, right, options = {}) {
     const { silent = false } = options;
     const L = left  ?? leftEvents;
@@ -624,6 +717,7 @@ export default function CrossCheck() {
             onRemove={() => clearSide('left')}
             accent="var(--accent-500)"
             loading={loadingSide === 'left'}
+            onFetchMaxtrack={profile?.maxtrack_email ? () => handleFetchMaxtrack('left') : null}
           />
           <div className="cc-upload-divider">
             <div className="cc-swap-btn" title="Trocar lados" onClick={swapSides}>
@@ -642,6 +736,7 @@ export default function CrossCheck() {
             onRemove={() => clearSide('right')}
             accent="var(--info-500)"
             loading={loadingSide === 'right'}
+            onFetchMaxtrack={profile?.maxtrack_email ? () => handleFetchMaxtrack('right') : null}
           />
         </div>
       </div>
