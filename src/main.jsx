@@ -10,6 +10,7 @@ import 'virtual:pwa-register';
 import './styles/tokens.css';
 import './styles/layout.css';
 import './styles/modules.css';
+import './styles/crosscheck.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
