@@ -116,36 +116,29 @@ async function fetchAllAlarms(token: string): Promise<Record<string, unknown>[]>
   return all;
 }
 
-// handleStatus: 0 = pendente (exibir), 1 = já tratado na plataforma (filtrar), 2 = falso positivo (filtrar)
-// Eventos técnicos (categoryId=100573) são isentos do filtro jaTratados — falhas de câmera
-// podem ser auto-processadas na plataforma mas ainda precisam ser monitoradas.
+// handleStatus: 0 = pendente, 1 = já tratado na plataforma, 2 = falso positivo
+// Apenas falsos positivos são removidos, igual ao comportamento da planilha exportada.
 function isFalsoPositivo(a: Record<string, unknown>): boolean {
   return a.handleStatus === 2 || a.handleStatus === '2';
-}
-function isJaTratado(a: Record<string, unknown>): boolean {
-  if (a.handleStatus !== 1 && a.handleStatus !== '1') return false;
-  const catList = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
-  const catId   = Number(catList[0]?.categoryId ?? 0);
-  return catId !== 100573; // técnicos sempre exibidos
 }
 
 function parseAlarms(alarms: Record<string, unknown>[]) {
   const SEV_LEVEL: Record<number, string> = { 15: 'Gravíssimo', 14: 'Grave', 13: 'Normal' };
   const MIN_SPEED_KMH = 10;
 
-  // Filtra falsos positivos e eventos já tratados na plataforma.
+  // Filtra falsos positivos — igual ao filtro Status="Falso positivo" da planilha.
   let falsosPositivos = 0;
-  let jaTratados = 0;
   const semFP = alarms.filter(a => {
     if (isFalsoPositivo(a)) { falsosPositivos++; return false; }
-    if (isJaTratado(a))     { jaTratados++;      return false; }
     return true;
   });
 
   // Velocidade: speed vem em 1/10 km/h (ex: 620 = 62 km/h).
+  // Só filtra quando o campo está presente, igual à planilha (sem campo = sem filtro).
   let filtradosPorVelocidade = 0;
   const valid = semFP.filter(a => {
-    const speedKmh = Number(a.speed ?? 0) / 10;
+    if (a.speed == null) return true;
+    const speedKmh = Number(a.speed) / 10;
     if (speedKmh < MIN_SPEED_KMH) { filtradosPorVelocidade++; return false; }
     return true;
   });
@@ -245,7 +238,6 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     soTecnico:              drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos:           valid.length,
     falsosPositivos,
-    jaTratados,
     filtradosPorVelocidade,
     filtradosPorHistorico:  0,
     autoDescartes:          [],
