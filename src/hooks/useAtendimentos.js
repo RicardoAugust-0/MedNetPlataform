@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from './useToast.jsx';
 
-const PAGE_SIZE = 300;
+const PAGE_SIZE = 1000;
 
 export function useAtendimentos() {
   const { profile } = useAuth();

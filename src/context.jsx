@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react';
+import { useDriversQueue } from './hooks/useDriversQueue';
 
 function load(k, fb) {
   try { const v = localStorage.getItem('mn_' + k); return v ? JSON.parse(v) : fb; } catch { return fb; }
@@ -11,8 +12,7 @@ const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
   const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
-  const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
-  const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
+  const { drivers, loading: driversLoading, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
@@ -39,7 +39,8 @@ export function AppProvider({ children }) {
   return (
     <Ctx.Provider value={{
       activePanel, setActivePanel,
-      drivers, setDrivers,
+      drivers, driversLoading,
+      replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
       filters, setFilters,
       platformId, setPlatformId,
       theme, setTheme,

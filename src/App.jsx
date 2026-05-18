@@ -12,7 +12,6 @@ import MaintenancePage from "./components/MaintenancePage.jsx";
 import Profile from "./modules/Profile.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Topbar from "./components/Topbar.jsx";
-import TweaksPanel from "./components/TweaksPanel.jsx";
 import Dashboard from "./modules/Dashboard.jsx";
 import Monitor from "./modules/Monitor.jsx";
 import Templates from "./modules/Templates.jsx";
@@ -172,7 +171,6 @@ function AppShell() {
             <i className="ti ti-tools"></i> Plataforma em manutenção (visível só para admins)
           </div>
         )}
-        <TweaksPanel />
       </div>
     </RemindersProvider>
   );
