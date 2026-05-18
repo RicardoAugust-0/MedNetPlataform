@@ -43,6 +43,9 @@ export function useAtendimentos() {
           return [toLocal(row), ...prev];
         });
       })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'atendimentos' }, ({ old: row }) => {
+        setHistory(prev => prev.filter(h => h.id !== row.id));
+      })
       .subscribe();
       
     return () => {
@@ -126,7 +129,51 @@ export function useAtendimentos() {
     return all;
   }, []);
 
-  return { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter };
+  // Carrega todos os atendimentos do filtro paginando (Supabase limita a 1000/req).
+  // Filtros: { from?, to?, tipos? }. Retorna { data, error }.
+  const loadAllByFilter = useCallback(async ({ from, to, tipos } = {}) => {
+    if (!isSupabaseConfigured) return { data: [], error: null };
+    const pageSize = 1000;
+    const all = [];
+    let cursor = 0;
+    while (true) {
+      let q = supabase.from('atendimentos').select('*').order('created_at', { ascending: false }).range(cursor, cursor + pageSize - 1);
+      if (from) q = q.gte('created_at', new Date(from + 'T00:00:00').toISOString());
+      if (to)   q = q.lte('created_at', new Date(to   + 'T23:59:59.999').toISOString());
+      if (tipos && tipos.length > 0) q = q.in('tipo', tipos);
+      const { data, error } = await q;
+      if (error) return { data: all.map(toLocal), error: error.message };
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < pageSize) break;
+      cursor += pageSize;
+    }
+    return { data: all.map(toLocal), error: null };
+  }, []);
+
+  // Apaga atendimentos conforme filtros (uso admin).
+  // Filtros: { from?: 'YYYY-MM-DD', to?: 'YYYY-MM-DD', tipos?: string[] }
+  // Retorna { count, error }. RLS exige role admin no Supabase.
+  const deleteByFilter = useCallback(async ({ from, to, tipos } = {}) => {
+    if (!isSupabaseConfigured) return { count: 0, error: 'Supabase não configurado' };
+    let query = supabase.from('atendimentos').delete({ count: 'exact' });
+    if (from) query = query.gte('created_at', new Date(from + 'T00:00:00').toISOString());
+    if (to)   query = query.lte('created_at', new Date(to   + 'T23:59:59.999').toISOString());
+    if (tipos && tipos.length > 0) query = query.in('tipo', tipos);
+    else query = query.not('id', 'is', null); // garante WHERE p/ evitar delete vazio acidental
+    const { error, count } = await query;
+    if (error) return { count: 0, error: error.message };
+    // Atualização otimista local (realtime confirma p/ outros operadores)
+    setHistory(prev => prev.filter(h => {
+      if (from && new Date(h.created_at) < new Date(from + 'T00:00:00')) return true;
+      if (to   && new Date(h.created_at) > new Date(to   + 'T23:59:59.999')) return true;
+      if (tipos && tipos.length > 0 && !tipos.includes(h.tipo)) return true;
+      return false;
+    }));
+    return { count: count || 0, error: null };
+  }, []);
+
+  return { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter, loadAllByFilter, deleteByFilter };
 }
 
 function toLocal(row) {
