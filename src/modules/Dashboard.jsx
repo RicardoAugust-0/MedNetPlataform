@@ -396,24 +396,34 @@ export default function Dashboard() {
 
   const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
 
-  // ── Tipos (em aberto) ───────────────────────────────────────────────────────
+  // ── Counts dos chips do FilterBar ──────────────────────────────────────────
+  // SEMPRE absolutos (sem filtros aplicados) — chip serve pra escolher;
+  // usuário precisa ver o universo total pra comparar opções.
+  // - Tipo: nº de motoristas em aberto naquele bucket
+  //   • Fadiga = drivers com alertas > 0 (intervenção, conforme docs PROJECT.md §8.1)
+  //   • Comportamento = drivers só em reportar (reportaveis > 0 e alertas === 0)
+  // - Resultado: nº de atendimentos hoje (positivo/pos-positivo) ou drivers (aberto)
   const TIPOS = useMemo(() => {
-    const tiposFadiga = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
-    const fadigaCount = driversAtivos.filter(d =>
-      d.tipos?.some(t => tiposFadiga.some(f => t.toLowerCase().includes(f.toLowerCase())))
-    ).length;
-    const comportCount = driversAtivos.length - fadigaCount;
+    const fadigaCount   = drivers.filter(d => (d.alertas || 0) > 0).length;
+    const comportCount  = drivers.filter(d => (d.reportaveis || 0) > 0 && (d.alertas || 0) === 0).length;
     return [
-      { id: 'fadiga',        label: 'Fadiga',        color: '#E24B4A', count: fadigaCount + positivo, hint: 'Bocejo · Olho fechado · Sonolência' },
-      { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount,            hint: 'Distração · Comportamento' },
+      { id: 'fadiga',        label: 'Fadiga',        color: '#E24B4A', count: fadigaCount,  hint: 'Motoristas em intervenção (fadiga/sonolência)' },
+      { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount, hint: 'Motoristas só para reportar (comportamento)' },
     ];
-  }, [driversAtivos, positivo]);
+  }, [drivers]);
 
-  const RESULTADOS = [
-    { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: positivo,    hint: 'Intervenção confirmada'         },
-    { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: posPositivo, hint: 'Reincidiu após intervenção'     },
-    { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAberto,    hint: 'Aguardando tratamento'          },
-  ];
+  const RESULTADOS = useMemo(() => {
+    const atsHojeFull = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr);
+    const fechadosFull = atsHojeFull.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
+    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
+    const posFull = fechadosFull.length - ppFull;
+    const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
+    return [
+      { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
+      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
+      { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
+    ];
+  }, [atHistory, drivers, todayStr, placasPrevia30d]);
 
   // ── Transportadoras ─────────────────────────────────────────────────────────
   const transpStats = useMemo(() => {
@@ -444,19 +454,25 @@ export default function Dashboard() {
   }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
 
   // Transportadoras pros chips do filtro — base UNFILTERED (usuário precisa
-  // poder trocar entre empresas). Objetos com {name,total,abertos} pra chip
-  // mostrar count real, ordenadas por volume.
+  // poder trocar entre empresas).
+  // - `total` (mostrado no chip): nº de MOTORISTAS em aberto da empresa
+  //   (alinha com semântica "selecionar empresa → vejo X motoristas")
+  // - `abertos`: igual a total, mantido pra compat com tooltip do FilterBar
   const transpForFilter = useMemo(() => {
     const map = new Map();
     drivers.forEach(d => {
       const name = resolveAlias(d.transportadora);
       if (!name) return;
       const e = map.get(name) || { name, total: 0, abertos: 0 };
-      e.total += (d.alertas || 0) + (d.reportaveis || 0);
-      if ((d.alertas || 0) > 0 || (d.reportaveis || 0) > 0) e.abertos++;
+      if ((d.alertas || 0) > 0 || (d.reportaveis || 0) > 0) {
+        e.total++;
+        e.abertos++;
+      }
       map.set(name, e);
     });
-    return [...map.values()].sort((a, b) => b.total - a.total);
+    return [...map.values()]
+      .filter(t => t.total > 0)
+      .sort((a, b) => b.total - a.total);
   }, [drivers, resolveAlias]);
 
   // Lista de operadores pro dropdown — equipe atual (profiles), não histórico.
