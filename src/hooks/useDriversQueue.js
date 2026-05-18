@@ -78,15 +78,22 @@ export function useDriversQueue() {
   const [loadedAt, setLoadedAt] = useState(null);
   const [lastChangeAt, setLastChangeAt] = useState(null);
   const driversRef = useRef(drivers);
+  const profileRef = useRef(profile);
   const touchChange = useCallback(() => setLastChangeAt(new Date().toISOString()), []);
 
-  // Keep ref + localStorage in sync
+  // Keep refs + localStorage in sync
   useEffect(() => {
     driversRef.current = drivers;
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(drivers)); } catch { /* quota */ }
   }, [drivers]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   // Initial load
+  // Importante: se a query SUCESSO mas vier vazia E o cache local tiver dados,
+  // NÃO sobrescreve. Caso típico: migration aplicada mas DB ainda sem registros,
+  // ou upload anterior falhou silenciosamente no upsert. Refresh não pode
+  // apagar o que o operador acabou de carregar. Em vez disso, faz backfill
+  // (sobe o cache local pro DB) pra reconciliar.
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
@@ -94,13 +101,36 @@ export function useDriversQueue() {
       .from('drivers_queue')
       .select('*')
       .order('updated_at', { ascending: false });
-    if (!error && data) {
-      setDriversState(data.map(toLocal));
+    if (error) {
+      console.warn('[useDriversQueue] load:', error.message);
+      setLoading(false);
+      return;
+    }
+    const fromDb = (data || []).map(toLocal);
+    if (fromDb.length > 0) {
+      // DB é fonte de verdade — substitui local
+      setDriversState(fromDb);
       const ts = new Date().toISOString();
       setLoadedAt(ts);
       setLastChangeAt(ts);
-    } else if (error) {
-      console.warn('[useDriversQueue] load:', error.message);
+    } else if (driversRef.current.length > 0) {
+      // DB vazio + cache local com dados → backfill (upsert local pro DB)
+      const userId = profileRef.current?.id || null;
+      const rows = driversRef.current.map(d => toDb(d, { userId }));
+      const { error: upErr } = await supabase
+        .from('drivers_queue')
+        .upsert(rows, { onConflict: 'placa' });
+      if (upErr) {
+        console.warn('[useDriversQueue] backfill upsert:', upErr.message);
+        // Mantém cache local mesmo sem conseguir gravar
+      } else {
+        const ts = new Date().toISOString();
+        setLoadedAt(ts);
+        setLastChangeAt(ts);
+      }
+    } else {
+      // Ambos vazios: tudo certo
+      setLoadedAt(new Date().toISOString());
     }
     setLoading(false);
   }, []);
