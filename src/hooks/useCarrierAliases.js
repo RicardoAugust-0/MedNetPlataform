@@ -7,6 +7,7 @@ export function useCarrierAliases() {
   const [aliases, setAliasesState] = useState({});
   const [loading, setLoading]       = useState(isSupabaseConfigured);
 
+  // Load inicial
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let cancelled = false;
@@ -23,6 +24,23 @@ export function useCarrierAliases() {
       });
 
     return () => { cancelled = true; };
+  }, []);
+
+  // Realtime — propaga mudança feita no Admin sem precisar de reload
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channelName = `carrier-aliases-live-${crypto.randomUUID()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${KEY}` },
+        ({ new: row, eventType }) => {
+          if (eventType === 'DELETE') setAliasesState({});
+          else if (row?.value) setAliasesState(row.value);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const setAliases = useCallback(async (next) => {
