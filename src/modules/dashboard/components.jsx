@@ -666,7 +666,12 @@ export function HourlyActivity({ hourly, currentHour = 16 }) {
           })}
         </div>
         <div className="dg-hour-axis">
-          {hourly.map((h, i) => <span key={i}>{h.h.replace('h', '')}</span>)}
+          {hourly.map((h, i) => {
+            const hr = parseInt(h.h, 10);
+            // 24 barras: mostra só horas pares pra não poluir; <24 (14h) mostra todas
+            const show = hourly.length < 24 || hr % 2 === 0;
+            return <span key={i}>{show ? h.h.replace('h', '') : ''}</span>;
+          })}
         </div>
       </div>
     </div>

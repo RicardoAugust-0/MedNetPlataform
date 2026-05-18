@@ -12,7 +12,7 @@ const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
   const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
-  const { drivers, loading: driversLoading, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
+  const { drivers, loading: driversLoading, lastChangeAt: driversLastChangeAt, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
@@ -39,7 +39,7 @@ export function AppProvider({ children }) {
   return (
     <Ctx.Provider value={{
       activePanel, setActivePanel,
-      drivers, driversLoading,
+      drivers, driversLoading, driversLastChangeAt,
       replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
       filters, setFilters,
       platformId, setPlatformId,

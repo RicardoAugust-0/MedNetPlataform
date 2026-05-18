@@ -19,7 +19,7 @@ export const NAV_ITEMS = [
 ];
 
 export const PANEL_TITLES = {
-  dashboard: { t: 'Dashboard · Gestão à Vista', s: 'Visão da diretoria · turno diurno' },
+  dashboard: { t: 'Dashboard · Gestão à Vista', s: 'Visão da diretoria' },
   monitor:   { t: 'Monitor de Frota',       s: 'Alertas logísticos & fila de intervenção' },
   agenda:    { t: 'Agenda & Lembretes',     s: 'Compromissos e ações do dia' },
   templates: { t: 'Templates de Mensagem',  s: 'Scripts prontos para atendimento' },

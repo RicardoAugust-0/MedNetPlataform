@@ -13,6 +13,10 @@ export default function Topbar() {
   }, []);
 
   const meta = PANEL_TITLES[activePanel] || { t: activePanel, s: '' };
+  // Turno: diurno 06h-18h, noturno 18h-06h (docs PROJECT.md §8.1)
+  const hour = new Date().getHours();
+  const turno = hour >= 6 && hour < 18 ? 'diurno' : 'noturno';
+  const subtitle = activePanel === 'dashboard' ? `${meta.s} · turno ${turno}` : meta.s;
 
   return (
     <header className="topbar">
@@ -36,7 +40,7 @@ export default function Topbar() {
       </div>
       <div className="topbar-meta">
         <div className="topbar-title">{meta.t}</div>
-        {meta.s && <div className="topbar-breadcrumb">{meta.s}</div>}
+        {subtitle && <div className="topbar-breadcrumb">{subtitle}</div>}
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-actions">

@@ -383,7 +383,7 @@
 /* ── Hourly activity ───────────────────────────────────────── */
 .dg-hourly { padding: 16px 18px 18px; }
 .dg-hourly-row {
-  display: flex; align-items: flex-end; gap: 4px;
+  display: flex; align-items: flex-end; gap: 3px;
   height: 110px;
 }
 .dg-hour-bar {

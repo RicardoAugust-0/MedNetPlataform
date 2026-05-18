@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context';
 import { useAtendimentos } from '../hooks/useAtendimentos';
+import { useCarrierAliases } from '../hooks/useCarrierAliases';
 import { fmtDate, applyAccent } from '../utils';
 import './dashboard/dashboard.css';
 import {
@@ -119,8 +120,9 @@ const MOCK_HISTORY = import.meta.env.DEV ? _buildHistory() : [];
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { drivers: driversReal, setActivePanel, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
+  const { drivers: driversReal, driversLastChangeAt, setActivePanel, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
   const { history: atHistoryReal } = useAtendimentos();
+  const { resolveAlias } = useCarrierAliases();
 
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
@@ -173,9 +175,15 @@ export default function Dashboard() {
     [atHistory, todayStr]
   );
 
-  // ── Motoristas com alertas ──────────────────────────────────────────────────
+  // ── Motoristas com alertas (intervenção OU reportar) ──────────────────────
+  // Técnico fica em card separado (não conta como "em aberto" do gestor)
   const driversAtivos = useMemo(
-    () => drivers.filter(d => d.alertas > 0),
+    () => drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0),
+    [drivers]
+  );
+  // Subconjunto com intervenção (fadiga) — base pra críticos
+  const driversIntervencao = useMemo(
+    () => drivers.filter(d => (d.alertas || 0) > 0),
     [drivers]
   );
 
@@ -195,8 +203,14 @@ export default function Dashboard() {
   }, [atHistory, now, todayStr]);
 
   // ── KPIs base ───────────────────────────────────────────────────────────────
+  // Atendimentos "produtivos" do dia: intervenção + reportar (descarte e limpeza
+  // não contam como "fechados" pro KPI de produtividade da operação)
   const intervHoje = useMemo(
     () => atendimentosHoje.filter(a => a.tipo === 'intervencao'),
+    [atendimentosHoje]
+  );
+  const fechadosHoje = useMemo(
+    () => atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar'),
     [atendimentosHoje]
   );
 
@@ -206,19 +220,20 @@ export default function Dashboard() {
   );
 
   const positivo    = intervHoje.length - posPositivo;
-  const fechados    = intervHoje.length;
+  const fechados    = fechadosHoje.length;
   const emAberto    = driversAtivos.length;
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
-  const taxaReinc    = fechados > 0 ? (posPositivo / fechados) * 100 : 0;
+  // Reincidência permanece sobre intervenção (fadiga) — não faz sentido pra reportar
+  const taxaReinc    = intervHoje.length > 0 ? (posPositivo / intervHoje.length) * 100 : 0;
 
   // ── Comparação com ontem ────────────────────────────────────────────────────
   const ONTEM = useMemo(() => {
     if (!compareYesterday) return null;
     const yStr = new Date(now.getTime() - 86400000).toDateString();
-    const yInterv = atHistory.filter(
-      a => a.tipo === 'intervencao' && new Date(a.created_at).toDateString() === yStr
-    );
+    const yAtsAll = atHistory.filter(a => new Date(a.created_at).toDateString() === yStr);
+    const yInterv   = yAtsAll.filter(a => a.tipo === 'intervencao');
+    const yFechados = yAtsAll.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
     const cutoffY = new Date(now.getTime() - 31 * 86400000);
     const placasPreviaY = new Set(
       atHistory
@@ -231,18 +246,20 @@ export default function Dashboard() {
         .filter(Boolean)
     );
     const ppY = yInterv.filter(a => a.placa && placasPreviaY.has(a.placa)).length;
-    // Heurística: motoristas com evento ontem que não tiveram intervenção fechada ontem
-    const yPlacasEvts    = new Set(atHistory.filter(a => new Date(a.created_at).toDateString() === yStr && a.placa).map(a => a.placa));
-    const yPlacasFechado = new Set(yInterv.map(a => a.placa).filter(Boolean));
+    // Heurística: placas com evento ontem que não tiveram intervenção/reportar fechado ontem
+    const yPlacasEvts    = new Set(yAtsAll.filter(a => a.placa).map(a => a.placa));
+    const yPlacasFechado = new Set(yFechados.map(a => a.placa).filter(Boolean));
     const emAbertoY      = [...yPlacasEvts].filter(p => !yPlacasFechado.has(p)).length;
-    return { total: yInterv.length, fechados: yInterv.length, posPositivo: ppY, emAberto: emAbertoY };
+    return { total: yFechados.length + emAbertoY, fechados: yFechados.length, posPositivo: ppY, emAberto: emAbertoY };
   }, [atHistory, compareYesterday, now]);
 
-  // ── Motoristas críticos (≥5 alertas) com SLA ───────────────────────────────
+  // ── Motoristas críticos com SLA ────────────────────────────────────────────
+  // Limiares por plataforma (docs PROJECT.md §5.14): Sascar ≥5, Maxtrack ≥8
+  const criticThreshold = (platformId) => platformId === 'maxtrack' ? 8 : 5;
   const criticos = useMemo(() => {
     const tiposFadiga = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
-    return driversAtivos
-      .filter(d => d.alertas >= 5)
+    return driversIntervencao
+      .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))
       .map(d => {
         const abertoMin  = d.ultimoEvento ? (now - new Date(d.ultimoEvento)) / 60000 : 0;
         const hasFadiga  = d.tipos?.some(t =>
@@ -263,7 +280,7 @@ export default function Dashboard() {
         return {
           nome: d.nome,
           placa: d.placa,
-          transportadora: d.transportadora,
+          transportadora: resolveAlias(d.transportadora),
           frota: d.frota,
           turno: d.turno,
           alertas: d.alertas,
@@ -275,7 +292,7 @@ export default function Dashboard() {
         };
       })
       .sort((a, b) => b.abertoMin - a.abertoMin);
-  }, [driversAtivos, atHistory, placasPrevia30d, now, todayStr]);
+  }, [driversIntervencao, atHistory, placasPrevia30d, now, todayStr, resolveAlias]);
 
   const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
 
@@ -304,38 +321,42 @@ export default function Dashboard() {
 
     driversAtivos.forEach(d => {
       if (!d.transportadora) return;
-      const e = map.get(d.transportadora) || { name: d.transportadora, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
+      const name = resolveAlias(d.transportadora);
+      const e = map.get(name) || { name, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
       e.abertos++;
       e.motoristas++;
-      e.total += d.alertas;
+      e.total += (d.alertas || 0) + (d.reportaveis || 0);
       if (d.placa && placasPrevia30d.has(d.placa)) e.posPositivos++;
-      map.set(d.transportadora, e);
+      map.set(name, e);
     });
 
-    atendimentosHoje.filter(a => a.tipo === 'intervencao' && a.transportadora).forEach(a => {
-      const e = map.get(a.transportadora) || { name: a.transportadora, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
-      e.total++;
-      if (a.placa && placasPrevia30d.has(a.placa)) e.posPositivos++;
-      map.set(a.transportadora, e);
-    });
+    atendimentosHoje
+      .filter(a => (a.tipo === 'intervencao' || a.tipo === 'reportar') && a.transportadora)
+      .forEach(a => {
+        const name = resolveAlias(a.transportadora);
+        const e = map.get(name) || { name, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
+        e.total++;
+        if (a.placa && placasPrevia30d.has(a.placa)) e.posPositivos++;
+        map.set(name, e);
+      });
 
     return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [driversAtivos, atendimentosHoje, placasPrevia30d]);
+  }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
 
   // Transportadoras distintas para chips do filtro
   const transpForFilter = useMemo(
-    () => [...new Set(driversAtivos.map(d => d.transportadora).filter(Boolean))],
-    [driversAtivos]
+    () => [...new Set(driversAtivos.map(d => resolveAlias(d.transportadora)).filter(Boolean))],
+    [driversAtivos, resolveAlias]
   );
 
-  // ── Atividade por hora (06h–19h) ────────────────────────────────────────────
+  // ── Atividade por hora (24h — operação 24/7, turno diurno 06-18 / noturno 18-06)
   const HOURLY = useMemo(() => {
-    return Array.from({ length: 14 }, (_, i) => {
-      const h      = i + 6;
+    return Array.from({ length: 24 }, (_, h) => {
       const closed = atendimentosHoje.filter(
-        a => a.tipo === 'intervencao' && new Date(a.created_at).getHours() === h
+        a => (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
+             new Date(a.created_at).getHours() === h
       ).length;
-      const open   = driversAtivos.filter(
+      const open = driversAtivos.filter(
         d => d.ultimoEvento && new Date(d.ultimoEvento).getHours() === h
       ).length;
       return { h: `${String(h).padStart(2, '0')}h`, closed, open };
@@ -432,6 +453,27 @@ export default function Dashboard() {
 
   const hour = now.getHours();
 
+  // ── "Atualizado há Xmin" — pega o evento mais recente (driver change OU atendimento)
+  const lastAtendimentoAt = useMemo(() => {
+    if (!atHistory.length) return null;
+    return atHistory.reduce((max, a) => {
+      const t = new Date(a.created_at).getTime();
+      return t > max ? t : max;
+    }, 0);
+  }, [atHistory]);
+  const updatedLabel = useMemo(() => {
+    const tDrv = driversLastChangeAt ? new Date(driversLastChangeAt).getTime() : 0;
+    const tAt  = lastAtendimentoAt || 0;
+    const latest = Math.max(tDrv, tAt);
+    if (!latest) return 'Sem dados';
+    const diffMin = Math.floor((now.getTime() - latest) / 60000);
+    if (diffMin < 1)  return 'Atualizado agora';
+    if (diffMin < 60) return `Atualizado há ${diffMin} min`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24)   return `Atualizado há ${diffH}h`;
+    return `Atualizado há ${Math.floor(diffH / 24)}d`;
+  }, [driversLastChangeAt, lastAtendimentoAt, now]);
+
   // ── Tweaks popover ─────────────────────────────────────────────────────────
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tweaksRef = useRef(null);
@@ -457,7 +499,7 @@ export default function Dashboard() {
               {fmtDate()}
             </span>
             <span className="sep">·</span>
-            <span className="live">Atualizado agora</span>
+            <span className="live">{updatedLabel}</span>
             <span className="sep">·</span>
             <span>SLA: {slaLimit} min</span>
           </div>
@@ -767,7 +809,7 @@ export default function Dashboard() {
             <div className="dg-drill-col">
               <h4>Por severidade</h4>
               <div className="dg-drill-line">
-                <span>Críticos (≥5)</span>
+                <span>Críticos</span>
                 <span className="v" style={{ color: 'var(--danger-500)' }}>{criticos.length}</span>
               </div>
               <div className="dg-drill-line">

@@ -76,7 +76,9 @@ export function useDriversQueue() {
   });
   const [loading, setLoading] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
+  const [lastChangeAt, setLastChangeAt] = useState(null);
   const driversRef = useRef(drivers);
+  const touchChange = useCallback(() => setLastChangeAt(new Date().toISOString()), []);
 
   // Keep ref + localStorage in sync
   useEffect(() => {
@@ -94,7 +96,9 @@ export function useDriversQueue() {
       .order('updated_at', { ascending: false });
     if (!error && data) {
       setDriversState(data.map(toLocal));
-      setLoadedAt(new Date().toISOString());
+      const ts = new Date().toISOString();
+      setLoadedAt(ts);
+      setLastChangeAt(ts);
     } else if (error) {
       console.warn('[useDriversQueue] load:', error.message);
     }
@@ -114,17 +118,20 @@ export function useDriversQueue() {
           if (prev.some(d => d._id === row.id)) return prev;
           return [toLocal(row), ...prev];
         });
+        touchChange();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drivers_queue' }, ({ new: row }) => {
         setDriversState(prev => prev.map(d => d._id === row.id ? toLocal(row) : d));
+        touchChange();
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'drivers_queue' }, ({ old: row }) => {
         // replica identity full → row tem id e placa
         setDriversState(prev => prev.filter(d => d._id !== row.id && d.placa !== row.placa));
+        touchChange();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [touchChange]);
 
   // ── Mutations ────────────────────────────────────────────────
   // Substitui a fila de uma plataforma específica: upsert todos do batch,
@@ -189,5 +196,5 @@ export function useDriversQueue() {
     if (error) console.warn('[useDriversQueue] clearAll:', error.message);
   }, []);
 
-  return { drivers, loading, loadedAt, replaceAll, updateOne, bulkUpdate, clearAll, reload: load };
+  return { drivers, loading, loadedAt, lastChangeAt, replaceAll, updateOne, bulkUpdate, clearAll, reload: load };
 }
