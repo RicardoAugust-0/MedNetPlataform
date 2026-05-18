@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useCarrierAliases } from '../hooks/useCarrierAliases';
+import { useProfiles } from '../hooks/useProfiles.jsx';
 import { fmtDate, applyAccent } from '../utils';
 import './dashboard/dashboard.css';
 import {
@@ -123,6 +124,7 @@ export default function Dashboard() {
   const { drivers: driversReal, driversLastChangeAt, setActivePanel, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
   const { history: atHistoryReal } = useAtendimentos();
   const { resolveAlias } = useCarrierAliases();
+  const { profiles } = useProfiles();
 
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
@@ -454,12 +456,15 @@ export default function Dashboard() {
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [drivers, resolveAlias]);
 
-  // Lista de operadores pro dropdown — todos do histórico (não restringe ao filtro atual)
-  const operadoresForFilter = useMemo(
-    () => [...new Set(atHistory.map(a => a.operador).filter(Boolean))].sort()
-      .map(nome => ({ nome })),
-    [atHistory]
-  );
+  // Lista de operadores pro dropdown — equipe atual (profiles), não histórico.
+  // Atendimentos antigos podem ter operadores que saíram; filtrar por profiles ativos.
+  const operadoresForFilter = useMemo(() => {
+    const team = (profiles || [])
+      .filter(p => p.role === 'operador' || p.role === 'admin')
+      .map(p => ({ nome: p.nome }))
+      .filter(p => p.nome);
+    return team.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [profiles]);
 
   // ── Atividade por hora (24h — operação 24/7, turno diurno 06-18 / noturno 18-06)
   const HOURLY = useMemo(() => {
