@@ -19,14 +19,6 @@ create table if not exists public.atendimentos (
 
 alter table public.atendimentos enable row level security;
 
-create policy "Operadores leem atendimentos"
-  on public.atendimentos for select
-  using (auth.role() = 'authenticated');
-
-create policy "Operadores inserem atendimentos"
-  on public.atendimentos for insert
-  with check (auth.role() = 'authenticated');
-
 create index if not exists atendimentos_created_at_idx  on public.atendimentos (created_at desc);
 create index if not exists atendimentos_operador_id_idx on public.atendimentos (operador_id);
 create index if not exists atendimentos_tipo_idx        on public.atendimentos (tipo);
