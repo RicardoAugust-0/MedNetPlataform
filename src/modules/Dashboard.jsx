@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useCarrierAliases } from '../hooks/useCarrierAliases';
 import { useProfiles } from '../hooks/useProfiles.jsx';
@@ -125,6 +126,8 @@ export default function Dashboard() {
   const { history: atHistoryReal } = useAtendimentos();
   const { resolveAlias } = useCarrierAliases();
   const { profiles } = useProfiles();
+  const { profile: me } = useAuth();
+  const isAdmin = me?.role === 'admin';
 
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
@@ -719,6 +722,20 @@ export default function Dashboard() {
                     ))}
                   </div>
                 </div>
+
+                {isAdmin && (
+                  <div className="dg-tweaks-foot">
+                    <button
+                      className="dg-tweaks-link"
+                      onClick={() => { setTweaksOpen(false); setActivePanel('admin'); }}
+                      title="Unificar nomes diferentes da mesma transportadora"
+                    >
+                      <i className="ti ti-arrows-shuffle"></i>
+                      Configurar aliases de transportadora
+                      <i className="ti ti-arrow-right" style={{ marginLeft: 'auto' }}></i>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

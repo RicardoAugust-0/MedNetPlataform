@@ -758,6 +758,25 @@ body.dash-tv-mode .dg-kpi.is-hero .dg-kpi-value { font-size: 60px; }
 .dg-tweaks-sw:hover { transform: scale(1.1); }
 .dg-tweaks-sw.on { box-shadow: 0 0 0 2px var(--text-primary); transform: scale(1.08); }
 
+/* Footer link (atalho admin → mapeamento) */
+.dg-tweaks-foot {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.dg-tweaks-link {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--surface-1); border: 1px solid var(--border-md);
+  color: var(--text-secondary); cursor: pointer;
+  font-size: 11.5px; font-weight: 600; font-family: var(--font-sans);
+  transition: all 0.15s;
+}
+.dg-tweaks-link i { font-size: 13px; }
+.dg-tweaks-link:hover {
+  color: var(--text-primary); border-color: var(--accent-500);
+  background: var(--surface-2);
+}
+
 /* ── Layout variants (dg-grid) ────────────────────────────── */
 .dg-grid.dg-layout-cinema  { grid-template-columns: 1fr; }
 .dg-grid.dg-layout-compact { grid-template-columns: 1fr 1fr; gap: 12px; }
