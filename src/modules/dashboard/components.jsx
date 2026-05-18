@@ -154,11 +154,11 @@ export function FilterBar({ filters, setFilters, tipos: TIPOS, resultados: RESUL
           {TRANSPORTADORAS.slice(0, 6).map(t => (
             <span
               key={t.name}
-              className={`dg-chip dg-chip-truncate${filters.empresa === t.name ? ' active' : ''}`}
+              className={`dg-chip${filters.empresa === t.name ? ' active' : ''}`}
               onClick={() => toggleEmpresa(t.name)}
               title={`${t.name} · ${t.total} alertas · ${t.abertos} em aberto · clique pra alternar`}
             >
-              <span className="dg-chip-label">{t.name}</span>
+              {t.name.split(' ')[0]}
               <span className="count">{t.total}</span>
             </span>
           ))}

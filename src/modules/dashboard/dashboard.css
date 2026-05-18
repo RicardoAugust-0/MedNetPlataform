@@ -59,17 +59,8 @@
   box-shadow: 0 4px 12px var(--accent-glow);
 }
 .dg-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
-.dg-chip .count { font-size: 10px; opacity: 0.7; font-family: var(--font-mono); margin-left: 2px; flex-shrink: 0; }
+.dg-chip .count { font-size: 10px; opacity: 0.7; font-family: var(--font-mono); margin-left: 2px; }
 .dg-chip.active .count { opacity: 1; }
-
-/* Chips de empresa: nome completo truncado com ellipsis pra evitar
-   ambiguidade quando duas transportadoras compartilham primeira palavra
-   (ex.: "LSL Transportes" vs "LSL Logística") */
-.dg-chip-truncate { max-width: 160px; }
-.dg-chip-truncate .dg-chip-label {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  min-width: 0;
-}
 
 .dg-select {
   background: var(--surface-1); color: var(--text-primary);
