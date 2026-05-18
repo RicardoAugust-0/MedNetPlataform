@@ -169,22 +169,86 @@ export default function Dashboard() {
 
   const todayStr = now.toDateString();
 
-  // ── Atendimentos de hoje ────────────────────────────────────────────────────
-  const atendimentosHoje = useMemo(
-    () => atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr),
-    [atHistory, todayStr]
-  );
+  // ── Filtros de tela ─────────────────────────────────────────────────────────
+  const [filters, setFilters] = useState({
+    tipo:      [],
+    resultado: [],
+    empresa:   'todas',
+    operador:  'todos',
+    periodo:   'hoje',
+  });
+  const [activeKpi, setActiveKpi] = useState(null);
+
+  // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
+  const periodoWindow = useMemo(() => {
+    if (filters.periodo === 'turno') {
+      const isDiurno = now.getHours() >= 6 && now.getHours() < 18;
+      const start = new Date(now);
+      if (isDiurno) {
+        start.setHours(6, 0, 0, 0);
+      } else {
+        // turno noturno: começou às 18h (de ontem se hora<6, ou hoje se hora>=18)
+        if (now.getHours() < 6) start.setDate(start.getDate() - 1);
+        start.setHours(18, 0, 0, 0);
+      }
+      return { start, end: new Date(now) };
+    }
+    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    return { start, end: new Date(now) };
+  }, [filters.periodo, now]);
+
+  // Helpers semânticos do filtro tipo
+  const showTipo = (id) => filters.tipo.length === 0 || filters.tipo.includes(id);
+  const showResultado = (id) => filters.resultado.length === 0 || filters.resultado.includes(id);
+  const empresaFilterFn = (transp) => filters.empresa === 'todas' || resolveAlias(transp || '') === filters.empresa;
+
+  // ── Atendimentos no período (com filtros: periodo + empresa + operador + tipo)
+  const atendimentosNoPeriodo = useMemo(() => {
+    return atHistory.filter(a => {
+      const d = new Date(a.created_at);
+      if (d < periodoWindow.start || d > periodoWindow.end) return false;
+      if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
+      if (!empresaFilterFn(a.transportadora)) return false;
+      // tipo mapping: intervencao→fadiga, reportar→comportamento, outros não classificados
+      if (filters.tipo.length > 0) {
+        if (a.tipo === 'intervencao' && !showTipo('fadiga')) return false;
+        if (a.tipo === 'reportar' && !showTipo('comportamento')) return false;
+      }
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atHistory, periodoWindow, filters.operador, filters.empresa, filters.tipo, resolveAlias]);
+
+  // Alias mantido pra compatibilidade com código existente que dizia "atendimentosHoje"
+  const atendimentosHoje = atendimentosNoPeriodo;
+
+  // ── Base de drivers com filtros (empresa + tipo). Operador/período/resultado
+  // não fazem sentido pra fila de motoristas (snapshot atual, sem operador atribuído)
+  const driversFiltered = useMemo(() => {
+    return drivers.filter(d => {
+      if (!empresaFilterFn(d.transportadora)) return false;
+      if (filters.tipo.length > 0) {
+        const isFadiga    = (d.alertas || 0) > 0;
+        const isComport   = (d.reportaveis || 0) > 0 && !isFadiga;
+        if (isFadiga && !showTipo('fadiga')) return false;
+        if (isComport && !showTipo('comportamento')) return false;
+        if (!isFadiga && !isComport) return false; // só técnico → fora se filtro de tipo ativo
+      }
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drivers, filters.empresa, filters.tipo, resolveAlias]);
 
   // ── Motoristas com alertas (intervenção OU reportar) ──────────────────────
   // Técnico fica em card separado (não conta como "em aberto" do gestor)
   const driversAtivos = useMemo(
-    () => drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0),
-    [drivers]
+    () => driversFiltered.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0),
+    [driversFiltered]
   );
   // Subconjunto com intervenção (fadiga) — base pra críticos
   const driversIntervencao = useMemo(
-    () => drivers.filter(d => (d.alertas || 0) > 0),
-    [drivers]
+    () => driversFiltered.filter(d => (d.alertas || 0) > 0),
+    [driversFiltered]
   );
 
   // ── Placas com intervenção nos últimos 30 dias (excl. hoje) ────────────────
@@ -205,13 +269,28 @@ export default function Dashboard() {
   // ── KPIs base ───────────────────────────────────────────────────────────────
   // Atendimentos "produtivos" do dia: intervenção + reportar (descarte e limpeza
   // não contam como "fechados" pro KPI de produtividade da operação)
+  // Filtro resultado: positivo = placa não-reincidente / pos-positivo = reincidente / aberto = drivers
   const intervHoje = useMemo(
-    () => atendimentosHoje.filter(a => a.tipo === 'intervencao'),
-    [atendimentosHoje]
+    () => atendimentosHoje.filter(a => {
+      if (a.tipo !== 'intervencao') return false;
+      const isPP = a.placa && placasPrevia30d.has(a.placa);
+      if (isPP && !showResultado('pos-positivo')) return false;
+      if (!isPP && !showResultado('positivo'))    return false;
+      return true;
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [atendimentosHoje, placasPrevia30d, filters.resultado]
   );
   const fechadosHoje = useMemo(
-    () => atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar'),
-    [atendimentosHoje]
+    () => atendimentosHoje.filter(a => {
+      if (a.tipo !== 'intervencao' && a.tipo !== 'reportar') return false;
+      const isPP = a.placa && placasPrevia30d.has(a.placa);
+      if (isPP && !showResultado('pos-positivo')) return false;
+      if (!isPP && !showResultado('positivo'))    return false;
+      return true;
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [atendimentosHoje, placasPrevia30d, filters.resultado]
   );
 
   const posPositivo = useMemo(
@@ -221,17 +300,28 @@ export default function Dashboard() {
 
   const positivo    = intervHoje.length - posPositivo;
   const fechados    = fechadosHoje.length;
-  const emAberto    = driversAtivos.length;
+  // Filtro resultado: 'aberto' liga/desliga a contagem de em-aberto
+  const emAberto    = showResultado('aberto') ? driversAtivos.length : 0;
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
   // Reincidência permanece sobre intervenção (fadiga) — não faz sentido pra reportar
   const taxaReinc    = intervHoje.length > 0 ? (posPositivo / intervHoje.length) * 100 : 0;
 
-  // ── Comparação com ontem ────────────────────────────────────────────────────
+  // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
   const ONTEM = useMemo(() => {
     if (!compareYesterday) return null;
     const yStr = new Date(now.getTime() - 86400000).toDateString();
-    const yAtsAll = atHistory.filter(a => new Date(a.created_at).toDateString() === yStr);
+    // Mesmos filtros operador/empresa/tipo aplicados a ontem
+    const yAtsAll = atHistory.filter(a => {
+      if (new Date(a.created_at).toDateString() !== yStr) return false;
+      if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
+      if (!empresaFilterFn(a.transportadora)) return false;
+      if (filters.tipo.length > 0) {
+        if (a.tipo === 'intervencao' && !showTipo('fadiga')) return false;
+        if (a.tipo === 'reportar' && !showTipo('comportamento')) return false;
+      }
+      return true;
+    });
     const yInterv   = yAtsAll.filter(a => a.tipo === 'intervencao');
     const yFechados = yAtsAll.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
     const cutoffY = new Date(now.getTime() - 31 * 86400000);
@@ -246,12 +336,12 @@ export default function Dashboard() {
         .filter(Boolean)
     );
     const ppY = yInterv.filter(a => a.placa && placasPreviaY.has(a.placa)).length;
-    // Heurística: placas com evento ontem que não tiveram intervenção/reportar fechado ontem
     const yPlacasEvts    = new Set(yAtsAll.filter(a => a.placa).map(a => a.placa));
     const yPlacasFechado = new Set(yFechados.map(a => a.placa).filter(Boolean));
     const emAbertoY      = [...yPlacasEvts].filter(p => !yPlacasFechado.has(p)).length;
     return { total: yFechados.length + emAbertoY, fechados: yFechados.length, posPositivo: ppY, emAberto: emAbertoY };
-  }, [atHistory, compareYesterday, now]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atHistory, compareYesterday, now, filters.operador, filters.empresa, filters.tipo, resolveAlias]);
 
   // ── Motoristas críticos com SLA ────────────────────────────────────────────
   // Limiares por plataforma (docs PROJECT.md §5.14): Sascar ≥5, Maxtrack ≥8
@@ -343,10 +433,18 @@ export default function Dashboard() {
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
 
-  // Transportadoras distintas para chips do filtro
+  // Transportadoras distintas pros chips do filtro — base UNFILTERED
+  // pra usuário poder trocar entre empresas (não restringe à seleção atual)
   const transpForFilter = useMemo(
-    () => [...new Set(driversAtivos.map(d => resolveAlias(d.transportadora)).filter(Boolean))],
-    [driversAtivos, resolveAlias]
+    () => [...new Set(drivers.map(d => resolveAlias(d.transportadora)).filter(Boolean))],
+    [drivers, resolveAlias]
+  );
+
+  // Lista de operadores pro dropdown — todos do histórico (não restringe ao filtro atual)
+  const operadoresForFilter = useMemo(
+    () => [...new Set(atHistory.map(a => a.operador).filter(Boolean))].sort()
+      .map(nome => ({ nome })),
+    [atHistory]
   );
 
   // ── Atividade por hora (24h — operação 24/7, turno diurno 06-18 / noturno 18-06)
@@ -371,7 +469,9 @@ export default function Dashboard() {
       'Sem motorista':    'ti-user-off',
     };
     const techMap = {};
-    drivers.filter(d => d.tecnicos > 0).forEach(d => {
+    // Técnico é bucket separado: aplica só filtro de empresa (não tipo/operador)
+    const baseTech = drivers.filter(d => d.tecnicos > 0 && empresaFilterFn(d.transportadora));
+    baseTech.forEach(d => {
       Object.keys(d.tiposTecnico || {}).forEach(tipo => {
         if (!techMap[tipo]) {
           techMap[tipo] = { id: tipo, label: tipo, count: 0, icon: techIcons[tipo] || 'ti-tools', placas: [] };
@@ -381,7 +481,8 @@ export default function Dashboard() {
       });
     });
     return Object.values(techMap);
-  }, [drivers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drivers, filters.empresa, resolveAlias]);
 
   // ── Produtividade da equipe ─────────────────────────────────────────────────
   const equipe = useMemo(() => {
@@ -412,38 +513,11 @@ export default function Dashboard() {
       });
   }, [atendimentosHoje, placasPrevia30d]);
 
-  // ── Filtros de tela ─────────────────────────────────────────────────────────
-  const [filters, setFilters] = useState({
-    tipo:      [],
-    resultado: [],
-    empresa:   'todas',
-    operador:  'todos',
-    periodo:   'hoje',
-  });
-  const [activeKpi, setActiveKpi] = useState(null);
-
-  const filteredCriticos = useMemo(() =>
-    criticos.filter(c => {
-      if (filters.tipo.length > 0 && !filters.tipo.includes(c.tipo))    return false;
-      if (filters.empresa !== 'todas' && c.transportadora !== filters.empresa) return false;
-      return true;
-    }),
-    [criticos, filters]
-  );
-
-  const filteredEquipe = useMemo(() =>
-    filters.operador !== 'todos'
-      ? equipe.filter(o => o.nome === filters.operador)
-      : equipe,
-    [equipe, filters.operador]
-  );
-
-  const filteredTransp = useMemo(() =>
-    filters.empresa !== 'todas'
-      ? transpStats.filter(t => t.name === filters.empresa)
-      : transpStats,
-    [transpStats, filters.empresa]
-  );
+  // criticos/equipe/transpStats já vêm filtrados da camada base (filters.tipo/empresa/operador)
+  // resultado aplicado on top na seção de KPIs/derivados. Aliases pra UI:
+  const filteredCriticos = criticos;
+  const filteredEquipe   = equipe;
+  const filteredTransp   = transpStats;
 
   // ── Dados auxiliares de UI ──────────────────────────────────────────────────
   const PERIODOS = [
@@ -649,7 +723,7 @@ export default function Dashboard() {
         tipos={TIPOS}
         resultados={RESULTADOS}
         transportadoras={transpForFilter}
-        equipe={equipe}
+        equipe={operadoresForFilter}
         periodos={PERIODOS}
       />
 
