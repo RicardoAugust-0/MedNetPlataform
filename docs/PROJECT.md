@@ -52,10 +52,13 @@ src/
 ├── supabase.js           # Cliente Supabase + flag de configuração
 ├── parseSheet.js         # Wrapper @deprecated p/ adapter Sascar (compat)
 ├── auth/                 # AuthContext, LoginPage, SetPasswordPage
-├── components/           # Topbar, Sidebar, TweaksPanel, ErrorBoundary, MaintenancePage
-├── hooks/                # 11 hooks de domínio (atendimentos, templates, notas, etc.)
+├── components/           # Topbar (com brand), Sidebar, ErrorBoundary, MaintenancePage
+├── hooks/                # Hooks de domínio (atendimentos, drivers_queue, templates, …)
 ├── lib/                  # uploadImage.js
 ├── modules/              # Painéis principais (Dashboard, Monitor, Agenda, ...)
+│   ├── dashboard/        # Subcomponentes + CSS do Dashboard (gestão à vista)
+│   │   ├── components.jsx    # KPI, FilterBar, CriticalSLA, ProductivityRanking, etc.
+│   │   └── dashboard.css     # Estilos isolados do painel
 │   ├── monitor/          # Subcomponentes do Monitor
 │   └── crosscheck/       # Subcomponentes do Cross-Check
 │       ├── utils.js          # Funções puras: normalize, parsers, buildStats
@@ -83,9 +86,13 @@ src/
 └── styles/               # CSS tokens + layout + módulos
 
 supabase/
-├── migration*.sql        # Histórico de schemas (v2..v10, workspace_images)
+├── migrations/
+│   ├── 20260507000000_initial_schema.sql          # Baseline (atendimentos, templates, …)
+│   ├── 20260518211646_drivers_queue.sql           # Fila compartilhada com realtime
+│   └── …outras migrations incrementais
 └── functions/
     ├── append-sheet/index.ts   # Append Google Sheets
+    ├── read-sheet/index.ts     # Leitura das abas mensais do Sheets
     ├── invite-user/index.ts    # Convite de operadores
     ├── pull-sascar/index.ts    # Busca automática Sascar (alarm/page)
     └── pull-maxtrack/index.ts  # Busca automática Maxtrack (event/events/load)
@@ -116,13 +123,101 @@ Busca global (⌘K / Ctrl+K) na Sidebar pesquisa entre páginas e motoristas
 
 ## 5. Domínios funcionais
 
-### 5.1. Dashboard (`modules/Dashboard.jsx`)
-KPIs em tempo real: alertas ativos, motoristas críticos, atendimentos do dia,
-lista dos motoristas mais críticos, gráfico de atendimentos dos últimos 7
-dias, atalhos para outros módulos. Saudação contextual e hero quando há
-motoristas com alta contagem.
+### 5.1. Dashboard — Gestão à Vista (`modules/Dashboard.jsx` + `modules/dashboard/`)
 
-**Breakdown por transportadora** — card "Transportadoras com mais alertas" exibido automaticamente quando há alertas ativos. Mostra ranking top 5 com barra proporcional, contagem de alertas e número de motoristas por transportadora. Derivado de `drivers` (estado global); não requer chamada extra.
+Visão de diretoria, foco em macros do dia + drill rápido. Realtime end-to-end
+(fila de motoristas + atendimentos da equipe) — qualquer ação de qualquer
+operador propaga em <2 s pros 6 dashboards abertos.
+
+**Subcomponentes** (todos em `modules/dashboard/components.jsx`):
+`KPI`, `FilterBar`, `CriticalSLA`, `ProductivityRanking`, `TechAlerts`,
+`ClassificationBreakdown` (donut Tipo × Resultado), `TransportadoraRanking`,
+`HourlyActivity` (24 h), `Banner`, `Section`, `AnimatedNumber`, `Donut` interno.
+CSS isolado em `dashboard/dashboard.css`.
+
+#### KPIs (4 cards no topo)
+
+| KPI | Cálculo |
+|---|---|
+| **Volume do dia** | `fechados + emAberto` (hero, accent laranja, mostra % concluído) |
+| **Fechados hoje** | Atendimentos `tipo ∈ (intervencao, reportar)` de hoje (exclui `descarte`/`limpeza`) |
+| **Em aberto agora** | Motoristas com `alertas > 0` OU `reportaveis > 0` (técnico não conta) |
+| **Reincidência** | Pos-positivos hoje (placas com intervenção nos últimos 30 d) |
+
+Cada KPI tem **delta vs. ontem** (se toggle "Comparar com ontem" estiver
+ligado) e **drill inline** ao clicar (abre um painel com breakdown por
+tipo/resultado/operador/transportadora).
+
+#### Seções abaixo dos KPIs
+
+- **Banner SLA vencido** — só aparece quando algum crítico passa do `slaLimit`
+- **Pulso da operação** (grid 2 colunas):
+  - Coluna principal: `Críticos & SLA` (lista expansível com timeline de eventos) + `Atividade por hora` (24 barras, eixo X em horas pares)
+  - Coluna lateral: `Tipo & Resultado` (donut), `Atenção técnica`, `Transportadoras` (top 6 ranqueadas)
+- **Produtividade da equipe** — ranking por operador com volume × qualidade (taxa de reincidência destacada)
+
+#### Filtros (`FilterBar`)
+
+Todos os filtros cabeiam **toda** a página (KPIs, drills, cards, ONTEM). Os
+counts dos chips são **sempre absolutos** (independentes da seleção atual) pra
+o gestor enxergar o universo antes de filtrar.
+
+| Filtro | Semântica | Afeta |
+|---|---|---|
+| **Tipo** (fadiga/comportamento) | Fadiga = drivers com `alertas > 0` · Comportamento = drivers só em `reportaveis > 0` | Drivers, atendimentos (intervencao=fadiga, reportar=comportamento), KPIs, donut, hourly, transp, produtividade, ONTEM |
+| **Resultado** (positivo/pos-positivo/aberto) | Recorta fechados (não-reinc vs reinc) e liga/desliga contagem de em-aberto | KPIs, donut |
+| **Empresa** | Nome da transportadora **após `resolveAlias`** (aliases vêm do Admin). Top 6 viram chips, resto vai pro select "Outras…" | Drivers, atendimentos, tecnicos, ONTEM, transp |
+| **Operador** | Lista vem de `useProfiles()` (equipe atual, role ∈ {operador, admin}) — não do histórico de atendimentos | Atendimentos, produtividade, fechados, ONTEM |
+| **Período** (hoje/turno) | `hoje` = 00 h → agora · `turno` = janela do turno atual (diurno 06 h–agora ou noturno 18 h–agora, cruzando meia-noite quando a hora < 6) | Atendimentos (timeframe) |
+
+Filtros **persistidos em `localStorage.mn_dash_filters`** — view do gestor
+sobrevive a reload e troca de painel. Botão "Limpar filtros" reseta.
+
+#### Tweaks popover (engrenagem na barra de saudação)
+
+Substitui o antigo `TweaksPanel` global (removido). Conteúdo do popover:
+
+| Grupo | Itens |
+|---|---|
+| **SLA** | Input numérico 5–240 min com -5/+5 |
+| **Apresentação** | Comparar com ontem · Modo executivo (esconde Hourly/Tech/Transp, infla KPIs) |
+| **Layout** | Balanceado · Cinema (1 coluna) · Compacto (2 colunas com cards menores) |
+| **Seções visíveis** | Toggle individual: Hourly, Tipo & Resultado, Atenção técnica, Transportadoras |
+| **Aparência** | Tema (claro/escuro) · Densidade (compacta/normal/espaçada) · 6 swatches de accent — todos espelham `useApp()` |
+| **Footer** (só admin) | Atalho **Configurar aliases de transportadora** → vai direto pro Admin |
+
+Persistidos em `localStorage`: `mn_dash_sla`, `mn_dash_compare`, `mn_dash_hourly`,
+`mn_dash_transp`, `mn_dash_classif`, `mn_dash_tech`, `mn_dash_exec`,
+`mn_dash_layout`, `mn_dash_tv`. Tema/accent/densidade reusam as chaves globais
+de `context.jsx`.
+
+#### Modo TV (`body.dash-tv-mode`)
+
+Botão dedicado na barra (`ti-layout-sidebar-left-collapse`). Esconde a sidebar
+e infla `dg-kpi-value` pra ~48 px (`is-hero` ~60 px). CSS em
+`dashboard.css §body.dash-tv-mode`.
+
+#### Modo Executivo (`body.dash-exec-mode`)
+
+Toggle no Tweaks. Esconde Hourly/Tech/Transp, infla KPIs ainda mais (~56 px,
+hero ~68 px). Mostra só macros + críticos + produtividade.
+
+#### "Atualizado há X min"
+
+Indicador na barra de saudação derivado do `max(driversLastChangeAt,
+lastAtendimentoAt)`. Atualiza junto com o clock de 30 s. Formatos: `agora`
+(< 1 min), `X min` (< 60), `Xh` (< 24 h), `Xd`.
+
+#### Topbar do projeto (estendida hoje)
+
+- **Brand integrado**: SVG M + "GRUPO MedNet" à esquerda do título (mesma marca do sidebar, pra reforço quando em Modo TV)
+- **Turno dinâmico** no breadcrumb: "Visão da diretoria · turno diurno/noturno" calculado por `new Date().getHours()` (diurno 06–18)
+- **Dedup de data**: `fmtDate()` saiu do breadcrumb da topbar; agora aparece só na barra de saudação do Dashboard
+
+#### DEV mocks
+
+`Dashboard.jsx` define `MOCK_DRIVERS` + `MOCK_HISTORY` (~70 motoristas + ~250
+atendimentos sintéticos) usados só quando `import.meta.env.DEV && driversReal.length === 0`. Vite faz tree-shake em produção (`import.meta.env.DEV = false`), então a build de prod **não contém os mocks** (verificado no build).
 
 ### 5.2. Monitor de Frota (`modules/Monitor.jsx`)
 Núcleo operacional. Recebe a entrada da plataforma (atualmente upload de
@@ -406,9 +501,27 @@ Motoristas Maxtrack aparecem no badge de alertas da sidebar com limiar **≥ 8 a
 | `links` | `id`, `section`, `name`, `description`, `url`, `icon`, `bg`, `ic`, `position`, `created_at` | — |
 | `reminders` | `id`, `title`, `sub`, `time`, `urgent`, `done`, `reminder_date`, `icon`, `created_at` | — |
 | `app_settings` | `key`, `value` (JSON), `updated_at`, `updated_by` | `key='maintenance'` controla lockout · `key='carrier_aliases'` mapeia nomes de transportadoras |
+| `drivers_queue` | `id`, `placa` (UNIQUE), `platform_id`, `nome`, `transportadora`, `frota`, `turno`, `alertas`, `tipos` (jsonb), `ultimo_evento`, `reportaveis`, `tipos_reportar`, `ultimo_evento_reportar`, `tecnicos`, `tipos_tecnico` (jsonb), `eventos_detalhados` (jsonb), `severidade`, `loaded_at`, `updated_at`, `updated_by` | 1 linha por placa (cross-platform dedup). Trigger `drivers_queue_touch_updated_at` mantém `updated_at`. `replica identity full` pra DELETE entregar a placa via realtime |
 
 Realtime: `atendimentos`, `templates`, `notes`, `ws_pages`, `links`,
-`reminders`, `app_settings`.
+`reminders`, `app_settings`, `drivers_queue`.
+
+#### Sincronização realtime end-to-end
+
+Após a migration `20260518211646_drivers_queue.sql`, a fila de motoristas é
+compartilhada entre todos os operadores:
+
+| Hook | Tabela | Eventos escutados |
+|---|---|---|
+| `useAtendimentos` | `atendimentos` | INSERT (novos atendimentos da equipe) |
+| `useDriversQueue` | `drivers_queue` | INSERT/UPDATE/DELETE |
+| `useCarrierAliases` | `app_settings` (filter `key=eq.carrier_aliases`) | `*` — aliases recém-salvos no Admin propagam pro Dashboard sem reload |
+| `useReminders` / `useTemplates` / `useNotes` / etc. | Cada um na sua tabela | INSERT/UPDATE/DELETE |
+
+`useDriversQueue` faz **backfill automático** no load inicial: se o DB
+estiver vazio mas houver cache em `localStorage('mn_drivers_queue')`,
+sobe o cache pro DB (cobre casos de upload feito antes da migration ou de
+upsert que falhou silenciosamente). Caso contrário, DB é fonte de verdade.
 
 ---
 
@@ -461,13 +574,26 @@ Implementado em `src/platforms/sascar/parser.js`. Ordem das regras:
 
 ### 8.2. Ações no Monitor
 
-| Ação | Atendimento gerado | Effect no driver |
-|---|---|---|
-| **Inserir na planilha** (intervenção) | `tipo='intervencao'` + post à `append-sheet` | zera `alertas` e `tipos` |
-| **Reportar e remover** | `tipo='reportar'` | zera `reportaveis` e `tiposReportar` |
-| **Descartar (intervenção/reportar/técnico)** | `tipo='descarte'` | zera o bucket correspondente |
-| **Auto-descarte Dinon** | `tipo='descarte'` (background) | evento removido antes de virar driver |
-| **Limpar fila** | nenhum | zera lista no `localStorage` |
+Todas as mutações na fila vão pra tabela `drivers_queue` via os métodos do
+`useDriversQueue` (expostos pelo contexto). Não há mais `setDrivers` direto —
+o Monitor refatorou para chamar o método semântico apropriado, que atualiza
+local + DB e propaga via realtime pros outros operadores.
+
+| Ação | Atendimento gerado | Método chamado | Effect no driver |
+|---|---|---|---|
+| **Upload de planilha** | — (auto-descartes Dinon vão como background) | `replaceDrivers(batch, platformId)` — upsert dos novos + DELETE escopado ao `platform_id` dos sumidos | substitui a fila daquela plataforma |
+| **Scrape automático** | — | `replaceDrivers(batch, platformId)` | mesma lógica do upload |
+| **Inserir na planilha** (intervenção) | `tipo='intervencao'` + post à `append-sheet` | `updateDriver(placa, {alertas: 0, tipos: []})` | zera o bucket de intervenção |
+| **Reportar e remover** | `tipo='reportar'` | `updateDriver(placa, {reportaveis: 0, tiposReportar: []})` | zera o bucket de reportar |
+| **Descartar (intervenção/reportar/técnico)** | `tipo='descarte'` | `updateDriver(placa, patch)` com o bucket apropriado | zera o bucket correspondente (linha persiste zerada — não é deletada) |
+| **Descarte em massa** | um `tipo='descarte'` por placa | `bulkUpdateDrivers(placas, patch)` | zera o bucket nas placas em lote (`UPDATE … IN`) |
+| **Auto-descarte Dinon** | `tipo='descarte'` (background) | (evento removido antes de virar driver) | — |
+| **Limpar fila** | nenhum | `clearDrivers()` | `DELETE` em `drivers_queue` (propaga via realtime pros outros operadores) |
+
+Quando uma placa fica com todos os buckets zerados (alertas + reportaveis +
+tecnicos = 0), a linha **permanece** em `drivers_queue` (não é deletada). Sai
+da UI por ser filtrada em `driversAtivos`, mas serve de referência caso o mesmo
+motorista volte a gerar evento (preserva `_loadedAt` original, etc).
 
 ### 8.3. Critérios de notificação push
 
@@ -512,18 +638,23 @@ a UI normal com um chip "Plataforma em manutenção" no rodapé.
 
 ---
 
-## 11. Personalização visual (`TweaksPanel`)
+## 11. Personalização visual
 
-Persistido em `localStorage` com prefixo `mn_`:
-- `theme`: `light` | `dark` (default `dark`)
-- `density`: `compact` | `normal` | `cozy`
-- `accent`: 6 variantes (`vinho`, `roxo`, `azul`, `verde`, `ambar`, `rosa`)
-- `mode`: `pleno` | `plantao` | `foco`
-- `vibe`: `sobrio` | `editorial` | `pulse`
-- `rhythm`: `operacional` | `compacto` | `cinema`
+O antigo `TweaksPanel` FAB global foi removido. As preferências visuais agora
+moram no **popover ⚙ da barra de saudação do Dashboard** (ver §5.1 Tweaks
+popover). Todas seguem persistidas em `localStorage` com prefixo `mn_`:
 
-Plus `platformId` (default `sascar`) controla qual adapter de monitoramento
-está ativo.
+| Chave | Valores | Aplicado por |
+|---|---|---|
+| `theme` | `light` \| `dark` (default `dark`) | `useApp` + `data-theme` no `<html>` |
+| `density` | `compact` \| `normal` \| `cozy` | `useApp` + `data-density` no `<html>` |
+| `accent` | `vinho` \| `roxo` \| `azul` \| `verde` \| `ambar` \| `rosa` | `useApp` + `applyAccent()` que seta vars `--accent-*` |
+| `platformId` | `sascar` \| `maxtrack` | Monitor (qual adapter está ativo) |
+| `mn_dash_*` | SLA, compare, hourly, transp, classif, tech, exec, layout, tv | Dashboard-only (popover ⚙) |
+| `mn_dash_filters` | JSON `{tipo, resultado, empresa, operador, periodo}` | Dashboard (FilterBar) |
+
+Aliases `mode`/`vibe`/`rhythm` foram removidos com a desativação do TweaksPanel
+global — não eram aplicados em nenhum CSS ativo do Dashboard novo.
 
 ---
 
@@ -598,3 +729,37 @@ npm run lint      # ESLint
 Para integrar uma plataforma nova: copie `src/platforms/_template/`,
 implemente o(s) bloco(s) de ingestão e registre no `index.js`. Detalhes em
 [docs/PLATFORMS.md](./PLATFORMS.md).
+
+---
+
+## 18. Changelog — 2026-05-18 (Dashboard redesign + realtime end-to-end)
+
+### Novo
+- **Dashboard "Gestão à Vista"** completo (§5.1): 4 KPIs, drills, Críticos & SLA, donut Tipo × Resultado, Hourly 24 h, Transportadoras, Produtividade, Banner SLA. Tudo realtime.
+- **Tabela `drivers_queue`** (§6) — fila compartilhada per-row com realtime, replica identity full, trigger touch_updated_at. Migration `20260518211646_drivers_queue.sql`.
+- **Hook `useDriversQueue`** — INSERT/UPDATE/DELETE subscription + backfill automático do `localStorage('mn_drivers_queue')` se DB vazio na primeira carga após migration.
+- **Tweaks popover do Dashboard** (§5.1) — substitui `TweaksPanel` global FAB (removido). SLA, comparação, layout, executivo, seções, tema/accent/densidade, atalho admin pra aliases. Persistência granular em `mn_dash_*`.
+- **FilterBar 100 % funcional** (§5.1): tipo/resultado/empresa/operador/período cabeiam todos os widgets + ONTEM. Counts dos chips absolutos. Persistido em `mn_dash_filters`.
+- **Topbar reformulada** (§5.1): brand integrado (M MedNet) à esquerda, turno dinâmico no breadcrumb, data removida (dedup com greet do Dashboard).
+- **`useCarrierAliases` ganhou realtime** (§6) — admin edita aliases, Dashboard atualiza sem reload.
+
+### Mudanças de semântica
+- **Em aberto agora** e **Fechados hoje** passam a incluir o bucket **reportar** (antes era só intervenção).
+- **Reincidência** continua restrita a `tipo='intervencao'` (não faz sentido pra reportar).
+- **Limiar de críticos** virou per-plataforma: Sascar ≥ 5, Maxtrack ≥ 8.
+- **Transportadora ranking** + chips de filtro usam `resolveAlias` (consistência com Sheets/Admin).
+- **HourlyActivity** agora cobre 24 h (era 06–19 h) — turno noturno deixou de ser invisível.
+- **Operador filter** agora vem de `useProfiles()` (equipe atual), não do histórico de `atendimentos.operador_nome`.
+- **`ONTEM.emAberto`** virou heurística declarada (placas com evento ontem que não tiveram intervenção/reportar fechado no dia) — proxy, não snapshot.
+- **`PANEL_TITLES.dashboard`**: t='Dashboard · Gestão à Vista', s='Visão da diretoria' (turno colado dinamicamente pelo Topbar).
+
+### Removido
+- `src/components/TweaksPanel.jsx` (FAB global)
+- `setDrivers` direto no `context.jsx` (substituído pelos métodos do hook)
+- `aliases mode/vibe/rhythm` do TweaksPanel global (não eram aplicados em CSS ativo)
+
+### Known limitations
+- `ONTEM.emAberto` é heurística — pra precisão real, faltaria snapshot diário automatizado à meia-noite.
+- Produtividade não rastreia tempo médio de atendimento (precisaria coluna `duracao_seg` em `atendimentos` + capturar `started_at` no Monitor).
+- Sem indicador de "operador X está com a placa Y" — para reduzir colisão de dois operadores atendendo o mesmo motorista, faltaria tabela `atendimentos_em_andamento` (com TTL).
+- Status pill do Topbar ("Fadiga Zero · Online") segue hardcoded — não reflete saúde real de backend/scraper.
