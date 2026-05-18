@@ -90,7 +90,10 @@ export function FilterBar({ filters, setFilters, tipos: TIPOS, resultados: RESUL
     set.has(id) ? set.delete(id) : set.add(id);
     setFilters({ ...filters, [key]: [...set] });
   };
-  const setEmpresa = (e) => setFilters({ ...filters, empresa: e.target.value });
+  // Selecionar placeholder vazio "Outras…" volta pra "todas" (não zera o filtro)
+  const setEmpresa = (e) => setFilters({ ...filters, empresa: e.target.value || 'todas' });
+  const toggleEmpresa = (name) =>
+    setFilters({ ...filters, empresa: filters.empresa === name ? 'todas' : name });
   const setPeriodo = (id) => setFilters({ ...filters, periodo: id });
   const reset = () => setFilters({ tipo: [], resultado: [], empresa: 'todas', periodo: 'hoje', operador: 'todos' });
 
@@ -152,17 +155,24 @@ export function FilterBar({ filters, setFilters, tipos: TIPOS, resultados: RESUL
             <span
               key={t.name}
               className={`dg-chip${filters.empresa === t.name ? ' active' : ''}`}
-              onClick={() => setFilters({ ...filters, empresa: t.name })}
-              title={`${t.total} alertas · ${t.abertos} em aberto`}
+              onClick={() => toggleEmpresa(t.name)}
+              title={`${t.total} alertas · ${t.abertos} em aberto · clique pra alternar`}
             >
               {t.name.split(' ')[0]}
               <span className="count">{t.total}</span>
             </span>
           ))}
-          <select className="dg-select" value={TRANSPORTADORAS.slice(0, 6).find(t => t.name === filters.empresa) ? '' : filters.empresa} onChange={setEmpresa} style={{ minWidth: 130 }}>
-            <option value="">Outras…</option>
-            {TRANSPORTADORAS.slice(6).map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-          </select>
+          {TRANSPORTADORAS.length > 6 && (
+            <select
+              className="dg-select"
+              value={TRANSPORTADORAS.slice(0, 6).find(t => t.name === filters.empresa) || filters.empresa === 'todas' ? '' : filters.empresa}
+              onChange={setEmpresa}
+              style={{ minWidth: 130 }}
+            >
+              <option value="">Outras…</option>
+              {TRANSPORTADORAS.slice(6).map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 

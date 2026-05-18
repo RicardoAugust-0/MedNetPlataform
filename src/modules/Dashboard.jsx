@@ -169,14 +169,19 @@ export default function Dashboard() {
 
   const todayStr = now.toDateString();
 
-  // ── Filtros de tela ─────────────────────────────────────────────────────────
-  const [filters, setFilters] = useState({
-    tipo:      [],
-    resultado: [],
-    empresa:   'todas',
-    operador:  'todos',
-    periodo:   'hoje',
+  // ── Filtros de tela (persistidos em localStorage) ──────────────────────────
+  const FILTERS_DEFAULT = { tipo: [], resultado: [], empresa: 'todas', operador: 'todos', periodo: 'hoje' };
+  const [filters, setFilters] = useState(() => {
+    try {
+      const raw = localStorage.getItem('mn_dash_filters');
+      if (!raw) return FILTERS_DEFAULT;
+      const parsed = JSON.parse(raw);
+      return { ...FILTERS_DEFAULT, ...parsed };
+    } catch { return FILTERS_DEFAULT; }
   });
+  useEffect(() => {
+    try { localStorage.setItem('mn_dash_filters', JSON.stringify(filters)); } catch { /* quota */ }
+  }, [filters]);
   const [activeKpi, setActiveKpi] = useState(null);
 
   // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
@@ -433,12 +438,21 @@ export default function Dashboard() {
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
 
-  // Transportadoras distintas pros chips do filtro — base UNFILTERED
-  // pra usuário poder trocar entre empresas (não restringe à seleção atual)
-  const transpForFilter = useMemo(
-    () => [...new Set(drivers.map(d => resolveAlias(d.transportadora)).filter(Boolean))],
-    [drivers, resolveAlias]
-  );
+  // Transportadoras pros chips do filtro — base UNFILTERED (usuário precisa
+  // poder trocar entre empresas). Objetos com {name,total,abertos} pra chip
+  // mostrar count real, ordenadas por volume.
+  const transpForFilter = useMemo(() => {
+    const map = new Map();
+    drivers.forEach(d => {
+      const name = resolveAlias(d.transportadora);
+      if (!name) return;
+      const e = map.get(name) || { name, total: 0, abertos: 0 };
+      e.total += (d.alertas || 0) + (d.reportaveis || 0);
+      if ((d.alertas || 0) > 0 || (d.reportaveis || 0) > 0) e.abertos++;
+      map.set(name, e);
+    });
+    return [...map.values()].sort((a, b) => b.total - a.total);
+  }, [drivers, resolveAlias]);
 
   // Lista de operadores pro dropdown — todos do histórico (não restringe ao filtro atual)
   const operadoresForFilter = useMemo(
