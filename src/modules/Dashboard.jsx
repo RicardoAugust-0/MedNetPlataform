@@ -6,7 +6,9 @@ import { useCarrierAliases } from '../hooks/useCarrierAliases';
 import { useProfiles } from '../hooks/useProfiles.jsx';
 import { fmtDate, applyAccent } from '../utils';
 import './dashboard/dashboard.css';
-import { useMaxtrackAutoSync } from '../hooks/useMaxtrackAutoSync';
+import { useAutoSync } from '../hooks/useAutoSync';
+import maxtrack from '../platforms/maxtrack/index.js';
+import sascar from '../platforms/sascar/index.js';
 import {
   KPI,
   FilterBar,
@@ -129,13 +131,8 @@ export default function Dashboard() {
   const { profiles } = useProfiles();
   const { profile: me } = useAuth();
   const isAdmin = me?.role === 'admin';
-  const {
-    isEnabled: maxtrackEnabled,
-    autoSync: maxtrackAutoSync, setAutoSync: setMaxtrackAutoSync,
-    syncIntervalMin, setSyncIntervalMin,
-    syncing: maxtrackSyncing, lastSyncAt: maxtrackLastSync,
-    syncError: maxtrackSyncError, doSync: maxtrackSync,
-  } = useMaxtrackAutoSync();
+  const mxSync = useAutoSync({ platform: maxtrack, isEnabled: !!me?.maxtrack_email, storageKey: 'maxtrack' });
+  const scSync = useAutoSync({ platform: sascar,   isEnabled: !!me?.sascar_token,   storageKey: 'sascar'   });
 
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
@@ -653,30 +650,37 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {maxtrackEnabled && (
+                {(!!me?.maxtrack_email || !!me?.sascar_token) && (
                   <div className="dg-tweaks-grp">
                     <label className="dg-tweaks-lb">Atualização automática</label>
-                    <div className="dg-tweaks-toggles">
-                      <button
-                        className={`dg-tweaks-toggle${maxtrackAutoSync ? ' on' : ''}`}
-                        onClick={() => setMaxtrackAutoSync(v => !v)}
-                      >
-                        <span className="knob"></span>
-                        <span className="txt">Buscar Maxtrack automaticamente</span>
-                      </button>
-                    </div>
-                    {maxtrackAutoSync && (
-                      <div className="dg-tweaks-sla" style={{ marginTop: 8 }}>
-                        <button onClick={() => setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
-                        <input
-                          type="number" min="2" max="60" step="1"
-                          value={syncIntervalMin}
-                          onChange={(e) => setSyncIntervalMin(Number(e.target.value) || 5)}
-                        />
-                        <button onClick={() => setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                    {[
+                      { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
+                      { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
+                    ].filter(p => p.enabled).map(({ label, sync }) => (
+                      <div key={label} style={{ marginBottom: 6 }}>
+                        <div className="dg-tweaks-toggles">
+                          <button
+                            className={`dg-tweaks-toggle${sync.autoSync ? ' on' : ''}`}
+                            onClick={() => sync.setAutoSync(v => !v)}
+                          >
+                            <span className="knob"></span>
+                            <span className="txt">Buscar {label} automaticamente</span>
+                          </button>
+                        </div>
+                        {sync.autoSync && (
+                          <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
+                            <button onClick={() => sync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                            <input
+                              type="number" min="2" max="60" step="1"
+                              value={sync.syncIntervalMin}
+                              onChange={(e) => sync.setSyncIntervalMin(Number(e.target.value) || 5)}
+                            />
+                            <button onClick={() => sync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
 
@@ -790,21 +794,26 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {maxtrackEnabled && maxtrackAutoSync && (
+          {[
+            { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
+            { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
+          ].filter(p => p.enabled && p.sync.autoSync).map(({ label, sync }) => (
             <button
-              className={`dg-btn dg-btn-ghost${maxtrackSyncError ? ' dg-sync-error' : ''}`}
-              title={maxtrackSyncError || (maxtrackLastSync ? `Último sync: ${maxtrackLastSync.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Aguardando primeiro sync')}
-              onClick={() => !maxtrackSyncing && maxtrackSync()}
-              disabled={maxtrackSyncing}
+              key={label}
+              className={`dg-btn dg-btn-ghost${sync.syncError ? ' dg-sync-error' : ''}`}
+              title={sync.syncError || (sync.lastSyncAt ? `${label} — último sync: ${sync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : `${label} — aguardando primeiro sync`)}
+              onClick={() => !sync.syncing && sync.doSync()}
+              disabled={sync.syncing}
             >
-              <i className={`ti ti-refresh${maxtrackSyncing ? ' dg-spin' : ''}`}></i>
-              {maxtrackSyncing
-                ? ' Sincronizando…'
-                : maxtrackLastSync
-                  ? ` ${maxtrackLastSync.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                  : ' Auto'}
+              <i className={`ti ti-refresh${sync.syncing ? ' dg-spin' : ''}`}></i>
+              {` ${label} `}
+              {sync.syncing
+                ? '…'
+                : sync.lastSyncAt
+                  ? sync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  : 'Auto'}
             </button>
-          )}
+          ))}
           <button
             className="dg-btn dg-btn-ghost"
             title={tvMode ? 'Mostrar menu' : 'Modo TV'}
