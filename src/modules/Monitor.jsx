@@ -21,6 +21,9 @@ import { useSheetHistory } from '../hooks/useSheetHistory.js';
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
 
+const normalizeSev  = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
 // Reconstrói os campos derivados de stats após filtro de histórico e postProcess.
 function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes) {
   return {
@@ -177,26 +180,23 @@ export default function Monitor() {
   }, [autoRefresh, autoRefreshMin, platform?.id]);
 
   /* ── Filtros fila ── */
-  const normalizeSev = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const buscaNorm = normalizeText(filters.busca).trim();
-  const filtered = drivers.filter(d => {
-    const f = filters;
-    if (f.turno && d.turno !== f.turno) return false;
-    if (f.empresa && d.transportadora !== f.empresa) return false;
-    if (f.comportamento) {
+  const buscaNorm = useMemo(() => normalizeText(filters.busca).trim(), [filters.busca]);
+  const filtered = useMemo(() => drivers.filter(d => {
+    if (filters.turno && d.turno !== filters.turno) return false;
+    if (filters.empresa && d.transportadora !== filters.empresa) return false;
+    if (filters.comportamento) {
       const todos = [...(d.tipos || []), ...(d.tiposReportar || [])];
-      if (!todos.some(t => t.includes(f.comportamento))) return false;
+      if (!todos.some(t => t.includes(filters.comportamento))) return false;
     }
-    if (f.prioridade && normalizeSev(d.severidade) !== f.prioridade) return false;
+    if (filters.prioridade && normalizeSev(d.severidade) !== filters.prioridade) return false;
     if (buscaNorm && !normalizeText(d.placa).includes(buscaNorm) && !normalizeText(d.nome).includes(buscaNorm)) return false;
     return true;
-  });
+  }), [drivers, filters.turno, filters.empresa, filters.comportamento, filters.prioridade, buscaNorm]);
 
-  const intervencaoList = filtered.filter(d => d.alertas > 0).sort((a, b) => b.alertas - a.alertas);
-  const reportarList    = filtered.filter(d => d.alertas === 0 && d.reportaveis > 0).sort((a, b) => b.reportaveis - a.reportaveis);
-  const tecList         = filtered.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0);
-  const transps         = [...new Set(drivers.map(d => d.transportadora))].sort();
+  const intervencaoList = useMemo(() => filtered.filter(d => d.alertas > 0).sort((a, b) => b.alertas - a.alertas), [filtered]);
+  const reportarList    = useMemo(() => filtered.filter(d => d.alertas === 0 && d.reportaveis > 0).sort((a, b) => b.reportaveis - a.reportaveis), [filtered]);
+  const tecList         = useMemo(() => filtered.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0), [filtered]);
+  const transps         = useMemo(() => [...new Set(drivers.map(d => d.transportadora))].sort(), [drivers]);
 
   /* ── Upload ── */
   const hashFile = async (file) => {
@@ -540,7 +540,10 @@ export default function Monitor() {
   // Mantém ref sincronizado com a versão atual de handleScrape
   useEffect(() => { handleScrapeRef.current = handleScrape; });
 
-  const handlers = { openDossie, openTemplate, attend, deleteAlert, reportar };
+  const handlers = useMemo(
+    () => ({ openDossie, openTemplate, attend, deleteAlert, reportar }),
+    [openDossie, openTemplate, attend, deleteAlert, reportar],
+  );
 
   const sheetAgeColor = sheetAgeMin === null ? null
     : sheetAgeMin < 30  ? 'var(--success-500, #22c55e)'
