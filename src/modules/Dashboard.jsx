@@ -375,17 +375,6 @@ export default function Dashboard() {
   // Atendimentos "produtivos" do dia: intervenção + reportar (descarte e limpeza
   // não contam como "fechados" pro KPI de produtividade da operação)
   // Filtro resultado: positivo = placa não-reincidente / pos-positivo = reincidente / aberto = drivers
-  const intervHoje = useMemo(
-    () => atendimentosHoje.filter(a => {
-      if (a.tipo !== 'intervencao') return false;
-      const isPP = a.placa && placasPrevia30d.has(a.placa);
-      if (isPP && !showResultado('pos-positivo')) return false;
-      if (!isPP && !showResultado('positivo'))    return false;
-      return true;
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [atendimentosHoje, placasPrevia30d, filters.resultado]
-  );
   const fechadosHoje = useMemo(
     () => atendimentosHoje.filter(a => {
       if (a.tipo !== 'intervencao' && a.tipo !== 'reportar') return false;
@@ -398,19 +387,32 @@ export default function Dashboard() {
     [atendimentosHoje, placasPrevia30d, filters.resultado]
   );
 
-  const posPositivo = useMemo(
-    () => intervHoje.filter(a => a.placa && placasPrevia30d.has(a.placa)).length,
-    [intervHoje, placasPrevia30d]
-  );
+  // RESULTADOS movido para antes de posPositivo/positivo — ambos derivam daqui.
+  // Contagem SEMPRE absoluta (sem filtros de resultado/operador/empresa) para que
+  // o chip e o card KPI de reincidência exibam o mesmo número.
+  const RESULTADOS = useMemo(() => {
+    const atsHojeFull = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr);
+    const fechadosFull = atsHojeFull.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
+    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
+    const posFull = fechadosFull.length - ppFull;
+    const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
+    return [
+      { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
+      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
+      { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
+    ];
+  }, [atHistory, drivers, todayStr, placasPrevia30d]);
 
-  const positivo    = intervHoje.length - posPositivo;
-  const fechados    = fechadosHoje.length;
+  // posPositivo e positivo derivam do RESULTADOS (ambos os tipos, sem filtro resultado)
+  // para ficar consistentes com os chips do FilterBar.
+  const posPositivo  = RESULTADOS.find(r => r.id === 'pos-positivo')?.count ?? 0;
+  const positivo     = RESULTADOS.find(r => r.id === 'positivo')?.count ?? 0;
+  const fechados     = fechadosHoje.length;
   // Filtro resultado: 'aberto' liga/desliga a contagem de em-aberto
   const emAberto    = showResultado('aberto') ? driversAtivos.length : 0;
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
-  // Reincidência permanece sobre intervenção (fadiga) — não faz sentido pra reportar
-  const taxaReinc    = intervHoje.length > 0 ? (posPositivo / intervHoje.length) * 100 : 0;
+  const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
 
   // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
   const ONTEM = useMemo(() => {
@@ -502,19 +504,6 @@ export default function Dashboard() {
       { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount, hint: 'Motoristas só para reportar (comportamento)' },
     ];
   }, [drivers]);
-
-  const RESULTADOS = useMemo(() => {
-    const atsHojeFull = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr);
-    const fechadosFull = atsHojeFull.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
-    const posFull = fechadosFull.length - ppFull;
-    const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
-    return [
-      { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
-      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
-      { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
-    ];
-  }, [atHistory, drivers, todayStr, placasPrevia30d]);
 
   // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
   // Janela = mesma do dashboard (hoje ou turno). Empresa filtra via aliases.
