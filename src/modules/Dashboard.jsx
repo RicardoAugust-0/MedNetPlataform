@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useCarrierAliases } from '../hooks/useCarrierAliases';
 import { useProfiles } from '../hooks/useProfiles.jsx';
+import { useSheetHistory } from '../hooks/useSheetHistory.js';
 import { fmtDate, applyAccent } from '../utils';
 import './dashboard/dashboard.css';
 import { useAutoSync } from '../hooks/useAutoSync';
@@ -21,7 +22,40 @@ import {
   HourlyActivity,
   Banner,
   Section,
+  SheetInsights,
 } from './dashboard/components';
+
+// ─── Sheet date/time parsing helpers ─────────────────────────────────────────
+const MES_LABELS = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+
+function parseSheetRowDate(row) {
+  if (!row?.data || !row?._mes) return null;
+  const parts = String(row.data).split('/');
+  const d = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const mesParts = String(row._mes).trim().split(/\s+/);
+  const year = parseInt(mesParts[mesParts.length - 1], 10);
+  if (!d || !m || !year) return null;
+  return new Date(year, m - 1, d);
+}
+
+function parseTimeStrToMin(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// Constrói lista "MAIO 2026,ABRIL 2026,..." pros últimos N meses (incl. atual).
+function buildMesesLookback(monthsBack) {
+  const now = new Date();
+  const out = [];
+  for (let i = monthsBack; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${MES_LABELS[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  return out.join(',');
+}
 
 // ─── DEV MOCKS ────────────────────────────────────────────────────────────────
 // Stripped automatically by Vite in production (import.meta.env.DEV = false).
@@ -134,6 +168,7 @@ export default function Dashboard() {
   const isAdmin = me?.role === 'admin';
   const mxSync = useAutoSync({ platform: maxtrack, isEnabled: !!me?.maxtrack_email, storageKey: 'maxtrack' });
   const scSync = useAutoSync({ platform: sascar,   isEnabled: !!me?.sascar_token,   storageKey: 'sascar'   });
+  const sheetHistory = useSheetHistory();
 
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
@@ -148,6 +183,9 @@ export default function Dashboard() {
   const [tvMode,      setTvMode]                = useState(() => localStorage.getItem('mn_dash_tv')      === 'true');
   const [executiveMode, setExecutiveMode]       = useState(() => localStorage.getItem('mn_dash_exec')    === 'true');
   const [layout, setLayout]                     = useState(() => localStorage.getItem('mn_dash_layout')  || 'balanced');
+  const [showSheet,   setShowSheet]             = useState(() => localStorage.getItem('mn_dash_sheet')   !== 'false');
+  const [sheetAutoSync, setSheetAutoSync]       = useState(() => localStorage.getItem('mn_dash_sheet_autosync') === 'true');
+  const [sheetSyncMin,  setSheetSyncMin]        = useState(() => parseInt(localStorage.getItem('mn_dash_sheet_sync_min') || '10', 10));
 
   useEffect(() => { localStorage.setItem('mn_dash_sla',     String(slaLimit));         }, [slaLimit]);
   useEffect(() => { localStorage.setItem('mn_dash_compare', String(compareYesterday)); }, [compareYesterday]);
@@ -157,6 +195,24 @@ export default function Dashboard() {
   useEffect(() => { localStorage.setItem('mn_dash_tech',    String(showTech));         }, [showTech]);
   useEffect(() => { localStorage.setItem('mn_dash_exec',    String(executiveMode));    }, [executiveMode]);
   useEffect(() => { localStorage.setItem('mn_dash_layout',  layout);                   }, [layout]);
+  useEffect(() => { localStorage.setItem('mn_dash_sheet',   String(showSheet));        }, [showSheet]);
+  useEffect(() => { localStorage.setItem('mn_dash_sheet_autosync', String(sheetAutoSync)); }, [sheetAutoSync]);
+  useEffect(() => { localStorage.setItem('mn_dash_sheet_sync_min', String(sheetSyncMin));  }, [sheetSyncMin]);
+
+  // ── Sheet: carga inicial (4 meses pra cobrir janela de reincidência 90d)
+  useEffect(() => {
+    sheetHistory.load(buildMesesLookback(3));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Sheet: auto-refresh configurável
+  const sheetLoadRef = useRef(sheetHistory.load);
+  useEffect(() => { sheetLoadRef.current = sheetHistory.load; }, [sheetHistory.load]);
+  useEffect(() => {
+    if (!sheetAutoSync) return;
+    const id = setInterval(() => sheetLoadRef.current(buildMesesLookback(3)), Math.max(2, sheetSyncMin) * 60 * 1000);
+    return () => clearInterval(id);
+  }, [sheetAutoSync, sheetSyncMin]);
 
   // Executive mode body class (CSS controla tamanhos)
   useEffect(() => {
@@ -267,23 +323,37 @@ export default function Dashboard() {
     [driversFiltered]
   );
 
-  // ── Placas com intervenção nos últimos 30 dias (excl. hoje) ────────────────
+  // ── Placas com intervenção prévia (excl. hoje) ────────────────────────────
+  // Combina duas fontes pra ampliar a detecção de reincidência:
+  //   1. Supabase atendimentos: últimos 30 dias (operação corrente)
+  //   2. Planilha de intervenções (Sheets): últimos 90 dias, linhas com
+  //      `realizadoPor` preenchido — fonte oficial estendida.
   // Depende só de todayStr (não de `now`) — Set é recalculado apenas uma vez
   // por dia em vez de a cada 30 s (clock tick do SLA).
   const placasPrevia30d = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const cutoffMs = today.getTime() - 30 * 86400000;
+    const cutoff30 = today.getTime() - 30 * 86400000;
+    const cutoff90 = today.getTime() - 90 * 86400000;
     const set = new Set();
     for (const a of atHistory) {
       if (a.tipo !== 'intervencao' || !a.placa) continue;
       const t = new Date(a.created_at).getTime();
-      if (t < cutoffMs) continue;
+      if (t < cutoff30) continue;
       if (new Date(a.created_at).toDateString() === todayStr) continue;
       set.add(a.placa);
     }
+    for (const r of sheetHistory.rows) {
+      if (!r.placa || !r.realizadoPor) continue;
+      const d = parseSheetRowDate(r);
+      if (!d) continue;
+      const t = d.getTime();
+      if (t < cutoff90) continue;
+      if (d.toDateString() === todayStr) continue;
+      set.add(r.placa);
+    }
     return set;
-  }, [atHistory, todayStr]);
+  }, [atHistory, todayStr, sheetHistory.rows]);
 
   // Lookup placa → última intervenção registrada antes de hoje.
   // Pré-calculado uma vez por mudança em atHistory/data, evita O(drivers × histórico)
@@ -446,6 +516,94 @@ export default function Dashboard() {
     ];
   }, [atHistory, drivers, todayStr, placasPrevia30d]);
 
+  // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
+  // Janela = mesma do dashboard (hoje ou turno). Empresa filtra via aliases.
+  const sheetRowsPeriodo = useMemo(() => {
+    return sheetHistory.rows.filter(r => {
+      const d = parseSheetRowDate(r);
+      if (!d) return false;
+      if (filters.periodo === 'hoje') {
+        if (d.toDateString() !== todayStr) return false;
+      } else {
+        // turno: comparar pelo intervalo (mesmo dia → ok, dia anterior → checa hora)
+        if (d < new Date(periodoWindow.start.getFullYear(), periodoWindow.start.getMonth(), periodoWindow.start.getDate())) return false;
+        if (d > periodoWindow.end) return false;
+      }
+      if (!empresaFilterFn(r.empresa)) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, filters.empresa, resolveAlias]);
+
+  // ── Sheet: TMA (Tempo Médio de Atendimento) ───────────────────────────────
+  // Delta entre horaSolicitacao e horaRealizacao, em minutos. Ignora outliers
+  // (>12h, geralmente erro de digitação ou cruzou múltiplos dias).
+  const sheetTMA = useMemo(() => {
+    const deltas = [];
+    for (const r of sheetRowsPeriodo) {
+      if (!r.realizadoPor) continue;
+      const ts = parseTimeStrToMin(r.horaSolicitacao);
+      const tr = parseTimeStrToMin(r.horaRealizacao);
+      if (ts == null || tr == null) continue;
+      let delta = tr - ts;
+      if (delta < 0) delta += 24 * 60; // virou meia-noite
+      if (delta > 12 * 60) continue; // outlier
+      deltas.push(delta);
+    }
+    if (deltas.length === 0) return { avg: null, n: 0 };
+    const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    return { avg, n: deltas.length };
+  }, [sheetRowsPeriodo]);
+
+  // ── Sheet: distribuição por criticidade ───────────────────────────────────
+  const sheetCriticidade = useMemo(() => {
+    const COL = { 'GRAVÍSSIMO': '#E24B4A', 'GRAVISSIMO': '#E24B4A', 'GRAVE': '#E8A020', 'NORMAL': '#2DA75A' };
+    const counts = new Map();
+    for (const r of sheetRowsPeriodo) {
+      const raw = (r.criticidade || '').trim();
+      if (!raw) continue;
+      const key = raw;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count, color: COL[label.toUpperCase()] || '#8A94A6' }))
+      .sort((a, b) => b.count - a.count);
+  }, [sheetRowsPeriodo]);
+
+  // ── Sheet: distribuição por classificação ─────────────────────────────────
+  const sheetClassificacao = useMemo(() => {
+    const counts = new Map();
+    for (const r of sheetRowsPeriodo) {
+      const raw = (r.classificacao || '').trim();
+      if (!raw) continue;
+      counts.set(raw, (counts.get(raw) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [sheetRowsPeriodo]);
+
+  // ── Sheet: pendências (solicitadas sem realização registrada) ─────────────
+  // Olha toda a janela carregada (não filtra por período) — backlog acumulado.
+  // Respeita filtro de empresa.
+  const sheetPendencias = useMemo(() => {
+    let count = 0;
+    for (const r of sheetHistory.rows) {
+      if (!r.solicitadoPor) continue;
+      if (r.realizadoPor) continue;
+      if (!empresaFilterFn(r.empresa)) continue;
+      count++;
+    }
+    return count;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetHistory.rows, filters.empresa, resolveAlias]);
+
+  // ── Sheet: idade da última leitura (minutos) ──────────────────────────────
+  const sheetAgeMin = useMemo(() => {
+    if (!sheetHistory.loadedAt) return null;
+    return Math.floor((now.getTime() - new Date(sheetHistory.loadedAt).getTime()) / 60000);
+  }, [sheetHistory.loadedAt, now]);
+
   // ── Transportadoras ─────────────────────────────────────────────────────────
   const transpStats = useMemo(() => {
     const map = new Map();
@@ -597,7 +755,8 @@ export default function Dashboard() {
   const updatedLabel = useMemo(() => {
     const tDrv = driversLastChangeAt ? new Date(driversLastChangeAt).getTime() : 0;
     const tAt  = lastAtendimentoAt || 0;
-    const latest = Math.max(tDrv, tAt);
+    const tSh  = sheetHistory.loadedAt ? new Date(sheetHistory.loadedAt).getTime() : 0;
+    const latest = Math.max(tDrv, tAt, tSh);
     if (!latest) return 'Sem dados';
     const diffMin = Math.floor((now.getTime() - latest) / 60000);
     if (diffMin < 1)  return 'Atualizado agora';
@@ -605,7 +764,7 @@ export default function Dashboard() {
     const diffH = Math.floor(diffMin / 60);
     if (diffH < 24)   return `Atualizado há ${diffH}h`;
     return `Atualizado há ${Math.floor(diffH / 24)}d`;
-  }, [driversLastChangeAt, lastAtendimentoAt, now]);
+  }, [driversLastChangeAt, lastAtendimentoAt, sheetHistory.loadedAt, now]);
 
   // Contagem de drivers com alertas ativos por plataforma — base absoluta
   // (sem filtros), igual aos chips do FilterBar.
@@ -687,39 +846,60 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {(!!me?.maxtrack_email || !!me?.sascar_token) && (
-                  <div className="dg-tweaks-grp">
-                    <label className="dg-tweaks-lb">Atualização automática</label>
-                    {[
-                      { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
-                      { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
-                    ].filter(p => p.enabled).map(({ label, sync }) => (
-                      <div key={label} style={{ marginBottom: 6 }}>
-                        <div className="dg-tweaks-toggles">
-                          <button
-                            className={`dg-tweaks-toggle${sync.autoSync ? ' on' : ''}`}
-                            onClick={() => sync.setAutoSync(v => !v)}
-                          >
-                            <span className="knob"></span>
-                            <span className="txt">Buscar {label} automaticamente</span>
-                          </button>
-                        </div>
-                        {sync.autoSync && (
-                          <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
-                            <button onClick={() => sync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
-                            <input
-                              type="number" min="2" max="60" step="1"
-                              value={sync.syncIntervalMin}
-                              onChange={(e) => sync.setSyncIntervalMin(Number(e.target.value) || 5)}
-                            />
-                            <button onClick={() => sync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
-                          </div>
-                        )}
+                <div className="dg-tweaks-grp">
+                  <label className="dg-tweaks-lb">Atualização automática</label>
+                  {[
+                    { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
+                    { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
+                  ].filter(p => p.enabled).map(({ label, sync }) => (
+                    <div key={label} style={{ marginBottom: 6 }}>
+                      <div className="dg-tweaks-toggles">
+                        <button
+                          className={`dg-tweaks-toggle${sync.autoSync ? ' on' : ''}`}
+                          onClick={() => sync.setAutoSync(v => !v)}
+                        >
+                          <span className="knob"></span>
+                          <span className="txt">Buscar {label} automaticamente</span>
+                        </button>
                       </div>
-                    ))}
+                      {sync.autoSync && (
+                        <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
+                          <button onClick={() => sync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                          <input
+                            type="number" min="2" max="60" step="1"
+                            value={sync.syncIntervalMin}
+                            onChange={(e) => sync.setSyncIntervalMin(Number(e.target.value) || 5)}
+                          />
+                          <button onClick={() => sync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 6 }}>
+                    <div className="dg-tweaks-toggles">
+                      <button
+                        className={`dg-tweaks-toggle${sheetAutoSync ? ' on' : ''}`}
+                        onClick={() => setSheetAutoSync(v => !v)}
+                      >
+                        <span className="knob"></span>
+                        <span className="txt">Buscar planilha automaticamente</span>
+                      </button>
+                    </div>
+                    {sheetAutoSync && (
+                      <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
+                        <button onClick={() => setSheetSyncMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                        <input
+                          type="number" min="2" max="60" step="1"
+                          value={sheetSyncMin}
+                          onChange={(e) => setSheetSyncMin(Math.max(2, Math.min(60, Number(e.target.value) || 10)))}
+                        />
+                        <button onClick={() => setSheetSyncMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">Apresentação</label>
@@ -765,6 +945,7 @@ export default function Dashboard() {
                     <button className={`dg-tweaks-chip${showClassif ? ' on' : ''}`} onClick={() => setShowClassif(v => !v)}><i className="ti ti-chart-pie"></i> Tipo & Resultado</button>
                     <button className={`dg-tweaks-chip${showTech    ? ' on' : ''}`} onClick={() => setShowTech(v    => !v)}><i className="ti ti-tools"></i> Atenção técnica</button>
                     <button className={`dg-tweaks-chip${showTransp  ? ' on' : ''}`} onClick={() => setShowTransp(v  => !v)}><i className="ti ti-building-community"></i> Transportadoras</button>
+                    <button className={`dg-tweaks-chip${showSheet   ? ' on' : ''}`} onClick={() => setShowSheet(v   => !v)}><i className="ti ti-table"></i> Planilha</button>
                   </div>
                 </div>
 
@@ -851,6 +1032,22 @@ export default function Dashboard() {
                   : 'Auto'}
             </button>
           ))}
+          {sheetAutoSync && (
+            <button
+              className={`dg-btn dg-btn-ghost${sheetHistory.error ? ' dg-sync-error' : ''}`}
+              title={sheetHistory.error || (sheetHistory.loadedAt ? `Planilha — última leitura: ${new Date(sheetHistory.loadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Planilha — aguardando primeira leitura')}
+              onClick={() => !sheetHistory.loading && sheetHistory.load(buildMesesLookback(3))}
+              disabled={sheetHistory.loading}
+            >
+              <i className={`ti ti-refresh${sheetHistory.loading ? ' dg-spin' : ''}`}></i>
+              {' Planilha '}
+              {sheetHistory.loading
+                ? '…'
+                : sheetHistory.loadedAt
+                  ? new Date(sheetHistory.loadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  : 'Auto'}
+            </button>
+          )}
           <button
             className="dg-btn dg-btn-ghost"
             title={tvMode ? 'Mostrar menu' : 'Modo TV'}
@@ -1144,6 +1341,26 @@ export default function Dashboard() {
           {showTransp && !executiveMode && <TransportadoraRanking transportadoras={filteredTransp.slice(0, 6)} />}
         </div>
       </div>
+
+      {/* Seção: Planilha de intervenções */}
+      {showSheet && !executiveMode && (
+        <>
+          <Section icon="ti-table" label="Planilha de intervenções" />
+          <SheetInsights
+            tmaMin={sheetTMA.avg}
+            tmaSampleSize={sheetTMA.n}
+            criticidade={sheetCriticidade}
+            classificacao={sheetClassificacao}
+            pendencias={sheetPendencias}
+            totalHoje={sheetRowsPeriodo.length}
+            loading={sheetHistory.loading}
+            error={sheetHistory.error}
+            ageMin={sheetAgeMin}
+            syncing={sheetHistory.loading}
+            onRefresh={() => sheetHistory.load(buildMesesLookback(3))}
+          />
+        </>
+      )}
 
       {/* Seção: Produtividade */}
       <Section icon="ti-users" label="Produtividade da equipe" />
