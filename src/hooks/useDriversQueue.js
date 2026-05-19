@@ -150,13 +150,17 @@ export function useDriversQueue() {
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'drivers_queue' }, ({ new: row }) => {
         setDriversState(prev => {
-          if (prev.some(d => d._id === row.id)) return prev;
+          // Check both _id and placa: optimistic entries added via replaceAll lack _id
+          if (prev.some(d => d._id === row.id || d.placa === row.placa)) return prev;
           return [toLocal(row), ...prev];
         });
         touchChange();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drivers_queue' }, ({ new: row }) => {
-        setDriversState(prev => prev.map(d => d._id === row.id ? toLocal(row) : d));
+        setDriversState(prev => prev.map(d =>
+          // Match by _id first; fall back to placa for optimistic entries that lost _id
+          (d._id === row.id || (!d._id && d.placa === row.placa)) ? toLocal(row) : d
+        ));
         touchChange();
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'drivers_queue' }, ({ old: row }) => {
@@ -174,8 +178,16 @@ export function useDriversQueue() {
   const replaceAll = useCallback(async (newList, platformId) => {
     const stamped = newList.map(d => ({ ...d, _platformId: d._platformId || platformId }));
     setDriversState(prev => {
+      const prevById = new Map(prev.map(d => [d.placa, d]));
       const newPlacas = new Set(stamped.map(d => d.placa));
-      return [...prev.filter(d => !newPlacas.has(d.placa)), ...stamped];
+      return [
+        ...prev.filter(d => !newPlacas.has(d.placa)),
+        // Preserve _id from existing DB entry so UPDATE realtime events can match
+        ...stamped.map(d => {
+          const existing = prevById.get(d.placa);
+          return existing?._id ? { ...d, _id: existing._id } : d;
+        }),
+      ];
     });
     if (!isSupabaseConfigured) return;
     const userId = profile?.id || null;
