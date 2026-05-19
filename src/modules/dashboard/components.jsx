@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { iniciais } from '../../utils';
+import PlatformBadge from '../PlatformBadge';
 
 // ── Design colors ─────────────────────────────────────────────────────────────
 const COLORS = {
@@ -366,6 +367,7 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
                 <div className="dg-crit-info">
                   <div className="dg-crit-name">
                     {c.nome}
+                    <PlatformBadge platformId={c.platformId} />
                     <span className={`dg-crit-tag ${c.tipo}`}>{tipoInfo?.label}</span>
                     {c.reincidente && (
                       <span className="dg-crit-tag" style={{ background: 'rgba(42, 141, 217, 0.18)', color: 'var(--info-500)' }} title={`Última intervenção há ${c.ultimaIntervencao}`}>
