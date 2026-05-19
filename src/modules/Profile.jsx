@@ -239,12 +239,20 @@ function MaxtrackSection({ profile, session, updateProfile }) {
     if (!email.trim()) { setMsg({ type: 'error', text: 'Informe o e-mail Maxtrack.' }); return; }
     if (!senha.trim()) { setMsg({ type: 'error', text: 'Informe a senha Maxtrack.' }); return; }
     setLoading(true); setMsg(null);
-    const { error } = await supabase
+    const { error: profileError } = await supabase
       .from('profiles')
-      .update({ maxtrack_email: email.trim(), maxtrack_password: senha })
+      .update({ maxtrack_email: email.trim() })
       .eq('id', session?.user?.id);
-    if (error) {
-      setMsg({ type: 'error', text: error.message });
+    if (profileError) {
+      setMsg({ type: 'error', text: profileError.message });
+      setLoading(false);
+      return;
+    }
+    const { error: credError } = await supabase
+      .from('profile_credentials')
+      .upsert({ id: session?.user?.id, maxtrack_password: senha }, { onConflict: 'id' });
+    if (credError) {
+      setMsg({ type: 'error', text: credError.message });
     } else {
       updateProfile({ maxtrack_email: email.trim() });
       setSenha('');
@@ -256,14 +264,16 @@ function MaxtrackSection({ profile, session, updateProfile }) {
   const handleRemove = async () => {
     if (!window.confirm('Remover credenciais Maxtrack?')) return;
     setLoading(true); setMsg(null);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ maxtrack_email: null, maxtrack_password: null })
-      .eq('id', session?.user?.id);
-    if (!error) {
+    const [{ error: profileError }, { error: credError }] = await Promise.all([
+      supabase.from('profiles').update({ maxtrack_email: null }).eq('id', session?.user?.id),
+      supabase.from('profile_credentials').update({ maxtrack_password: null }).eq('id', session?.user?.id),
+    ]);
+    if (!profileError && !credError) {
       updateProfile({ maxtrack_email: '' });
       setEmail(''); setSenha('');
       setMsg({ type: 'success', text: 'Credenciais removidas.' });
+    } else {
+      setMsg({ type: 'error', text: (profileError || credError).message });
     }
     setLoading(false);
   };

@@ -161,18 +161,17 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
-    const { data: profileData, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('maxtrack_email, maxtrack_password')
-      .eq('id', user.id)
-      .single();
+    const [{ data: profileData }, { data: credData }] = await Promise.all([
+      serviceClient.from('profiles').select('maxtrack_email').eq('id', user.id).single(),
+      serviceClient.from('profile_credentials').select('maxtrack_password').eq('id', user.id).single(),
+    ]);
 
-    if (profileError || !profileData?.maxtrack_email || !profileData?.maxtrack_password) {
+    if (!profileData?.maxtrack_email || !credData?.maxtrack_password) {
       return json({ error: 'Credenciais Maxtrack não configuradas. Configure em Meu Perfil.' }, 400);
     }
 
     // Autentica na Maxtrack com as credenciais do operador
-    const { cookie: sessionCookie, cco } = await login(profileData.maxtrack_email, profileData.maxtrack_password);
+    const { cookie: sessionCookie, cco } = await login(profileData.maxtrack_email, credData.maxtrack_password);
 
     // Headers usados em todas as chamadas autenticadas — espelha o que o browser envia
     const authHeaders = {
