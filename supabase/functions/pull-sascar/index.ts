@@ -24,23 +24,27 @@ const CATEGORY_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = 
 // Fallback por alarmType quando categoryId não disponível.
 const ALARM_BUCKET: Record<number, 'intervencao' | 'reportar' | 'tecnico'> = {
   56001: 'intervencao', // Bocejo
-  56016: 'intervencao', // Distração Genérica
   56002: 'intervencao', // Sonolência
+  56004: 'intervencao', // Olho fechado
+  56016: 'intervencao', // Distração Genérica
+  56000: 'reportar',    // Uso de celular
   56003: 'reportar',    // Fumando
-  56004: 'reportar',
-  56010: 'reportar',
-  0:     'tecnico',
+  56010: 'reportar',    // Distração
+  0:     'tecnico',     // Perda de vídeo (addInfo.alarmName = "Video Loss")
+  1:     'tecnico',     // Câmera obstruída (addInfo.alarmName = "Video Shield")
 };
 
 // Nomes de evento por alarmType.
 const ALARM_NAMES: Record<number, string> = {
   56001: 'Bocejo',
-  56016: 'Distração Genérica',
   56002: 'Sonolência',
   56003: 'Fumando',
-  56004: 'Comportamento indevido',
-  56010: 'Evento reportável',
+  56004: 'Olho fechado',
+  56000: 'Uso de celular',
+  56010: 'Distração',
+  56016: 'Distração Genérica',
   0:     'Perda de vídeo',
+  1:     'Câmera obstruída',
 };
 
 function buildHeaders(token: string) {
@@ -163,15 +167,20 @@ function parseAlarms(alarms: Record<string, unknown>[]) {
     const transportadora = String(a.carrierName ?? '—').trim() || '—';
 
     // Classificação: categoryId é fonte primária.
-    // Exceção: tipos de fadiga (56001, 56002, 56016) às vezes chegam com
-    // categoryId=100573 (técnico) por erro da API — nesses casos alarmType prevalece.
-    const catList   = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
-    const catId     = Number(catList[0]?.categoryId ?? 0);
-    const alarmType = Number(a.alarmType ?? -1);
-    const FATIGUE_TYPES = new Set([56001, 56002, 56016]);
-    const bucket    = FATIGUE_TYPES.has(alarmType)
+    // FATIGUE_TYPES: 56001/56002/56016 às vezes chegam com categoryId=100573 (técnico)
+    // por bug da API — forçamos 'intervencao' pelo alarmType.
+    // REPORTAR_TYPES: 56003 (Fumando) chega com categoryId=100574 (fadiga) mas
+    // operacionalmente é reportar à empresa, não intervenção imediata.
+    const catList      = (a.categoryInfoList as Array<Record<string, unknown>>) ?? [];
+    const catId        = Number(catList[0]?.categoryId ?? 0);
+    const alarmType    = Number(a.alarmType ?? -1);
+    const FATIGUE_TYPES  = new Set([56001, 56002, 56016]);
+    const REPORTAR_TYPES = new Set([56003]);
+    const bucket = FATIGUE_TYPES.has(alarmType)
       ? 'intervencao'
-      : (CATEGORY_BUCKET[catId] ?? ALARM_BUCKET[alarmType] ?? 'reportar');
+      : REPORTAR_TYPES.has(alarmType)
+        ? 'reportar'
+        : (CATEGORY_BUCKET[catId] ?? ALARM_BUCKET[alarmType] ?? 'reportar');
     const nomeEvento = ALARM_NAMES[alarmType] ?? `Evento ${alarmType}`;
 
     // Severidade: levelInfo.levelId
