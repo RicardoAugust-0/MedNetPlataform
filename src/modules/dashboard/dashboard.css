@@ -789,3 +789,8 @@ body.dash-exec-mode .dg-kpi.is-hero .dg-kpi-value { font-size: 68px; }
 body.dash-exec-mode .dg-kpi { padding: 22px 22px 18px; }
 body.dash-exec-mode .dg-kpi-label { font-size: 11px; }
 body.dash-exec-mode .dg-kpi-row { gap: 18px; margin-bottom: 22px; }
+
+/* ── Auto-sync indicator ──────────────────────────────────── */
+@keyframes dg-rotate { to { transform: rotate(360deg); } }
+.dg-spin { display: inline-block; animation: dg-rotate 0.9s linear infinite; }
+.dg-sync-error { color: var(--danger-400, #e05252) !important; }
