@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos';
@@ -24,140 +24,19 @@ import {
   Section,
   SheetInsights,
 } from './dashboard/components';
+import { MOCK_DRIVERS, MOCK_HISTORY } from './dashboard/_mocks';
+import { buildMesesLookback } from './dashboard/_helpers';
+import { useDashboardSettings } from './dashboard/hooks/useDashboardSettings';
+import { useDashboardFilters } from './dashboard/hooks/useDashboardFilters';
+import { useDashboardMetrics } from './dashboard/hooks/useDashboardMetrics';
+import {
+  VolumeDrill, FechadosDrill, EmAbertoDrill, ReincidenciaDrill,
+} from './dashboard/drills';
 
-// ─── Sheet date/time parsing helpers ─────────────────────────────────────────
-const MES_LABELS = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
-
-function parseSheetRowDate(row) {
-  if (!row?.data || !row?._mes) return null;
-  const parts = String(row.data).split('/');
-  const d = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  const mesParts = String(row._mes).trim().split(/\s+/);
-  const year = parseInt(mesParts[mesParts.length - 1], 10);
-  if (!d || !m || !year) return null;
-  return new Date(year, m - 1, d);
-}
-
-function parseTimeStrToMin(s) {
-  if (!s) return null;
-  const m = String(s).match(/^(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-}
-
-// Constrói lista "MAIO 2026,ABRIL 2026,..." pros últimos N meses (incl. atual).
-function buildMesesLookback(monthsBack) {
-  const now = new Date();
-  const out = [];
-  for (let i = monthsBack; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(`${MES_LABELS[d.getMonth()]} ${d.getFullYear()}`);
-  }
-  return out.join(',');
-}
-
-// ─── DEV MOCKS ────────────────────────────────────────────────────────────────
-// Stripped automatically by Vite in production (import.meta.env.DEV = false).
-const _now = new Date();
-const _iso = (m = 0) => new Date(_now.getTime() - m * 60000).toISOString();
-
-const _MOTS = [
-  { n: 'Carlos Eduardo Santos',    p: 'ABC-1234', t: 'Transportes Brasil Ltda'  },
-  { n: 'Marcos Paulo Lima',         p: 'DEF-5678', t: 'LogBrasil Ltda'           },
-  { n: 'José Antônio Ferreira',     p: 'GHI-9012', t: 'Transportes Brasil Ltda'  },
-  { n: 'Roberto Silva Souza',       p: 'JKL-3456', t: 'Fast Cargo Express'        },
-  { n: 'Anderson Rodrigues Costa',  p: 'MNO-7890', t: 'LogBrasil Ltda'            },
-  { n: 'Leandro Costa Pinto',       p: 'PQR-1234', t: 'NorteLogística SA'         },
-  { n: 'Fábio Nascimento Silva',    p: 'STU-5555', t: 'Sul Express Ltda'          },
-  { n: 'Ricardo Barbosa Lima',      p: 'VWX-9999', t: 'Atlântica Cargo'           },
-  { n: 'Thiago Pereira Gomes',      p: 'YZA-1357', t: 'Prime Logística'           },
-  { n: 'Diego Ferreira Santos',     p: 'BCD-2468', t: 'RodriBrasil'               },
+const PERIODOS = [
+  { id: 'hoje',  label: 'Hoje'  },
+  { id: 'turno', label: 'Turno' },
 ];
-
-const _TRANSP = [
-  'Transportes Brasil Ltda', 'LogBrasil Ltda', 'Fast Cargo Express',
-  'NorteLogística SA', 'Sul Express Ltda', 'Atlântica Cargo', 'Prime Logística', 'RodriBrasil',
-];
-
-const _TIPOS_A = ['Bocejo', 'Olho fechado', 'Sonolência', 'Distração Genérica'];
-
-const _OP_DIST = [
-  { nome: 'Ana Oliveira', i: 8,  d: 85, r: 24 },
-  { nome: 'João Mendes',  i: 6,  d: 72, r: 20 },
-  { nome: 'Maria Santos', i: 5,  d: 61, r: 16 },
-  { nome: 'Pedro Alves',  i: 4,  d: 50, r: 13 },
-  { nome: 'Carla Reis',   i: 3,  d: 38, r: 10 },
-  { nome: 'Lucas Moura',  i: 2,  d: 28, r:  8 },
-];
-
-function _buildHistory() {
-  const out = [];
-  let seq = 0;
-  _OP_DIST.forEach(({ nome, i: iv, d: dc, r: rp }) => {
-    [['intervencao', iv], ['descarte', dc], ['reportar', rp]].forEach(([tipo, count]) => {
-      for (let k = 0; k < count; k++) {
-        const m      = _MOTS[seq % _MOTS.length];
-        const minAgo = (seq * 1.1) % 479;
-        const hh     = String(8 + (minAgo / 60 | 0)).padStart(2, '0');
-        const mm     = String((seq * 7) % 60).padStart(2, '0');
-        out.push({
-          id: `h${++seq}`, motorista: m.n, placa: m.p, transportadora: m.t,
-          operador: nome, tipo, obs: '', hora: `${hh}:${mm}`, created_at: _iso(minAgo),
-        });
-      }
-    });
-  });
-  return out;
-}
-
-function _buildDrivers() {
-  const named = [
-    { nome: 'Carlos Eduardo Santos',    placa: 'ABC-1234', t: 'Transportes Brasil Ltda', a: 9, tipos: ['Bocejo', 'Olho fechado'],  sev: 'Gravíssimo', minAgo: 48 },
-    { nome: 'Marcos Paulo Lima',         placa: 'DEF-5678', t: 'LogBrasil Ltda',          a: 8, tipos: ['Sonolência'],              sev: 'Gravíssimo', minAgo: 35 },
-    { nome: 'José Antônio Ferreira',     placa: 'GHI-9012', t: 'Transportes Brasil Ltda', a: 7, tipos: ['Bocejo'],                  sev: 'Gravíssimo', minAgo: 22 },
-    { nome: 'Fábio Nascimento Silva',    placa: 'STU-5555', t: 'Sul Express Ltda',         a: 7, tipos: ['Olho fechado'],            sev: 'Gravíssimo', minAgo: 18 },
-    { nome: 'Ricardo Barbosa Lima',      placa: 'VWX-9999', t: 'Atlântica Cargo',          a: 6, tipos: ['Sonolência'],              sev: 'Grave',      minAgo: 14 },
-    { nome: 'Roberto Silva Souza',       placa: 'JKL-3456', t: 'Fast Cargo Express',       a: 6, tipos: ['Distração Genérica'],     sev: 'Grave',      minAgo: 11 },
-    { nome: 'Anderson Rodrigues Costa',  placa: 'MNO-7890', t: 'LogBrasil Ltda',           a: 5, tipos: ['Bocejo'],                  sev: 'Grave',      minAgo: 8  },
-    { nome: 'Thiago Pereira Gomes',      placa: 'YZA-1357', t: 'Prime Logística',          a: 5, tipos: ['Sonolência'],              sev: 'Grave',      minAgo: 5  },
-  ];
-  const rest = Array.from({ length: 60 }, (_, i) => ({
-    nome:  `Motorista ${i + 9}`,
-    placa: `Z${String.fromCharCode(65 + i % 26)}X-${String((i * 137 + 1000) % 9000 + 1000).slice(-4)}`,
-    t:     _TRANSP[i % _TRANSP.length],
-    a:     Math.max(1, 4 - (i / 15 | 0)),
-    tipos: [_TIPOS_A[i % 4]],
-    sev:   'Normal',
-    minAgo: (i * 3) % 60,
-  }));
-
-  return [...named, ...rest].map((d, idx) => ({
-    nome:           d.nome,
-    placa:          d.placa,
-    transportadora: d.t,
-    frota:          `F${String(idx + 1).padStart(3, '0')}`,
-    turno:          idx % 3 === 0 ? 'noturno' : 'diurno',
-    alertas:        d.a,
-    tipos:          d.tipos,
-    ultimoEvento:   _iso(d.minAgo || 0),
-    reportaveis:    Math.max(0, d.a - 2),
-    tiposReportar:  d.a > 2 ? ['Distração'] : [],
-    ultimoEventoReportar: d.a > 2 ? _iso(d.minAgo || 0) : null,
-    tecnicos:       0,
-    tiposTecnico:   {},
-    eventosDetalhados: d.tipos ? d.tipos.map((t, ei) => ({
-      hora:       `${String(9 + ei).padStart(2,'0')}:${String(ei * 12).padStart(2,'0')}`,
-      tipo:       t,
-      severidade: d.sev || 'Normal',
-    })) : [],
-    severidade:     d.sev || 'Normal',
-  }));
-}
-
-const MOCK_DRIVERS = import.meta.env.DEV ? _buildDrivers() : [];
-const MOCK_HISTORY = import.meta.env.DEV ? _buildHistory() : [];
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { drivers: driversReal, driversLastChangeAt, setActivePanel, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
@@ -173,31 +52,34 @@ export default function Dashboard() {
   const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
   const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
 
-  // ── Persistent UI tweaks (localStorage) ────────────────────────────────────
-  const [slaLimit, setSlaLimit]                 = useState(() => Number(localStorage.getItem('mn_dash_sla') || 30));
-  const [compareYesterday, setCompareYesterday] = useState(() => localStorage.getItem('mn_dash_compare') !== 'false');
-  const [showHourly,  setShowHourly]            = useState(() => localStorage.getItem('mn_dash_hourly')  !== 'false');
-  const [showTransp,  setShowTransp]            = useState(() => localStorage.getItem('mn_dash_transp')  !== 'false');
-  const [showClassif, setShowClassif]           = useState(() => localStorage.getItem('mn_dash_classif') !== 'false');
-  const [showTech,    setShowTech]              = useState(() => localStorage.getItem('mn_dash_tech')    !== 'false');
-  const [tvMode,      setTvMode]                = useState(() => localStorage.getItem('mn_dash_tv')      === 'true');
-  const [executiveMode, setExecutiveMode]       = useState(() => localStorage.getItem('mn_dash_exec')    === 'true');
-  const [layout, setLayout]                     = useState(() => localStorage.getItem('mn_dash_layout')  || 'balanced');
-  const [showSheet,   setShowSheet]             = useState(() => localStorage.getItem('mn_dash_sheet')   !== 'false');
-  const [sheetAutoSync, setSheetAutoSync]       = useState(() => localStorage.getItem('mn_dash_sheet_autosync') === 'true');
-  const [sheetSyncMin,  setSheetSyncMin]        = useState(() => parseInt(localStorage.getItem('mn_dash_sheet_sync_min') || '10', 10));
+  // ── UI prefs persistidas em localStorage
+  const settings = useDashboardSettings();
+  const {
+    slaLimit, setSlaLimit,
+    compareYesterday, setCompareYesterday,
+    showHourly,  setShowHourly,
+    showTransp,  setShowTransp,
+    showClassif, setShowClassif,
+    showTech,    setShowTech,
+    tvMode,      setTvMode,
+    executiveMode, setExecutiveMode,
+    layout,      setLayout,
+    showSheet,   setShowSheet,
+    sheetAutoSync, setSheetAutoSync,
+    sheetSyncMin,  setSheetSyncMin,
+  } = settings;
 
-  useEffect(() => { localStorage.setItem('mn_dash_sla',     String(slaLimit));         }, [slaLimit]);
-  useEffect(() => { localStorage.setItem('mn_dash_compare', String(compareYesterday)); }, [compareYesterday]);
-  useEffect(() => { localStorage.setItem('mn_dash_hourly',  String(showHourly));       }, [showHourly]);
-  useEffect(() => { localStorage.setItem('mn_dash_transp',  String(showTransp));       }, [showTransp]);
-  useEffect(() => { localStorage.setItem('mn_dash_classif', String(showClassif));      }, [showClassif]);
-  useEffect(() => { localStorage.setItem('mn_dash_tech',    String(showTech));         }, [showTech]);
-  useEffect(() => { localStorage.setItem('mn_dash_exec',    String(executiveMode));    }, [executiveMode]);
-  useEffect(() => { localStorage.setItem('mn_dash_layout',  layout);                   }, [layout]);
-  useEffect(() => { localStorage.setItem('mn_dash_sheet',   String(showSheet));        }, [showSheet]);
-  useEffect(() => { localStorage.setItem('mn_dash_sheet_autosync', String(sheetAutoSync)); }, [sheetAutoSync]);
-  useEffect(() => { localStorage.setItem('mn_dash_sheet_sync_min', String(sheetSyncMin));  }, [sheetSyncMin]);
+  // ── Filtros de tela (persistidos em localStorage)
+  const { filters, setFilters, showTipo, showResultado, empresaFilterFn } = useDashboardFilters(resolveAlias);
+  const [activeKpi, setActiveKpi] = useState(null);
+
+  // ── Live SLA clock — ticks every 30 s
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const todayStr = now.toDateString();
 
   // ── Sheet: carga inicial (4 meses pra cobrir janela de reincidência 90d)
   useEffect(() => {
@@ -214,542 +96,21 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [sheetAutoSync, sheetSyncMin]);
 
-  // Executive mode body class (CSS controla tamanhos)
-  useEffect(() => {
-    document.body.classList.toggle('dash-exec-mode', executiveMode);
-    return () => document.body.classList.remove('dash-exec-mode');
-  }, [executiveMode]);
-
-  // ── TV mode: toggle sidebar via body class ──────────────────────────────────
-  useEffect(() => {
-    document.body.classList.toggle('dash-tv-mode', tvMode);
-    localStorage.setItem('mn_dash_tv', tvMode);
-    return () => document.body.classList.remove('dash-tv-mode');
-  }, [tvMode]);
-
-  // ── Live SLA clock — ticks every 30 s ──────────────────────────────────────
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
-  }, []);
-
-  const todayStr = now.toDateString();
-
-  // ── Filtros de tela (persistidos em localStorage) ──────────────────────────
-  const FILTERS_DEFAULT = { tipo: [], resultado: [], empresa: 'todas', operador: 'todos', periodo: 'hoje' };
-  const [filters, setFilters] = useState(() => {
-    try {
-      const raw = localStorage.getItem('mn_dash_filters');
-      if (!raw) return FILTERS_DEFAULT;
-      const parsed = JSON.parse(raw);
-      return { ...FILTERS_DEFAULT, ...parsed };
-    } catch { return FILTERS_DEFAULT; }
+  // ── Métricas derivadas (todos os useMemos)
+  const m = useDashboardMetrics({
+    drivers, atHistory, sheetHistory,
+    now, todayStr,
+    filters, showTipo, showResultado, empresaFilterFn,
+    resolveAlias, profiles,
+    compareYesterday, slaLimit,
   });
-  useEffect(() => {
-    try { localStorage.setItem('mn_dash_filters', JSON.stringify(filters)); } catch { /* quota */ }
-  }, [filters]);
-  const [activeKpi, setActiveKpi] = useState(null);
-
-  // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
-  const periodoWindow = useMemo(() => {
-    if (filters.periodo === 'turno') {
-      const isDiurno = now.getHours() >= 6 && now.getHours() < 18;
-      const start = new Date(now);
-      if (isDiurno) {
-        start.setHours(6, 0, 0, 0);
-      } else {
-        // turno noturno: começou às 18h (de ontem se hora<6, ou hoje se hora>=18)
-        if (now.getHours() < 6) start.setDate(start.getDate() - 1);
-        start.setHours(18, 0, 0, 0);
-      }
-      return { start, end: new Date(now) };
-    }
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    return { start, end: new Date(now) };
-  }, [filters.periodo, now]);
-
-  // Helpers semânticos do filtro tipo
-  const showTipo = (id) => filters.tipo.length === 0 || filters.tipo.includes(id);
-  const showResultado = (id) => filters.resultado.length === 0 || filters.resultado.includes(id);
-  const empresaFilterFn = (transp) => filters.empresa === 'todas' || resolveAlias(transp || '') === filters.empresa;
-
-  // ── Atendimentos no período (com filtros: periodo + empresa + operador + tipo)
-  const atendimentosNoPeriodo = useMemo(() => {
-    return atHistory.filter(a => {
-      const d = new Date(a.created_at);
-      if (d < periodoWindow.start || d > periodoWindow.end) return false;
-      if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
-      if (!empresaFilterFn(a.transportadora)) return false;
-      // tipo mapping: intervencao→fadiga, reportar→comportamento, outros não classificados
-      if (filters.tipo.length > 0) {
-        if (a.tipo === 'intervencao' && !showTipo('fadiga')) return false;
-        if (a.tipo === 'reportar' && !showTipo('comportamento')) return false;
-      }
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atHistory, periodoWindow, filters.operador, filters.empresa, filters.tipo, resolveAlias]);
-
-  // Alias mantido pra compatibilidade com código existente que dizia "atendimentosHoje"
-  const atendimentosHoje = atendimentosNoPeriodo;
-
-  // ── Base de drivers com filtros (empresa + tipo). Operador/período/resultado
-  // não fazem sentido pra fila de motoristas (snapshot atual, sem operador atribuído)
-  const driversFiltered = useMemo(() => {
-    return drivers.filter(d => {
-      if (!empresaFilterFn(d.transportadora)) return false;
-      if (filters.tipo.length > 0) {
-        const isFadiga    = (d.alertas || 0) > 0;
-        const isComport   = (d.reportaveis || 0) > 0 && !isFadiga;
-        if (isFadiga && !showTipo('fadiga')) return false;
-        if (isComport && !showTipo('comportamento')) return false;
-        if (!isFadiga && !isComport) return false; // só técnico → fora se filtro de tipo ativo
-      }
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, filters.empresa, filters.tipo, resolveAlias]);
-
-  // ── Motoristas com alertas (intervenção OU reportar) ──────────────────────
-  // Técnico fica em card separado (não conta como "em aberto" do gestor)
-  const driversAtivos = useMemo(
-    () => driversFiltered.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0),
-    [driversFiltered]
-  );
-  // Subconjunto com intervenção (fadiga) — base pra críticos
-  const driversIntervencao = useMemo(
-    () => driversFiltered.filter(d => (d.alertas || 0) > 0),
-    [driversFiltered]
-  );
-
-  // ── Placas com intervenção prévia (excl. hoje) ────────────────────────────
-  // Combina duas fontes pra ampliar a detecção de reincidência:
-  //   1. Supabase atendimentos: últimos 30 dias (operação corrente)
-  //   2. Planilha de intervenções (Sheets): últimos 90 dias, linhas com
-  //      `realizadoPor` preenchido — fonte oficial estendida.
-  // Depende só de todayStr (não de `now`) — Set é recalculado apenas uma vez
-  // por dia em vez de a cada 30 s (clock tick do SLA).
-  const placasPrevia30d = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const cutoff30 = today.getTime() - 30 * 86400000;
-    const cutoff90 = today.getTime() - 90 * 86400000;
-    const set = new Set();
-    for (const a of atHistory) {
-      if (a.tipo !== 'intervencao' || !a.placa) continue;
-      const t = new Date(a.created_at).getTime();
-      if (t < cutoff30) continue;
-      if (new Date(a.created_at).toDateString() === todayStr) continue;
-      set.add(a.placa);
-    }
-    for (const r of sheetHistory.rows) {
-      if (!r.placa || !r.realizadoPor) continue;
-      const d = parseSheetRowDate(r);
-      if (!d) continue;
-      const t = d.getTime();
-      if (t < cutoff90) continue;
-      if (d.toDateString() === todayStr) continue;
-      set.add(r.placa);
-    }
-    return set;
-  }, [atHistory, todayStr, sheetHistory.rows]);
-
-  // Lookup placa → última intervenção registrada antes de hoje.
-  // Pré-calculado uma vez por mudança em atHistory/data, evita O(drivers × histórico)
-  // dentro do .map() de criticos.
-  const lastIntervByPlaca = useMemo(() => {
-    const map = new Map();
-    for (const a of atHistory) {
-      if (a.tipo !== 'intervencao' || !a.placa) continue;
-      if (new Date(a.created_at).toDateString() === todayStr) continue;
-      const existing = map.get(a.placa);
-      if (!existing || a.created_at > existing.created_at) {
-        map.set(a.placa, a);
-      }
-    }
-    return map;
-  }, [atHistory, todayStr]);
-
-  // ── KPIs base ───────────────────────────────────────────────────────────────
-  // Atendimentos "produtivos" do dia: intervenção + reportar (descarte e limpeza
-  // não contam como "fechados" pro KPI de produtividade da operação)
-  // Filtro resultado: positivo = placa não-reincidente / pos-positivo = reincidente / aberto = drivers
-  const fechadosHoje = useMemo(
-    () => atendimentosHoje.filter(a => {
-      if (a.tipo !== 'intervencao' && a.tipo !== 'reportar') return false;
-      const isPP = a.placa && placasPrevia30d.has(a.placa);
-      if (isPP && !showResultado('pos-positivo')) return false;
-      if (!isPP && !showResultado('positivo'))    return false;
-      return true;
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [atendimentosHoje, placasPrevia30d, filters.resultado]
-  );
-
-  // RESULTADOS movido para antes de posPositivo/positivo — ambos derivam daqui.
-  // Contagem SEMPRE absoluta (sem filtros de resultado/operador/empresa) para que
-  // o chip e o card KPI de reincidência exibam o mesmo número.
-  const RESULTADOS = useMemo(() => {
-    const atsHojeFull = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr);
-    const fechadosFull = atsHojeFull.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
-    const posFull = fechadosFull.length - ppFull;
-    const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
-    return [
-      { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
-      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
-      { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
-    ];
-  }, [atHistory, drivers, todayStr, placasPrevia30d]);
-
-  // posPositivo e positivo derivam do RESULTADOS (ambos os tipos, sem filtro resultado)
-  // para ficar consistentes com os chips do FilterBar.
-  const posPositivo  = RESULTADOS.find(r => r.id === 'pos-positivo')?.count ?? 0;
-  const positivo     = RESULTADOS.find(r => r.id === 'positivo')?.count ?? 0;
-  const fechados     = fechadosHoje.length;
-  // Filtro resultado: 'aberto' liga/desliga a contagem de em-aberto
-  const emAberto    = showResultado('aberto') ? driversAtivos.length : 0;
-  const totalAlertas = fechados + emAberto;
-  const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
-  const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
-  // Reincidentes em aberto: motoristas na fila com histórico de intervenção nos últimos 30-90d.
-  // Somado a posPositivo forma o total de reincidentes encontrados hoje (fila + tratados).
-  const reincidentesAtivos = useMemo(
-    () => driversAtivos.filter(d => d.placa && placasPrevia30d.has(d.placa)).length,
-    [driversAtivos, placasPrevia30d]
-  );
-
-  // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
-  const ONTEM = useMemo(() => {
-    if (!compareYesterday) return null;
-    const yStr = new Date(now.getTime() - 86400000).toDateString();
-    // Mesmos filtros operador/empresa/tipo aplicados a ontem
-    const yAtsAll = atHistory.filter(a => {
-      if (new Date(a.created_at).toDateString() !== yStr) return false;
-      if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
-      if (!empresaFilterFn(a.transportadora)) return false;
-      if (filters.tipo.length > 0) {
-        if (a.tipo === 'intervencao' && !showTipo('fadiga')) return false;
-        if (a.tipo === 'reportar' && !showTipo('comportamento')) return false;
-      }
-      return true;
-    });
-    const yInterv   = yAtsAll.filter(a => a.tipo === 'intervencao');
-    const yFechados = yAtsAll.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const cutoffY = new Date(now.getTime() - 31 * 86400000);
-    const placasPreviaY = new Set(
-      atHistory
-        .filter(a =>
-          a.tipo === 'intervencao' &&
-          new Date(a.created_at) > cutoffY &&
-          new Date(a.created_at).toDateString() !== yStr
-        )
-        .map(a => a.placa)
-        .filter(Boolean)
-    );
-    const ppY = yInterv.filter(a => a.placa && placasPreviaY.has(a.placa)).length;
-    const yPlacasEvts    = new Set(yAtsAll.filter(a => a.placa).map(a => a.placa));
-    const yPlacasFechado = new Set(yFechados.map(a => a.placa).filter(Boolean));
-    const emAbertoY      = [...yPlacasEvts].filter(p => !yPlacasFechado.has(p)).length;
-    return { total: yFechados.length + emAbertoY, fechados: yFechados.length, posPositivo: ppY, emAberto: emAbertoY };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atHistory, compareYesterday, now, filters.operador, filters.empresa, filters.tipo, resolveAlias]);
-
-  // ── Motoristas críticos com SLA ────────────────────────────────────────────
-  // Limiares por plataforma (docs PROJECT.md §5.14): Sascar ≥5, Maxtrack ≥8
-  const criticThreshold = (platformId) => platformId === 'maxtrack' ? 8 : 5;
-  const criticos = useMemo(() => {
-    const tiposFadiga = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
-    const nowMs = now.getTime();
-    return driversIntervencao
-      .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))
-      .map(d => {
-        const abertoMin  = d.ultimoEvento ? (nowMs - new Date(d.ultimoEvento).getTime()) / 60000 : 0;
-        const hasFadiga  = d.tipos?.some(t =>
-          tiposFadiga.some(f => t.toLowerCase().includes(f.toLowerCase()))
-        );
-        const tipo       = hasFadiga ? 'fadiga' : 'comportamento';
-        const reincidente = d.placa && placasPrevia30d.has(d.placa);
-        const lastInterv = lastIntervByPlaca.get(d.placa);
-        const ultimaIntervencao = lastInterv
-          ? `${Math.floor((nowMs - new Date(lastInterv.created_at).getTime()) / 86400000)}d`
-          : null;
-        return {
-          nome: d.nome,
-          placa: d.placa,
-          platformId: d._platformId,
-          transportadora: resolveAlias(d.transportadora),
-          frota: d.frota,
-          turno: d.turno,
-          alertas: d.alertas,
-          tipo,
-          reincidente,
-          abertoMin,
-          ultimaIntervencao,
-          eventos: d.eventosDetalhados || [],
-        };
-      })
-      .sort((a, b) => b.abertoMin - a.abertoMin);
-  }, [driversIntervencao, lastIntervByPlaca, placasPrevia30d, now, resolveAlias]);
-
-  const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
-
-  // ── Counts dos chips do FilterBar ──────────────────────────────────────────
-  // SEMPRE absolutos (sem filtros aplicados) — chip serve pra escolher;
-  // usuário precisa ver o universo total pra comparar opções.
-  // - Tipo: nº de motoristas em aberto naquele bucket
-  //   • Fadiga = drivers com alertas > 0 (intervenção, conforme docs PROJECT.md §8.1)
-  //   • Comportamento = drivers só em reportar (reportaveis > 0 e alertas === 0)
-  // - Resultado: nº de atendimentos hoje (positivo/pos-positivo) ou drivers (aberto)
-  const TIPOS = useMemo(() => {
-    const fadigaCount   = drivers.filter(d => (d.alertas || 0) > 0).length;
-    const comportCount  = drivers.filter(d => (d.reportaveis || 0) > 0 && (d.alertas || 0) === 0).length;
-    return [
-      { id: 'fadiga',        label: 'Fadiga',        color: '#E24B4A', count: fadigaCount,  hint: 'Motoristas em intervenção (fadiga/sonolência)' },
-      { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount, hint: 'Motoristas só para reportar (comportamento)' },
-    ];
-  }, [drivers]);
-
-  // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
-  // Janela = mesma do dashboard (hoje ou turno). Empresa filtra via aliases.
-  const sheetRowsPeriodo = useMemo(() => {
-    return sheetHistory.rows.filter(r => {
-      const d = parseSheetRowDate(r);
-      if (!d) return false;
-      if (filters.periodo === 'hoje') {
-        if (d.toDateString() !== todayStr) return false;
-      } else {
-        // turno: comparar pelo intervalo (mesmo dia → ok, dia anterior → checa hora)
-        if (d < new Date(periodoWindow.start.getFullYear(), periodoWindow.start.getMonth(), periodoWindow.start.getDate())) return false;
-        if (d > periodoWindow.end) return false;
-      }
-      if (!empresaFilterFn(r.empresa)) return false;
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, filters.empresa, resolveAlias]);
-
-  // ── Sheet: TMA (Tempo Médio de Atendimento) ───────────────────────────────
-  // Delta entre horaSolicitacao e horaRealizacao, em minutos. Ignora outliers
-  // (>12h, geralmente erro de digitação ou cruzou múltiplos dias).
-  const sheetTMA = useMemo(() => {
-    const deltas = [];
-    for (const r of sheetRowsPeriodo) {
-      if (!r.realizadoPor) continue;
-      const ts = parseTimeStrToMin(r.horaSolicitacao);
-      const tr = parseTimeStrToMin(r.horaRealizacao);
-      if (ts == null || tr == null) continue;
-      let delta = tr - ts;
-      if (delta < 0) delta += 24 * 60; // virou meia-noite
-      if (delta > 12 * 60) continue; // outlier
-      deltas.push(delta);
-    }
-    if (deltas.length === 0) return { avg: null, n: 0 };
-    const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length;
-    return { avg, n: deltas.length };
-  }, [sheetRowsPeriodo]);
-
-  // ── Sheet: distribuição por criticidade ───────────────────────────────────
-  const sheetCriticidade = useMemo(() => {
-    const COL = { 'GRAVÍSSIMO': '#E24B4A', 'GRAVISSIMO': '#E24B4A', 'GRAVE': '#E8A020', 'NORMAL': '#2DA75A' };
-    const counts = new Map();
-    for (const r of sheetRowsPeriodo) {
-      const raw = (r.criticidade || '').trim();
-      if (!raw) continue;
-      const key = raw;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    return [...counts.entries()]
-      .map(([label, count]) => ({ label, count, color: COL[label.toUpperCase()] || '#8A94A6' }))
-      .sort((a, b) => b.count - a.count);
-  }, [sheetRowsPeriodo]);
-
-  // ── Sheet: distribuição por classificação ─────────────────────────────────
-  const sheetClassificacao = useMemo(() => {
-    const counts = new Map();
-    for (const r of sheetRowsPeriodo) {
-      const raw = (r.classificacao || '').trim();
-      if (!raw) continue;
-      counts.set(raw, (counts.get(raw) || 0) + 1);
-    }
-    return [...counts.entries()]
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [sheetRowsPeriodo]);
-
-  // ── Sheet: pendências (solicitadas sem realização registrada) ─────────────
-  // Olha toda a janela carregada (não filtra por período) — backlog acumulado.
-  // Respeita filtro de empresa.
-  const sheetPendencias = useMemo(() => {
-    let count = 0;
-    for (const r of sheetHistory.rows) {
-      if (!r.solicitadoPor) continue;
-      if (r.realizadoPor) continue;
-      if (!empresaFilterFn(r.empresa)) continue;
-      count++;
-    }
-    return count;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetHistory.rows, filters.empresa, resolveAlias]);
-
-  // ── Sheet: idade da última leitura (minutos) ──────────────────────────────
-  const sheetAgeMin = useMemo(() => {
-    if (!sheetHistory.loadedAt) return null;
-    return Math.floor((now.getTime() - new Date(sheetHistory.loadedAt).getTime()) / 60000);
-  }, [sheetHistory.loadedAt, now]);
-
-  // ── Transportadoras ─────────────────────────────────────────────────────────
-  const transpStats = useMemo(() => {
-    const map = new Map();
-
-    driversAtivos.forEach(d => {
-      if (!d.transportadora) return;
-      const name = resolveAlias(d.transportadora);
-      const e = map.get(name) || { name, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
-      e.abertos++;
-      e.motoristas++;
-      e.total += (d.alertas || 0) + (d.reportaveis || 0);
-      if (d.placa && placasPrevia30d.has(d.placa)) e.posPositivos++;
-      map.set(name, e);
-    });
-
-    atendimentosHoje
-      .filter(a => (a.tipo === 'intervencao' || a.tipo === 'reportar') && a.transportadora)
-      .forEach(a => {
-        const name = resolveAlias(a.transportadora);
-        const e = map.get(name) || { name, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
-        e.total++;
-        if (a.placa && placasPrevia30d.has(a.placa)) e.posPositivos++;
-        map.set(name, e);
-      });
-
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
-
-  // Transportadoras pros chips do filtro — base UNFILTERED (usuário precisa
-  // poder trocar entre empresas).
-  // - `total` (mostrado no chip): nº de MOTORISTAS em aberto da empresa
-  //   (alinha com semântica "selecionar empresa → vejo X motoristas")
-  // - `abertos`: igual a total, mantido pra compat com tooltip do FilterBar
-  const transpForFilter = useMemo(() => {
-    const map = new Map();
-    drivers.forEach(d => {
-      const name = resolveAlias(d.transportadora);
-      if (!name) return;
-      const e = map.get(name) || { name, total: 0, abertos: 0 };
-      if ((d.alertas || 0) > 0 || (d.reportaveis || 0) > 0) {
-        e.total++;
-        e.abertos++;
-      }
-      map.set(name, e);
-    });
-    return [...map.values()]
-      .filter(t => t.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [drivers, resolveAlias]);
-
-  // Lista de operadores pro dropdown — equipe atual (profiles), não histórico.
-  // Atendimentos antigos podem ter operadores que saíram; filtrar por profiles ativos.
-  const operadoresForFilter = useMemo(() => {
-    const team = (profiles || [])
-      .filter(p => p.role === 'operador' || p.role === 'admin')
-      .map(p => ({ nome: p.nome }))
-      .filter(p => p.nome);
-    return team.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  }, [profiles]);
-
-  // ── Atividade por hora (24h — operação 24/7, turno diurno 06-18 / noturno 18-06)
-  const HOURLY = useMemo(() => {
-    return Array.from({ length: 24 }, (_, h) => {
-      const closed = atendimentosHoje.filter(
-        a => (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
-             new Date(a.created_at).getHours() === h
-      ).length;
-      const open = driversAtivos.filter(
-        d => d.ultimoEvento && new Date(d.ultimoEvento).getHours() === h
-      ).length;
-      return { h: `${String(h).padStart(2, '0')}h`, closed, open };
-    });
-  }, [atendimentosHoje, driversAtivos]);
-
-  // ── Alertas técnicos ────────────────────────────────────────────────────────
-  const tecnicos = useMemo(() => {
-    const techIcons = {
-      'Câmera obstruída': 'ti-camera-off',
-      'Perda de vídeo':   'ti-video-off',
-      'Sem motorista':    'ti-user-off',
-    };
-    const techMap = {};
-    // Técnico é bucket separado: aplica só filtro de empresa (não tipo/operador)
-    const baseTech = drivers.filter(d => d.tecnicos > 0 && empresaFilterFn(d.transportadora));
-    baseTech.forEach(d => {
-      Object.keys(d.tiposTecnico || {}).forEach(tipo => {
-        if (!techMap[tipo]) {
-          techMap[tipo] = { id: tipo, label: tipo, count: 0, icon: techIcons[tipo] || 'ti-tools', placas: [] };
-        }
-        techMap[tipo].count += d.tiposTecnico[tipo] || 0;
-        if (d.placa) techMap[tipo].placas.push(d.placa);
-      });
-    });
-    return Object.values(techMap);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, filters.empresa, resolveAlias]);
-
-  // ── Produtividade da equipe ─────────────────────────────────────────────────
-  const equipe = useMemo(() => {
-    const opMap = {};
-    atendimentosHoje.forEach(a => {
-      if (!a.operador || a.tipo === 'limpeza') return;
-      if (!opMap[a.operador]) opMap[a.operador] = { nome: a.operador, interv: 0, pp: 0, reportes: 0 };
-      if (a.tipo === 'intervencao') {
-        opMap[a.operador].interv++;
-        if (a.placa && placasPrevia30d.has(a.placa)) opMap[a.operador].pp++;
-      } else if (a.tipo === 'reportar') {
-        opMap[a.operador].reportes++;
-      }
-    });
-    const colors = ['#9E1A45', '#2A8DD9', '#2DA75A', '#E8A020', '#7A1235', '#C24A6A'];
-    return Object.values(opMap)
-      .map((op, idx) => ({
-        nome:         op.nome,
-        cargo:        '',
-        avatarColor:  colors[idx % colors.length],
-        tratados:     { fadigaPos: op.interv - op.pp, fadigaPP: op.pp, compPos: op.reportes, compPP: 0 },
-        tempoMedio:   null,
-      }))
-      .sort((a, b) => {
-        const ta = a.tratados.fadigaPos + a.tratados.fadigaPP + a.tratados.compPos;
-        const tb = b.tratados.fadigaPos + b.tratados.fadigaPP + b.tratados.compPos;
-        return tb - ta;
-      });
-  }, [atendimentosHoje, placasPrevia30d]);
-
-  // criticos/equipe/transpStats já vêm filtrados da camada base (filters.tipo/empresa/operador)
-  // resultado aplicado on top na seção de KPIs/derivados. Aliases pra UI:
-  const filteredCriticos = criticos;
-  const filteredEquipe   = equipe;
-  const filteredTransp   = transpStats;
-
-  // ── Dados auxiliares de UI ──────────────────────────────────────────────────
-  const PERIODOS = [
-    { id: 'hoje',  label: 'Hoje'  },
-    { id: 'turno', label: 'Turno' },
-  ];
 
   const hour = now.getHours();
 
-  // ── "Atualizado há Xmin" — pega o evento mais recente (driver change OU atendimento)
-  const lastAtendimentoAt = useMemo(() => {
-    if (!atHistory.length) return null;
-    return atHistory.reduce((max, a) => {
-      const t = new Date(a.created_at).getTime();
-      return t > max ? t : max;
-    }, 0);
-  }, [atHistory]);
-  const updatedLabel = useMemo(() => {
+  // ── "Atualizado há Xmin" — pega o evento mais recente
+  const updatedLabel = (() => {
     const tDrv = driversLastChangeAt ? new Date(driversLastChangeAt).getTime() : 0;
-    const tAt  = lastAtendimentoAt || 0;
+    const tAt  = m.lastAtendimentoAt || 0;
     const tSh  = sheetHistory.loadedAt ? new Date(sheetHistory.loadedAt).getTime() : 0;
     const latest = Math.max(tDrv, tAt, tSh);
     if (!latest) return 'Sem dados';
@@ -759,21 +120,9 @@ export default function Dashboard() {
     const diffH = Math.floor(diffMin / 60);
     if (diffH < 24)   return `Atualizado há ${diffH}h`;
     return `Atualizado há ${Math.floor(diffH / 24)}d`;
-  }, [driversLastChangeAt, lastAtendimentoAt, sheetHistory.loadedAt, now]);
+  })();
 
-  // Contagem de drivers com alertas ativos por plataforma — base absoluta
-  // (sem filtros), igual aos chips do FilterBar.
-  const platformCounts = useMemo(() => {
-    const counts = { maxtrack: 0, sascar: 0 };
-    for (const d of drivers) {
-      if ((d.alertas || 0) === 0 && (d.reportaveis || 0) === 0) continue;
-      if (d._platformId === 'maxtrack') counts.maxtrack++;
-      else if (d._platformId === 'sascar') counts.sascar++;
-    }
-    return counts;
-  }, [drivers]);
-
-  // ── Tweaks popover ─────────────────────────────────────────────────────────
+  // ── Tweaks popover
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tweaksRef = useRef(null);
   useEffect(() => {
@@ -785,7 +134,6 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [tweaksOpen]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Saudação */}
@@ -801,12 +149,12 @@ export default function Dashboard() {
             <span className="live">{updatedLabel}</span>
             <span className="sep">·</span>
             <span>SLA: {slaLimit} min</span>
-            {(platformCounts.maxtrack > 0 || platformCounts.sascar > 0) && (
+            {(m.platformCounts.maxtrack > 0 || m.platformCounts.sascar > 0) && (
               <>
                 <span className="sep">·</span>
                 <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                  {platformCounts.maxtrack > 0 && <PlatformBadge platformId="maxtrack" count={platformCounts.maxtrack} />}
-                  {platformCounts.sascar   > 0 && <PlatformBadge platformId="sascar"   count={platformCounts.sascar} />}
+                  {m.platformCounts.maxtrack > 0 && <PlatformBadge platformId="maxtrack" count={m.platformCounts.maxtrack} />}
+                  {m.platformCounts.sascar   > 0 && <PlatformBadge platformId="sascar"   count={m.platformCounts.sascar} />}
                 </span>
               </>
             )}
@@ -1060,19 +408,19 @@ export default function Dashboard() {
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        tipos={TIPOS}
-        resultados={RESULTADOS}
-        transportadoras={transpForFilter}
-        equipe={operadoresForFilter}
+        tipos={m.TIPOS}
+        resultados={m.RESULTADOS}
+        transportadoras={m.transpForFilter}
+        equipe={m.operadoresForFilter}
         periodos={PERIODOS}
       />
 
       {/* Banner SLA vencido */}
-      {slaVencidos > 0 && (
+      {m.slaVencidos > 0 && (
         <Banner
           tone="danger"
           icon="ti-clock-exclamation"
-          title={`${slaVencidos} alerta${slaVencidos > 1 ? 's' : ''} com SLA vencido — requer atenção imediata`}
+          title={`${m.slaVencidos} alerta${m.slaVencidos > 1 ? 's' : ''} com SLA vencido — requer atenção imediata`}
           sub={`Motoristas gravíssimos aguardando há mais de ${slaLimit} minutos.`}
         />
       )}
@@ -1083,10 +431,10 @@ export default function Dashboard() {
           hero
           icon="ti-layers-subtract"
           label="Volume do dia"
-          value={totalAlertas}
-          sub={`tratados + em aberto · ${pctConcluido}% concluído`}
-          compareValue={ONTEM?.total}
-          progress={pctConcluido}
+          value={m.totalAlertas}
+          sub={`tratados + em aberto · ${m.pctConcluido}% concluído`}
+          compareValue={m.ONTEM?.total}
+          progress={m.pctConcluido}
           onClick={() => setActiveKpi(activeKpi === 'total' ? null : 'total')}
           active={activeKpi === 'total'}
           accent="#F26931"
@@ -1094,234 +442,44 @@ export default function Dashboard() {
         <KPI
           icon="ti-circle-check"
           label="Fechados hoje"
-          value={fechados}
-          sub={`${pctConcluido}% do volume`}
-          compareValue={ONTEM?.fechados}
+          value={m.fechados}
+          sub={`${m.pctConcluido}% do volume`}
+          compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
-          progress={pctConcluido}
+          progress={m.pctConcluido}
           onClick={() => setActiveKpi(activeKpi === 'fechados' ? null : 'fechados')}
           active={activeKpi === 'fechados'}
         />
         <KPI
           icon="ti-clock-hour-4"
           label="Em aberto agora"
-          value={emAberto}
-          sub={slaVencidos > 0
-            ? `${slaVencidos} vencido${slaVencidos > 1 ? 's' : ''} · ${filteredCriticos.length} críticos`
-            : `${filteredCriticos.length} em estado crítico`}
-          compareValue={ONTEM?.emAberto}
+          value={m.emAberto}
+          sub={m.slaVencidos > 0
+            ? `${m.slaVencidos} vencido${m.slaVencidos > 1 ? 's' : ''} · ${m.criticos.length} críticos`
+            : `${m.criticos.length} em estado crítico`}
+          compareValue={m.ONTEM?.emAberto}
           accent="var(--warning-500)"
-          pulse={slaVencidos > 0}
+          pulse={m.slaVencidos > 0}
           onClick={() => setActiveKpi(activeKpi === 'aberto' ? null : 'aberto')}
           active={activeKpi === 'aberto'}
         />
         <KPI
           icon="ti-refresh"
           label="Reincidência"
-          value={reincidentesAtivos + posPositivo}
-          sub={`${reincidentesAtivos} em aberto · ${taxaReinc.toFixed(1)}% dos tratados`}
-          compareValue={ONTEM?.posPositivo}
+          value={m.reincidentesAtivos + m.posPositivo}
+          sub={`${m.reincidentesAtivos} em aberto · ${m.taxaReinc.toFixed(1)}% dos tratados`}
+          compareValue={m.ONTEM?.posPositivo}
           accent="#2A8DD9"
           onClick={() => setActiveKpi(activeKpi === 'reinc' ? null : 'reinc')}
           active={activeKpi === 'reinc'}
         />
       </div>
 
-      {/* Drill panel — Volume do dia */}
-      {activeKpi === 'total' && (
-        <div className="dg-card" style={{ marginBottom: 16, borderTop: '3px solid #F26931' }}>
-          <div className="dg-drill" style={{ background: 'transparent', borderTop: 'none', padding: '14px 18px' }}>
-            <div className="dg-drill-col">
-              <h4>Por tipo (origem)</h4>
-              {TIPOS.map(c => (
-                <div key={c.id} className="dg-drill-line">
-                  <span>
-                    <span style={{ display: 'inline-block', width: 9, height: 9, background: c.color, borderRadius: 2, marginRight: 8, verticalAlign: 'middle' }}></span>
-                    {c.label}
-                  </span>
-                  <span className="v" style={{ color: c.color }}>{c.count}</span>
-                </div>
-              ))}
-            </div>
-            <div className="dg-drill-col">
-              <h4>Por resultado</h4>
-              {RESULTADOS.map(c => (
-                <div key={c.id} className="dg-drill-line">
-                  <span>
-                    <span style={{ display: 'inline-block', width: 9, height: 9, background: c.color, borderRadius: 2, marginRight: 8, verticalAlign: 'middle' }}></span>
-                    {c.label}
-                  </span>
-                  <span className="v" style={{ color: c.color }}>{c.count}</span>
-                </div>
-              ))}
-            </div>
-            <div className="dg-drill-col">
-              <h4>Top 4 transportadoras</h4>
-              {transpStats.slice(0, 4).map(t => (
-                <div key={t.name} className="dg-drill-line">
-                  <span>{t.name}</span>
-                  <span className="v">{t.total}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Drill panel — Fechados */}
-      {activeKpi === 'fechados' && (
-        <div className="dg-card" style={{ marginBottom: 16, borderTop: '3px solid var(--success-500)' }}>
-          <div className="dg-drill" style={{ background: 'transparent', borderTop: 'none', padding: '14px 18px' }}>
-            <div className="dg-drill-col">
-              <h4>Intervenções</h4>
-              <div className="dg-drill-line">
-                <span>Positivos</span>
-                <span className="v" style={{ color: '#2DA75A' }}>{positivo}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Pós-positivos</span>
-                <span className="v" style={{ color: '#2A8DD9' }}>{posPositivo}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Total</span>
-                <span className="v">{fechados}</span>
-              </div>
-            </div>
-            <div className="dg-drill-col">
-              <h4>Reincidência</h4>
-              <div className="dg-drill-line">
-                <span>Taxa</span>
-                <span className="v" style={{ color: posPositivo > 0 ? '#2A8DD9' : 'var(--success-500)' }}>
-                  {taxaReinc.toFixed(1)}%
-                </span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Concluído</span>
-                <span className="v">{pctConcluido}%</span>
-              </div>
-            </div>
-            <div className="dg-drill-col">
-              <h4>Por operador (top 4)</h4>
-              {equipe.slice(0, 4).map(op => {
-                const t = op.tratados.fadigaPos + op.tratados.fadigaPP + op.tratados.compPos;
-                return (
-                  <div key={op.nome} className="dg-drill-line">
-                    <span>{op.nome.split(' ')[0]}</span>
-                    <span className="v">{t}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Drill panel — Em aberto */}
-      {activeKpi === 'aberto' && (
-        <div className="dg-card" style={{ marginBottom: 16, borderTop: '3px solid var(--warning-500)' }}>
-          <div className="dg-drill" style={{ background: 'transparent', borderTop: 'none', padding: '14px 18px' }}>
-            <div className="dg-drill-col">
-              <h4>Por severidade</h4>
-              <div className="dg-drill-line">
-                <span>Críticos</span>
-                <span className="v" style={{ color: 'var(--danger-500)' }}>{criticos.length}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>SLA vencido</span>
-                <span className="v" style={{ color: slaVencidos > 0 ? 'var(--danger-500)' : 'var(--text-muted)' }}>{slaVencidos}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Total em aberto</span>
-                <span className="v">{emAberto}</span>
-              </div>
-            </div>
-            <div className="dg-drill-col">
-              <h4>Por tipo</h4>
-              {TIPOS.map(c => (
-                <div key={c.id} className="dg-drill-line">
-                  <span>{c.label}</span>
-                  <span className="v" style={{ color: c.color }}>{driversAtivos.filter(d =>
-                    c.id === 'fadiga'
-                      ? d.tipos?.some(t => ['Bocejo','Olho fechado','Sonolência','Fadiga'].some(f => t.toLowerCase().includes(f.toLowerCase())))
-                      : !d.tipos?.some(t => ['Bocejo','Olho fechado','Sonolência','Fadiga'].some(f => t.toLowerCase().includes(f.toLowerCase())))
-                  ).length}</span>
-                </div>
-              ))}
-            </div>
-            <div className="dg-drill-col">
-              <h4>Top transportadoras</h4>
-              {transpStats.slice(0, 4).map(t => (
-                <div key={t.name} className="dg-drill-line">
-                  <span>{t.name.length > 20 ? t.name.slice(0, 18) + '…' : t.name}</span>
-                  <span className="v">{t.abertos}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Drill panel — Reincidência */}
-      {activeKpi === 'reinc' && (
-        <div className="dg-card" style={{ marginBottom: 16, borderTop: '3px solid #2A8DD9' }}>
-          <div className="dg-drill" style={{ background: 'transparent', borderTop: 'none', padding: '14px 18px' }}>
-            <div className="dg-drill-col">
-              <h4>Resumo</h4>
-              <div className="dg-drill-line">
-                <span>Em aberto</span>
-                <span className="v" style={{ color: '#2A8DD9' }}>{reincidentesAtivos}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Tratados hoje</span>
-                <span className="v" style={{ color: '#2A8DD9' }}>{posPositivo}</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Taxa de reinc.</span>
-                <span className="v">{taxaReinc.toFixed(1)}%</span>
-              </div>
-              <div className="dg-drill-line">
-                <span>Janela de referência</span>
-                <span className="v">30d</span>
-              </div>
-            </div>
-            <div className="dg-drill-col">
-              <h4>Motoristas reincidentes</h4>
-              {criticos.filter(c => c.reincidente).slice(0, 4).map(c => (
-                <div key={c.placa} className="dg-drill-line">
-                  <span>{c.nome.split(' ')[0]}</span>
-                  <span className="v" style={{ color: '#2A8DD9' }}>{c.placa}</span>
-                </div>
-              ))}
-              {criticos.filter(c => c.reincidente).length === 0 && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 6 }}>
-                  Nenhum reincidente crítico no momento
-                </div>
-              )}
-            </div>
-            <div className="dg-drill-col">
-              <h4>Ontem</h4>
-              {ONTEM ? (
-                <>
-                  <div className="dg-drill-line">
-                    <span>Intervenções</span>
-                    <span className="v">{ONTEM.fechados}</span>
-                  </div>
-                  <div className="dg-drill-line">
-                    <span>Pós-positivos</span>
-                    <span className="v" style={{ color: '#2A8DD9' }}>{ONTEM.posPositivo}</span>
-                  </div>
-                  <div className="dg-drill-line">
-                    <span>Taxa</span>
-                    <span className="v">{ONTEM.fechados > 0 ? ((ONTEM.posPositivo / ONTEM.fechados) * 100).toFixed(1) : '0.0'}%</span>
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 6 }}>Comparação desativada</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Drill panels */}
+      {activeKpi === 'total'    && <VolumeDrill   TIPOS={m.TIPOS} RESULTADOS={m.RESULTADOS} transpStats={m.transpStats} />}
+      {activeKpi === 'fechados' && <FechadosDrill positivo={m.positivo} posPositivo={m.posPositivo} fechados={m.fechados} taxaReinc={m.taxaReinc} pctConcluido={m.pctConcluido} equipe={m.equipe} />}
+      {activeKpi === 'aberto'   && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.TIPOS} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
+      {activeKpi === 'reinc'    && <ReincidenciaDrill reincidentesAtivos={m.reincidentesAtivos} posPositivo={m.posPositivo} taxaReinc={m.taxaReinc} criticos={m.criticos} ONTEM={m.ONTEM} />}
 
       {/* Seção: Pulso da operação */}
       <Section icon="ti-radio" label="Pulso da operação" />
@@ -1329,15 +487,15 @@ export default function Dashboard() {
       <div className={`dg-grid dg-layout-${layout}`}>
         {/* Coluna principal — críticos + atividade horária */}
         <div className="dg-col">
-          <CriticalSLA criticos={filteredCriticos} slaLimit={slaLimit} />
-          {showHourly && !executiveMode && <HourlyActivity hourly={HOURLY} currentHour={hour} />}
+          <CriticalSLA criticos={m.criticos} slaLimit={slaLimit} />
+          {showHourly && !executiveMode && <HourlyActivity hourly={m.HOURLY} currentHour={hour} />}
         </div>
 
         {/* Coluna lateral — classificação + alertas técnicos + transportadoras */}
         <div className="dg-col">
-          {showClassif && <ClassificationBreakdown tipos={TIPOS} resultados={RESULTADOS} />}
-          {showTech && !executiveMode && tecnicos.length > 0 && <TechAlerts tecnicos={tecnicos} />}
-          {showTransp && !executiveMode && <TransportadoraRanking transportadoras={filteredTransp.slice(0, 6)} />}
+          {showClassif && <ClassificationBreakdown tipos={m.TIPOS} resultados={m.RESULTADOS} />}
+          {showTech && !executiveMode && m.tecnicos.length > 0 && <TechAlerts tecnicos={m.tecnicos} />}
+          {showTransp && !executiveMode && <TransportadoraRanking transportadoras={m.transpStats.slice(0, 6)} />}
         </div>
       </div>
 
@@ -1346,15 +504,15 @@ export default function Dashboard() {
         <>
           <Section icon="ti-table" label="Planilha de intervenções" />
           <SheetInsights
-            tmaMin={sheetTMA.avg}
-            tmaSampleSize={sheetTMA.n}
-            criticidade={sheetCriticidade}
-            classificacao={sheetClassificacao}
-            pendencias={sheetPendencias}
-            totalHoje={sheetRowsPeriodo.length}
+            tmaMin={m.sheetTMA.avg}
+            tmaSampleSize={m.sheetTMA.n}
+            criticidade={m.sheetCriticidade}
+            classificacao={m.sheetClassificacao}
+            pendencias={m.sheetPendencias}
+            totalHoje={m.sheetRowsPeriodo.length}
             loading={sheetHistory.loading}
             error={sheetHistory.error}
-            ageMin={sheetAgeMin}
+            ageMin={m.sheetAgeMin}
             syncing={sheetHistory.loading}
             onRefresh={() => sheetHistory.load(buildMesesLookback(3))}
           />
@@ -1363,7 +521,7 @@ export default function Dashboard() {
 
       {/* Seção: Produtividade */}
       <Section icon="ti-users" label="Produtividade da equipe" />
-      <ProductivityRanking equipe={filteredEquipe} />
+      <ProductivityRanking equipe={m.equipe} />
 
       {/* Spacer final */}
       <div style={{ height: 32 }}></div>
