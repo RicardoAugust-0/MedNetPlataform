@@ -1,5 +1,6 @@
 import { iniciais } from '../../utils';
 import { sevClass, TiposBadge, ElapsedTimer } from './utils';
+import PlatformBadge from '../PlatformBadge';
 
 export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }) {
   const sev = sevClass(d);
@@ -17,7 +18,8 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
       <div className="d-info">
         <div className="d-name">
           <span>{d.nome}</span>
-          
+          <PlatformBadge platformId={d._platformId} />
+
           {type !== 'tecnicos' && (
             <>
               <span className={`badge badge-${sev}`}>

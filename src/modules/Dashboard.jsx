@@ -9,6 +9,7 @@ import './dashboard/dashboard.css';
 import { useAutoSync } from '../hooks/useAutoSync';
 import maxtrack from '../platforms/maxtrack/index.js';
 import sascar from '../platforms/sascar/index.js';
+import PlatformBadge from './PlatformBadge';
 import {
   KPI,
   FilterBar,
@@ -399,6 +400,7 @@ export default function Dashboard() {
         return {
           nome: d.nome,
           placa: d.placa,
+          platformId: d._platformId,
           transportadora: resolveAlias(d.transportadora),
           frota: d.frota,
           turno: d.turno,
@@ -605,6 +607,18 @@ export default function Dashboard() {
     return `Atualizado há ${Math.floor(diffH / 24)}d`;
   }, [driversLastChangeAt, lastAtendimentoAt, now]);
 
+  // Contagem de drivers com alertas ativos por plataforma — base absoluta
+  // (sem filtros), igual aos chips do FilterBar.
+  const platformCounts = useMemo(() => {
+    const counts = { maxtrack: 0, sascar: 0 };
+    for (const d of drivers) {
+      if ((d.alertas || 0) === 0 && (d.reportaveis || 0) === 0) continue;
+      if (d._platformId === 'maxtrack') counts.maxtrack++;
+      else if (d._platformId === 'sascar') counts.sascar++;
+    }
+    return counts;
+  }, [drivers]);
+
   // ── Tweaks popover ─────────────────────────────────────────────────────────
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tweaksRef = useRef(null);
@@ -633,6 +647,15 @@ export default function Dashboard() {
             <span className="live">{updatedLabel}</span>
             <span className="sep">·</span>
             <span>SLA: {slaLimit} min</span>
+            {(platformCounts.maxtrack > 0 || platformCounts.sascar > 0) && (
+              <>
+                <span className="sep">·</span>
+                <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  {platformCounts.maxtrack > 0 && <PlatformBadge platformId="maxtrack" count={platformCounts.maxtrack} />}
+                  {platformCounts.sascar   > 0 && <PlatformBadge platformId="sascar"   count={platformCounts.sascar} />}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="dg-greet-actions">
