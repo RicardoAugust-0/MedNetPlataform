@@ -6,6 +6,7 @@ export function useSheetHistory() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const [loaded, setLoaded]   = useState(false);
+  const [loadedAt, setLoadedAt] = useState(null);
 
   const load = useCallback(async (meses) => {
     if (!isSupabaseConfigured) {
@@ -29,6 +30,7 @@ export function useSheetHistory() {
 
       setRows(data.rows || []);
       setLoaded(true);
+      setLoadedAt(new Date().toISOString());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,8 +41,9 @@ export function useSheetHistory() {
   const reset = useCallback(() => {
     setRows([]);
     setLoaded(false);
+    setLoadedAt(null);
     setError(null);
   }, []);
 
-  return { rows, loading, error, loaded, load, reset };
+  return { rows, loading, error, loaded, loadedAt, load, reset };
 }
