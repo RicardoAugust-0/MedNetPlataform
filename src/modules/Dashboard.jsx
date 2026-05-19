@@ -413,6 +413,12 @@ export default function Dashboard() {
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
   const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
+  // Reincidentes em aberto: motoristas na fila com histórico de intervenção nos últimos 30-90d.
+  // Somado a posPositivo forma o total de reincidentes encontrados hoje (fila + tratados).
+  const reincidentesAtivos = useMemo(
+    () => driversAtivos.filter(d => d.placa && placasPrevia30d.has(d.placa)).length,
+    [driversAtivos, placasPrevia30d]
+  );
 
   // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
   const ONTEM = useMemo(() => {
@@ -1112,8 +1118,8 @@ export default function Dashboard() {
         <KPI
           icon="ti-refresh"
           label="Reincidência"
-          value={posPositivo}
-          sub={`${taxaReinc.toFixed(1)}% dos tratados voltaram`}
+          value={reincidentesAtivos + posPositivo}
+          sub={`${reincidentesAtivos} em aberto · ${taxaReinc.toFixed(1)}% dos tratados`}
           compareValue={ONTEM?.posPositivo}
           accent="#2A8DD9"
           onClick={() => setActiveKpi(activeKpi === 'reinc' ? null : 'reinc')}
@@ -1262,7 +1268,11 @@ export default function Dashboard() {
             <div className="dg-drill-col">
               <h4>Resumo</h4>
               <div className="dg-drill-line">
-                <span>Pós-positivos hoje</span>
+                <span>Em aberto</span>
+                <span className="v" style={{ color: '#2A8DD9' }}>{reincidentesAtivos}</span>
+              </div>
+              <div className="dg-drill-line">
+                <span>Tratados hoje</span>
                 <span className="v" style={{ color: '#2A8DD9' }}>{posPositivo}</span>
               </div>
               <div className="dg-drill-line">
