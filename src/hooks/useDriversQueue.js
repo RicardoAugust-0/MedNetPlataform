@@ -81,10 +81,15 @@ export function useDriversQueue() {
   const profileRef = useRef(profile);
   const touchChange = useCallback(() => setLastChangeAt(new Date().toISOString()), []);
 
-  // Keep refs + localStorage in sync
+  // Ref síncrono + cache em localStorage com debounce (escrita síncrona é cara
+  // e drivers pode mudar em rajadas via realtime — escrevemos só depois que
+  // estabilizar).
   useEffect(() => {
     driversRef.current = drivers;
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(drivers)); } catch { /* quota */ }
+    const id = setTimeout(() => {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(drivers)); } catch { /* quota */ }
+    }, 500);
+    return () => clearTimeout(id);
   }, [drivers]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
 

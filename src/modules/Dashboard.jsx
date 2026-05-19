@@ -267,19 +267,38 @@ export default function Dashboard() {
   );
 
   // ── Placas com intervenção nos últimos 30 dias (excl. hoje) ────────────────
+  // Depende só de todayStr (não de `now`) — Set é recalculado apenas uma vez
+  // por dia em vez de a cada 30 s (clock tick do SLA).
   const placasPrevia30d = useMemo(() => {
-    const cutoff = new Date(now.getTime() - 30 * 86400000);
-    return new Set(
-      atHistory
-        .filter(a =>
-          a.tipo === 'intervencao' &&
-          new Date(a.created_at) > cutoff &&
-          new Date(a.created_at).toDateString() !== todayStr
-        )
-        .map(a => a.placa)
-        .filter(Boolean)
-    );
-  }, [atHistory, now, todayStr]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cutoffMs = today.getTime() - 30 * 86400000;
+    const set = new Set();
+    for (const a of atHistory) {
+      if (a.tipo !== 'intervencao' || !a.placa) continue;
+      const t = new Date(a.created_at).getTime();
+      if (t < cutoffMs) continue;
+      if (new Date(a.created_at).toDateString() === todayStr) continue;
+      set.add(a.placa);
+    }
+    return set;
+  }, [atHistory, todayStr]);
+
+  // Lookup placa → última intervenção registrada antes de hoje.
+  // Pré-calculado uma vez por mudança em atHistory/data, evita O(drivers × histórico)
+  // dentro do .map() de criticos.
+  const lastIntervByPlaca = useMemo(() => {
+    const map = new Map();
+    for (const a of atHistory) {
+      if (a.tipo !== 'intervencao' || !a.placa) continue;
+      if (new Date(a.created_at).toDateString() === todayStr) continue;
+      const existing = map.get(a.placa);
+      if (!existing || a.created_at > existing.created_at) {
+        map.set(a.placa, a);
+      }
+    }
+    return map;
+  }, [atHistory, todayStr]);
 
   // ── KPIs base ───────────────────────────────────────────────────────────────
   // Atendimentos "produtivos" do dia: intervenção + reportar (descarte e limpeza
@@ -363,24 +382,19 @@ export default function Dashboard() {
   const criticThreshold = (platformId) => platformId === 'maxtrack' ? 8 : 5;
   const criticos = useMemo(() => {
     const tiposFadiga = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
+    const nowMs = now.getTime();
     return driversIntervencao
       .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))
       .map(d => {
-        const abertoMin  = d.ultimoEvento ? (now - new Date(d.ultimoEvento)) / 60000 : 0;
+        const abertoMin  = d.ultimoEvento ? (nowMs - new Date(d.ultimoEvento).getTime()) / 60000 : 0;
         const hasFadiga  = d.tipos?.some(t =>
           tiposFadiga.some(f => t.toLowerCase().includes(f.toLowerCase()))
         );
         const tipo       = hasFadiga ? 'fadiga' : 'comportamento';
         const reincidente = d.placa && placasPrevia30d.has(d.placa);
-        const lastInterv = atHistory
-          .filter(a =>
-            a.tipo === 'intervencao' &&
-            a.placa === d.placa &&
-            new Date(a.created_at).toDateString() !== todayStr
-          )
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const lastInterv = lastIntervByPlaca.get(d.placa);
         const ultimaIntervencao = lastInterv
-          ? `${Math.floor((now - new Date(lastInterv.created_at)) / 86400000)}d`
+          ? `${Math.floor((nowMs - new Date(lastInterv.created_at).getTime()) / 86400000)}d`
           : null;
         return {
           nome: d.nome,
@@ -397,7 +411,7 @@ export default function Dashboard() {
         };
       })
       .sort((a, b) => b.abertoMin - a.abertoMin);
-  }, [driversIntervencao, atHistory, placasPrevia30d, now, todayStr, resolveAlias]);
+  }, [driversIntervencao, lastIntervByPlaca, placasPrevia30d, now, resolveAlias]);
 
   const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
 
