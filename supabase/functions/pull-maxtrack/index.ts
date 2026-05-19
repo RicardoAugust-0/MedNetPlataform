@@ -1,7 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const BASE = 'https://go.maxtrack.com.br';
-const CONCURRENCY = 8; // requisições paralelas à Maxtrack por vez
+const BASE        = 'https://go.maxtrack.com.br';
+const CONCURRENCY = 8;   // requisições paralelas à Maxtrack por vez
+const SESSION_TTL = 55 * 60 * 1000;  // 55 min — renova antes de expirar
+const RESULT_TTL  =  5 * 60 * 1000;  // 5 min  — cache de resultado
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -48,6 +50,46 @@ async function login(email: string, senha: string): Promise<LoginResult> {
   } catch { /* ignora erro de parse — usa UUID gerado como fallback */ }
 
   return { cookie, cco };
+}
+
+// Devolve sessão cacheada se ainda válida, ou null.
+async function getSession(svc: SupabaseClient, userId: string): Promise<LoginResult | null> {
+  const { data } = await svc
+    .from('maxtrack_sessions')
+    .select('cookie, cco, expires_at')
+    .eq('user_id', userId)
+    .single();
+  if (!data || new Date(data.expires_at) <= new Date()) return null;
+  return { cookie: data.cookie, cco: data.cco };
+}
+
+async function saveSession(svc: SupabaseClient, userId: string, session: LoginResult) {
+  await svc.from('maxtrack_sessions').upsert({
+    user_id:    userId,
+    cookie:     session.cookie,
+    cco:        session.cco,
+    expires_at: new Date(Date.now() + SESSION_TTL).toISOString(),
+  });
+}
+
+// Devolve eventos cacheados se dentro do TTL, ou null.
+async function getCachedResult(svc: SupabaseClient, userId: string): Promise<Record<string, unknown>[] | null> {
+  const { data } = await svc
+    .from('maxtrack_cache')
+    .select('events, fetched_at')
+    .eq('user_id', userId)
+    .single();
+  if (!data) return null;
+  if (Date.now() - new Date(data.fetched_at).getTime() > RESULT_TTL) return null;
+  return data.events as Record<string, unknown>[];
+}
+
+async function saveResult(svc: SupabaseClient, userId: string, events: Record<string, unknown>[]) {
+  await svc.from('maxtrack_cache').upsert({
+    user_id:    userId,
+    events,
+    fetched_at: new Date().toISOString(),
+  });
 }
 
 function getDayStartBRT(): Date {
@@ -192,26 +234,42 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
-    const [{ data: profileData }, { data: credData }] = await Promise.all([
+
+    // Retorna imediatamente se o cache de resultado ainda for válido.
+    const cached = await getCachedResult(serviceClient, user.id);
+    if (cached) return json({ events: cached, isCompanyIntegrator: false, count: cached.length, fromCache: true });
+
+    // Busca credenciais e sessão cacheada em paralelo.
+    const [
+      { data: profileData },
+      { data: credData },
+      cachedSession,
+    ] = await Promise.all([
       serviceClient.from('profiles').select('maxtrack_email').eq('id', user.id).single(),
       serviceClient.from('profile_credentials').select('maxtrack_password').eq('id', user.id).single(),
+      getSession(serviceClient, user.id),
     ]);
 
     if (!profileData?.maxtrack_email || !credData?.maxtrack_password) {
       return json({ error: 'Credenciais Maxtrack não configuradas. Configure em Meu Perfil.' }, 400);
     }
 
-    const { cookie: sessionCookie, cco } = await login(profileData.maxtrack_email, credData.maxtrack_password);
+    // Reutiliza sessão cacheada ou faz novo login e persiste o cookie.
+    let session = cachedSession;
+    if (!session) {
+      session = await login(profileData.maxtrack_email, credData.maxtrack_password);
+      saveSession(serviceClient, user.id, session); // fire-and-forget
+    }
 
     const authHeaders: Record<string, string> = {
       'Content-Type':     'application/json; charset=utf-8',
-      'Cookie':           sessionCookie,
+      'Cookie':           session.cookie,
       'X-Requested-With': 'XMLHttpRequest',
       'Origin':           BASE,
       'Referer':          `${BASE}/`,
       'baseURL':          BASE,
       'cm':               'MONITORING',
-      'cco':              cco,
+      'cco':              session.cco,
       'tz':               'America/Sao_Paulo',
       'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     };
@@ -235,7 +293,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ events, isCompanyIntegrator: false, count: events.length });
+    saveResult(serviceClient, user.id, events); // fire-and-forget
+
+    return json({ events, isCompanyIntegrator: false, count: events.length, fromCache: false });
 
   } catch (err) {
     console.error('[pull-maxtrack]', err);
