@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const BASE        = 'https://go.maxtrack.com.br';
-const CONCURRENCY = 8;
 const SESSION_TTL = 55 * 60 * 1000;
 
 const CORS = {
@@ -82,25 +81,18 @@ async function saveSession(svc: SupabaseClient, userId: string, session: LoginRe
   });
 }
 
-function getDayStartBRT(): Date {
+// Retorna o intervalo do dia BRT atual: 03:00 UTC → 02:59:59 UTC do dia seguinte.
+function getDayRangeBRT(): { startDate: string; endDate: string } {
   const now   = new Date();
   const start = new Date(now);
   start.setUTCHours(3, 0, 0, 0);
   if (now < start) start.setDate(start.getDate() - 1);
-  return start;
-}
 
-function buildWindows(): Array<{ startDate: string; endDate: string }> {
-  const dayStart = getDayStartBRT();
-  const now      = new Date();
-  const windows  = [];
-  for (let i = 0; i < 96; i++) {
-    const wStart = new Date(dayStart.getTime() + i * 15 * 60 * 1000);
-    const wEnd   = new Date(wStart.getTime() + 15 * 60 * 1000 - 1);
-    if (wStart >= now) break;
-    windows.push({ startDate: wStart.toISOString(), endDate: wEnd.toISOString() });
-  }
-  return windows;
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  end.setUTCMilliseconds(end.getUTCMilliseconds() - 1); // 02:59:59.999 UTC
+
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
 }
 
 const STATIC_SEARCH = {
@@ -165,37 +157,29 @@ function buildPayload(startDate: string, endDate: string) {
   };
 }
 
-// Extrai quem fechou e quando do array de steps do evento.
-// A API Maxtrack retorna os steps em `ev.steps` ou `ev.stepHistory`.
-// Cada step tem: { step: string, user: { name: string }, date: number, obs: string }
+// ev.step é o status atual do evento: { id: 'AUTO_CLOSED_*' | 'CLOSED', name: string }
+// Para auto-fechamento, não há operador humano — usamos o nome do step como "fechadoPor".
+// Para fechamento manual (CLOSED), procuramos um campo de usuário.
 function extractClosingInfo(ev: Record<string, unknown>): { fechadoPor: string | null; fechadoEm: number | null } {
-  const steps = (
-    (ev.steps as Array<Record<string, unknown>> | undefined) ||
-    (ev.stepHistory as Array<Record<string, unknown>> | undefined) ||
-    []
-  );
+  const step     = ev.step as Record<string, unknown> | undefined;
+  const stepName = String(step?.name || '');
 
-  const closeStep = [...steps].reverse().find(s => {
-    const status = String(s.step || s.status || s.stepEvent || '').toUpperCase();
-    return status === 'CLOSE' || status === 'CLOSED' || status === 'FINALIZED';
-  });
+  const closingUser =
+    (ev.closingUser as Record<string, unknown>)?.name as string | undefined ||
+    (ev.closedByUser as Record<string, unknown>)?.name as string | undefined;
 
-  const fechadoPor =
-    (closeStep?.user as Record<string, unknown>)?.name as string | undefined ||
-    (ev.closedBy as Record<string, unknown>)?.name as string | undefined ||
-    (ev.closer as Record<string, unknown>)?.name as string | undefined ||
-    null;
+  const fechadoPor = closingUser || (stepName || null);
 
-  const rawFechadoEm =
-    (closeStep?.date as number | undefined) ||
-    (ev.endDate as number | undefined) ||
-    (ev.closedAt as number | undefined) ||
-    null;
+  // autoCloseDate vem em milissegundos; endDate em segundos (0 = não preenchido).
+  const autoCloseDateMs = ev.autoCloseDate as number | undefined;
+  const endDateRaw      = ev.endDate as number | undefined;
 
-  // A Maxtrack usa timestamps em segundos; normaliza para segundos.
-  const fechadoEm = rawFechadoEm
-    ? (rawFechadoEm > 1e10 ? Math.floor(rawFechadoEm / 1000) : rawFechadoEm)
-    : null;
+  let fechadoEm: number | null = null;
+  if (autoCloseDateMs && autoCloseDateMs > 0) {
+    fechadoEm = Math.floor(autoCloseDateMs / 1000);
+  } else if (endDateRaw && endDateRaw > 0) {
+    fechadoEm = endDateRaw > 1e10 ? Math.floor(endDateRaw / 1000) : endDateRaw;
+  }
 
   return { fechadoPor, fechadoEm };
 }
@@ -223,43 +207,29 @@ function parseEvent(ev: Record<string, unknown>): ClosedEvent {
   };
 }
 
-async function fetchWindow(
-  startDate: string,
-  endDate: string,
-  headers: Record<string, string>,
-): Promise<Record<string, unknown>[]> {
+// O portal Maxtrack usa uma única requisição para o dia inteiro (sem janelas).
+// Usamos a mesma estratégia para garantir todos os eventos fechados.
+async function fetchAllClosedToday(headers: Record<string, string>): Promise<Record<string, unknown>[]> {
+  const { startDate, endDate } = getDayRangeBRT();
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(`${BASE}/event/events/load`, {
         method:  'POST',
         headers,
         body:    JSON.stringify(buildPayload(startDate, endDate)),
-        signal:  AbortSignal.timeout(30_000),
+        signal:  AbortSignal.timeout(90_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       return (d.events ?? []) as Record<string, unknown>[];
     } catch (err) {
       if (attempt === 2) {
-        throw new Error(`Maxtrack /event/events/load falhou (${startDate}): ${(err as Error).message}`);
+        throw new Error(`Maxtrack /event/events/load falhou: ${(err as Error).message}`);
       }
-      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
   return [];
-}
-
-async function pool<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = await Promise.all(items.slice(i, i + concurrency).map(fn));
-    results.push(...batch);
-  }
-  return results;
 }
 
 Deno.serve(async (req) => {
@@ -321,22 +291,15 @@ Deno.serve(async (req) => {
       'User-Agent':       'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0',
     };
 
-    const windows = buildWindows();
-    const results = await pool(
-      windows,
-      CONCURRENCY,
-      ({ startDate, endDate }) => fetchWindow(startDate, endDate, authHeaders),
-    );
+    const rawEvents = await fetchAllClosedToday(authHeaders);
 
     const seen   = new Set<string>();
     const events: ClosedEvent[] = [];
-    for (const batch of results) {
-      for (const ev of batch) {
-        const id = ev._id as string;
-        if (id && !seen.has(id)) {
-          seen.add(id);
-          events.push(parseEvent(ev));
-        }
+    for (const ev of rawEvents) {
+      const id = ev._id as string;
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        events.push(parseEvent(ev));
       }
     }
 
