@@ -130,7 +130,7 @@ const STATIC_SEARCH = {
   serials:             null,
   locals:              [],
   drivers:             [],
-  soSearchType:        null,
+  soSearchType:        'N',
   serviceOrders:       null,
   operationals:        null,
   showAutoClose:       null,
@@ -150,10 +150,16 @@ const STATIC_SEARCH = {
 function buildPayload(startDate: string, endDate: string) {
   return {
     search:             { ...STATIC_SEARCH, startDate, endDate },
-    // 'CLOSE' é o stepEvent da Maxtrack para eventos encerrados.
-    // Se a API usar um valor diferente (ex: 'CLOSED', 'FINALIZED'), ajustar aqui.
-    stepEvents:         ['CLOSE'],
-    loadProcessingType: 'ALL',
+    stepEvents: [
+      'CLOSED',
+      'AUTO_CLOSED',
+      'AUTO_CLOSED_TIME',
+      'AUTO_CLOSED_NO_EVIDENCE_TIME',
+      'AUTO_CLOSED_COMPLEMENTARY',
+      'AUTO_CLOSED_AUTOMATION',
+      'AUTO_CLOSED_SUSPENSION',
+    ],
+    loadProcessingType: '',
     aggregatedType:     'N',
     sort:               'desc',
   };
