@@ -3,6 +3,12 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 const BASE        = 'https://go.maxtrack.com.br';
 const SESSION_TTL = 55 * 60 * 1000;
 
+// O endpoint /event/events/load tem um cap implícito (~30 eventos) quando o
+// range de datas é amplo (dia inteiro). Quebrar em janelas curtas + pool
+// paralelo evita o cap e cobre o dia completo.
+const WINDOW_MIN  = 15;
+const POOL_SIZE   = 6;
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -159,26 +165,43 @@ function buildPayload(startDate: string, endDate: string) {
 
 // ev.step é o status atual do evento: { id: 'AUTO_CLOSED_*' | 'CLOSED', name: string }
 // Para auto-fechamento, não há operador humano — usamos o nome do step como "fechadoPor".
-// Para fechamento manual (CLOSED), procuramos um campo de usuário.
+// Para fechamento manual (CLOSED), procuramos o nome do usuário em vários campos.
+function pickUserName(ev: Record<string, unknown>, fields: string[]): string | null {
+  for (const f of fields) {
+    const v = ev[f];
+    if (!v) continue;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'object') {
+      const name = (v as Record<string, unknown>).name;
+      if (typeof name === 'string' && name.trim()) return name.trim();
+    }
+  }
+  return null;
+}
+
 function extractClosingInfo(ev: Record<string, unknown>): { fechadoPor: string | null; fechadoEm: number | null } {
   const step     = ev.step as Record<string, unknown> | undefined;
   const stepName = String(step?.name || '');
 
-  const closingUser =
-    (ev.closingUser as Record<string, unknown>)?.name as string | undefined ||
-    (ev.closedByUser as Record<string, unknown>)?.name as string | undefined;
+  // Cobre variações de naming usadas pela Maxtrack para o operador que fechou.
+  const operatorName = pickUserName(ev, [
+    'closingUser', 'closedByUser', 'closedBy', 'closingOperator',
+    'responsibleUser', 'lastUser', 'evaluator', 'attendant',
+    'operator', 'user', 'userClosed', 'finishedBy',
+  ]);
 
-  const fechadoPor = closingUser || (stepName || null);
+  const fechadoPor = operatorName || (stepName || null);
 
-  // autoCloseDate vem em milissegundos; endDate em segundos (0 = não preenchido).
-  const autoCloseDateMs = ev.autoCloseDate as number | undefined;
-  const endDateRaw      = ev.endDate as number | undefined;
-
+  // Campos de timestamp possíveis (autoCloseDate normalmente em ms;
+  // endDate pode estar em s ou ms; 0 = não preenchido).
+  const tsFields = ['autoCloseDate', 'closingDate', 'closedAt', 'finishedAt', 'endDate'];
   let fechadoEm: number | null = null;
-  if (autoCloseDateMs && autoCloseDateMs > 0) {
-    fechadoEm = Math.floor(autoCloseDateMs / 1000);
-  } else if (endDateRaw && endDateRaw > 0) {
-    fechadoEm = endDateRaw > 1e10 ? Math.floor(endDateRaw / 1000) : endDateRaw;
+  for (const f of tsFields) {
+    const v = ev[f] as number | undefined;
+    if (v && v > 0) {
+      fechadoEm = v > 1e10 ? Math.floor(v / 1000) : v;
+      break;
+    }
   }
 
   return { fechadoPor, fechadoEm };
@@ -207,29 +230,59 @@ function parseEvent(ev: Record<string, unknown>): ClosedEvent {
   };
 }
 
-// O portal Maxtrack usa uma única requisição para o dia inteiro (sem janelas).
-// Usamos a mesma estratégia para garantir todos os eventos fechados.
-async function fetchAllClosedToday(headers: Record<string, string>): Promise<Record<string, unknown>[]> {
-  const { startDate, endDate } = getDayRangeBRT();
+function buildWindows(startISO: string, endISO: string): Array<{ startDate: string; endDate: string }> {
+  const startMs = new Date(startISO).getTime();
+  const endMs   = new Date(endISO).getTime();
+  const stepMs  = WINDOW_MIN * 60 * 1000;
+  const windows: Array<{ startDate: string; endDate: string }> = [];
+  for (let t = startMs; t < endMs; t += stepMs) {
+    const s = new Date(t);
+    const e = new Date(Math.min(t + stepMs - 1, endMs));
+    windows.push({ startDate: s.toISOString(), endDate: e.toISOString() });
+  }
+  return windows;
+}
+
+async function fetchWindow(
+  headers: Record<string, string>,
+  w: { startDate: string; endDate: string },
+): Promise<Record<string, unknown>[]> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(`${BASE}/event/events/load`, {
         method:  'POST',
         headers,
-        body:    JSON.stringify(buildPayload(startDate, endDate)),
-        signal:  AbortSignal.timeout(90_000),
+        body:    JSON.stringify(buildPayload(w.startDate, w.endDate)),
+        signal:  AbortSignal.timeout(60_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       return (d.events ?? []) as Record<string, unknown>[];
     } catch (err) {
       if (attempt === 2) {
-        throw new Error(`Maxtrack /event/events/load falhou: ${(err as Error).message}`);
+        console.warn(`[pull-maxtrack-closed] janela ${w.startDate}→${w.endDate} falhou:`, (err as Error).message);
+        return [];
       }
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
     }
   }
   return [];
+}
+
+// Quebra o dia em janelas de WINDOW_MIN minutos e baixa POOL_SIZE em paralelo.
+// O endpoint /events/load cappa em ~30 eventos quando o range é amplo, então
+// janelas curtas garantem cobertura total.
+async function fetchAllClosedToday(headers: Record<string, string>): Promise<Record<string, unknown>[]> {
+  const { startDate, endDate } = getDayRangeBRT();
+  const windows = buildWindows(startDate, endDate);
+
+  const all: Record<string, unknown>[] = [];
+  for (let i = 0; i < windows.length; i += POOL_SIZE) {
+    const batch = windows.slice(i, i + POOL_SIZE);
+    const results = await Promise.all(batch.map(w => fetchWindow(headers, w)));
+    for (const evs of results) all.push(...evs);
+  }
+  return all;
 }
 
 Deno.serve(async (req) => {
