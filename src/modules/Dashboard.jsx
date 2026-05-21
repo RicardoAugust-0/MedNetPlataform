@@ -24,7 +24,6 @@ import {
   Section,
   SheetInsights,
 } from './dashboard/components';
-import { MOCK_DRIVERS, MOCK_HISTORY } from './dashboard/_mocks';
 import { buildMesesLookback } from './dashboard/_helpers';
 import { useDashboardSettings } from './dashboard/hooks/useDashboardSettings';
 import { useDashboardFilters } from './dashboard/hooks/useDashboardFilters';
@@ -52,8 +51,8 @@ export default function Dashboard() {
   const maxtrackClosed = useMaxtrackClosed();
   const hasMaxtrack = !!me?.maxtrack_email;
 
-  const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
-  const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
+  const drivers   = driversReal;
+  const atHistory = atHistoryReal;
 
   // ── UI prefs persistidas em localStorage
   const settings = useDashboardSettings();
