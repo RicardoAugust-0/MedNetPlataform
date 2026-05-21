@@ -22,6 +22,8 @@ export function useDashboardMetrics({
   filters, showTipo, showResultado, empresaFilterFn,
   resolveAlias, profiles,
   compareYesterday, slaLimit,
+  maxtrackClosedCount = 0,
+  hasMaxtrack = false,
 }) {
   // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
   const periodoWindow = useMemo(() => {
@@ -161,8 +163,9 @@ export function useDashboardMetrics({
   const positivo     = RESULTADOS.find(r => r.id === 'positivo')?.count ?? 0;
   const fechados     = fechadosHoje.length;
   const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
-  const totalAlertas = fechados + emAberto;
-  const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
+  const encerradosPlataforma = hasMaxtrack ? maxtrackClosedCount : fechados;
+  const totalAlertas = encerradosPlataforma + emAberto;
+  const pctConcluido = totalAlertas > 0 ? Math.round((encerradosPlataforma / totalAlertas) * 100) : 0;
   const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
 
   // Reincidentes em aberto: drivers na fila cujas placas têm histórico recente.
@@ -257,6 +260,9 @@ export function useDashboardMetrics({
       return true;
     });
   }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, empresaFilterFn]);
+
+  const sheetIntervencoesHoje = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
+  const intervencoesRegistradas = fechados + sheetIntervencoesHoje;
 
   const sheetTMA = useMemo(() => {
     const deltas = [];
@@ -460,6 +466,7 @@ export function useDashboardMetrics({
     placasPrevia30d, lastIntervByPlaca,
     // KPIs principais
     fechadosHoje, posPositivo, positivo, fechados, emAberto,
+    encerradosPlataforma, intervencoesRegistradas, sheetIntervencoesHoje,
     totalAlertas, pctConcluido, taxaReinc, reincidentesAtivos,
     // chips
     TIPOS, RESULTADOS,

@@ -24,14 +24,14 @@ import {
   Section,
   SheetInsights,
 } from './dashboard/components';
-import { MOCK_DRIVERS, MOCK_HISTORY } from './dashboard/_mocks';
 import { buildMesesLookback } from './dashboard/_helpers';
 import { useDashboardSettings } from './dashboard/hooks/useDashboardSettings';
 import { useDashboardFilters } from './dashboard/hooks/useDashboardFilters';
 import { useDashboardMetrics } from './dashboard/hooks/useDashboardMetrics';
 import {
-  VolumeDrill, FechadosDrill, EmAbertoDrill, ReincidenciaDrill,
+  VolumeDrill, FechadosDrill, EmAbertoDrill,
 } from './dashboard/drills';
+import { useMaxtrackClosed } from '../hooks/useMaxtrackClosed';
 
 const PERIODOS = [
   { id: 'hoje',  label: 'Hoje'  },
@@ -48,9 +48,11 @@ export default function Dashboard() {
   const mxSync = useAutoSync({ platform: maxtrack, isEnabled: !!me?.maxtrack_email, storageKey: 'maxtrack' });
   const scSync = useAutoSync({ platform: sascar,   isEnabled: !!me?.sascar_token,   storageKey: 'sascar'   });
   const sheetHistory = useSheetHistory();
+  const maxtrackClosed = useMaxtrackClosed();
+  const hasMaxtrack = !!me?.maxtrack_email;
 
-  const drivers   = import.meta.env.DEV && driversReal.length   === 0 ? MOCK_DRIVERS : driversReal;
-  const atHistory = import.meta.env.DEV && atHistoryReal.length === 0 ? MOCK_HISTORY : atHistoryReal;
+  const drivers   = driversReal;
+  const atHistory = atHistoryReal;
 
   // ── UI prefs persistidas em localStorage
   const settings = useDashboardSettings();
@@ -96,6 +98,12 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [sheetAutoSync, sheetSyncMin]);
 
+  // ── Auto-fetch Maxtrack closed events on mount
+  useEffect(() => {
+    if (hasMaxtrack) maxtrackClosed.buscar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Métricas derivadas (todos os useMemos)
   const m = useDashboardMetrics({
     drivers, atHistory, sheetHistory,
@@ -103,6 +111,8 @@ export default function Dashboard() {
     filters, showTipo, showResultado, empresaFilterFn,
     resolveAlias, profiles,
     compareYesterday, slaLimit,
+    maxtrackClosedCount: maxtrackClosed.events.length,
+    hasMaxtrack,
   });
 
   const hour = now.getHours();
@@ -432,7 +442,7 @@ export default function Dashboard() {
           icon="ti-layers-subtract"
           label="Volume do dia"
           value={m.totalAlertas}
-          sub={`tratados + em aberto · ${m.pctConcluido}% concluído`}
+          sub={`encerrados + em aberto · ${m.pctConcluido}% concluído`}
           compareValue={m.ONTEM?.total}
           progress={m.pctConcluido}
           onClick={() => setActiveKpi(activeKpi === 'total' ? null : 'total')}
@@ -442,13 +452,11 @@ export default function Dashboard() {
         <KPI
           icon="ti-circle-check"
           label="Fechados hoje"
-          value={m.fechados}
-          sub={`${m.pctConcluido}% do volume`}
+          value={m.encerradosPlataforma}
+          sub={hasMaxtrack && maxtrackClosed.loading ? 'carregando…' : `${m.pctConcluido}% do volume`}
           compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
           progress={m.pctConcluido}
-          onClick={() => setActiveKpi(activeKpi === 'fechados' ? null : 'fechados')}
-          active={activeKpi === 'fechados'}
         />
         <KPI
           icon="ti-clock-hour-4"
@@ -464,22 +472,20 @@ export default function Dashboard() {
           active={activeKpi === 'aberto'}
         />
         <KPI
-          icon="ti-refresh"
-          label="Reincidência"
-          value={m.reincidentesAtivos + m.posPositivo}
-          sub={`${m.reincidentesAtivos} em aberto · ${m.taxaReinc.toFixed(1)}% dos tratados`}
-          compareValue={m.ONTEM?.posPositivo}
+          icon="ti-headset"
+          label="Intervenções"
+          value={m.intervencoesRegistradas}
+          sub={`${m.fechados} registradas · ${m.sheetIntervencoesHoje} planilha`}
           accent="#2A8DD9"
-          onClick={() => setActiveKpi(activeKpi === 'reinc' ? null : 'reinc')}
-          active={activeKpi === 'reinc'}
+          onClick={() => setActiveKpi(activeKpi === 'intervencoes' ? null : 'intervencoes')}
+          active={activeKpi === 'intervencoes'}
         />
       </div>
 
       {/* Drill panels */}
-      {activeKpi === 'total'    && <VolumeDrill   TIPOS={m.TIPOS} RESULTADOS={m.RESULTADOS} transpStats={m.transpStats} />}
-      {activeKpi === 'fechados' && <FechadosDrill positivo={m.positivo} posPositivo={m.posPositivo} fechados={m.fechados} taxaReinc={m.taxaReinc} pctConcluido={m.pctConcluido} equipe={m.equipe} />}
-      {activeKpi === 'aberto'   && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.TIPOS} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
-      {activeKpi === 'reinc'    && <ReincidenciaDrill reincidentesAtivos={m.reincidentesAtivos} posPositivo={m.posPositivo} taxaReinc={m.taxaReinc} criticos={m.criticos} ONTEM={m.ONTEM} />}
+      {activeKpi === 'total'        && <VolumeDrill   TIPOS={m.TIPOS} RESULTADOS={m.RESULTADOS} transpStats={m.transpStats} />}
+      {activeKpi === 'aberto'       && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.TIPOS} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
+      {activeKpi === 'intervencoes' && <FechadosDrill positivo={m.positivo} posPositivo={m.posPositivo} fechados={m.fechados} taxaReinc={m.taxaReinc} pctConcluido={m.pctConcluido} equipe={m.equipe} />}
 
       {/* Seção: Pulso da operação */}
       <Section icon="ti-radio" label="Pulso da operação" />
