@@ -15,8 +15,10 @@ import MonitorFilters from './monitor/MonitorFilters';
 import UploadArea from './monitor/UploadArea';
 import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
+import MaxtrackClosedTab from './monitor/MaxtrackClosedTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
+import { useMaxtrackClosed } from '../hooks/useMaxtrackClosed.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -79,6 +81,7 @@ export default function Monitor() {
   const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
   const { resolveAlias } = useCarrierAliases();
   const sheetHistory   = useSheetHistory();
+  const maxtrackClosed = useMaxtrackClosed();
 
   // Carrega dados do Sheets em background ao montar o Monitor
   useEffect(() => {
@@ -561,7 +564,7 @@ export default function Monitor() {
                      activeTab === 'reportar'    ? reportarList :
                      activeTab === 'tecnicos'    ? tecList : [];
                      
-  const totalPages = activeTab !== 'historico' ? Math.ceil(activeList.length / pageSize) || 1 : 1;
+  const totalPages = (activeTab !== 'historico' && activeTab !== 'encerrados') ? Math.ceil(activeList.length / pageSize) || 1 : 1;
   const paginate = (list) => list.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   /* ── Modal de credenciais ausentes (scraper sem login configurado) ── */
@@ -640,6 +643,7 @@ export default function Monitor() {
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
           ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
+          ...(platformId === 'maxtrack' ? [['encerrados', 'ti-circle-check', 'Encerrados', maxtrackClosed.events.length, 'var(--success-500, #22c55e)']] : []),
           ['historico',   'ti-history',     'Histórico',         history.length,     null],
         ].map(([id, icon, lbl, cnt, color]) => (
           <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
@@ -647,7 +651,7 @@ export default function Monitor() {
             <span className="tab-count">{cnt}</span>
           </div>
         ))}
-        {activeTab !== 'historico' && activeList.length > 0 && (
+        {activeTab !== 'historico' && activeTab !== 'encerrados' && activeList.length > 0 && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button
               className="btn btn-sm btn-ghost"
@@ -710,17 +714,28 @@ export default function Monitor() {
             </div>
       )}
 
+      {/* Tab: Encerrados Maxtrack */}
+      {activeTab === 'encerrados' && (
+        <MaxtrackClosedTab
+          events={maxtrackClosed.events}
+          loading={maxtrackClosed.loading}
+          error={maxtrackClosed.error}
+          fetchedAt={maxtrackClosed.fetchedAt}
+          buscar={maxtrackClosed.buscar}
+        />
+      )}
+
       {/* Tab: Histórico */}
       {activeTab === 'historico' && (
-        <HistoryTab 
+        <HistoryTab
           history={history} histLoading={histLoading} histError={histError}
-          loadByRange={loadByRange} 
+          loadByRange={loadByRange}
           currentPage={currentPage} setCurrentPage={setCurrentPage} pageSize={pageSize}
         />
       )}
 
       {/* Queue Pagination */}
-      {activeTab !== 'historico' && totalPages > 1 && (
+      {activeTab !== 'historico' && activeTab !== 'encerrados' && totalPages > 1 && (
         <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
           <button className="btn btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
             <i className="ti ti-chevron-left"></i>
