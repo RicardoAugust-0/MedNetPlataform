@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useDriversQueue } from './hooks/useDriversQueue';
+import { useSheetHistory } from './hooks/useSheetHistory';
 
 function load(k, fb) {
   try { const v = localStorage.getItem('mn_' + k); return v ? JSON.parse(v) : fb; } catch { return fb; }
@@ -12,6 +13,7 @@ const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
   const { drivers, loading: driversLoading, lastChangeAt: driversLastChangeAt, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
+  const sheetHistory = useSheetHistory();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
@@ -42,6 +44,7 @@ export function AppProvider({ children }) {
     mode, setMode,
     vibe, setVibe,
     rhythm, setRhythm,
+    sheetHistory,
   }), [
     drivers, driversLoading, driversLastChangeAt,
     replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
@@ -53,6 +56,7 @@ export function AppProvider({ children }) {
     mode, setMode,
     vibe, setVibe,
     rhythm, setRhythm,
+    sheetHistory,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

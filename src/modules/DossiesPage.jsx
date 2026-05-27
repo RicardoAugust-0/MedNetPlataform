@@ -60,6 +60,7 @@ export default function DossiesPage() {
 
   // Histórico de fadiga e atendimentos do motorista selecionado
   const [telemetryEvents, setTelemetryEvents] = useState([]);
+  const [telemetryTotal, setTelemetryTotal] = useState(0);
   const [atendimentosList, setAtendimentosList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -221,6 +222,7 @@ export default function DossiesPage() {
         turno: selectedDriver.turno || 'diurno',
       });
       setTelemetryEvents([]);
+      setTelemetryTotal(0);
       setAtendimentosList([]);
 
       if (!isSupabaseConfigured) {
@@ -252,19 +254,20 @@ export default function DossiesPage() {
           });
         }
 
-        // 2. Busca eventos de telemetria
-        let teleQuery = supabase.from('driver_events').select('*');
-        if (placa) {
-          teleQuery = teleQuery.or(`placa.eq.${placa},nome.eq.${name}`);
-        } else {
-          teleQuery = teleQuery.eq('nome', name);
-        }
-        
-        const { data: teleData } = await teleQuery
-          .order('ocorrido_em', { ascending: false })
-          .limit(100);
+        // 2. Busca eventos de telemetria — count real + primeiros 200 para exibição
+        const buildTeleFilter = (q) => placa
+          ? q.or(`placa.eq.${placa},nome.eq.${name}`)
+          : q.eq('nome', name);
+
+        const [{ count: teleCount }, { data: teleData }] = await Promise.all([
+          buildTeleFilter(supabase.from('driver_events').select('*', { count: 'exact', head: true })),
+          buildTeleFilter(supabase.from('driver_events').select('*'))
+            .order('ocorrido_em', { ascending: false })
+            .limit(200),
+        ]);
 
         if (teleData) setTelemetryEvents(teleData);
+        setTelemetryTotal(teleCount ?? teleData?.length ?? 0);
 
         // 3. Busca atendimentos anteriores
         let atendQuery = supabase.from('atendimentos').select('*');
@@ -386,11 +389,11 @@ export default function DossiesPage() {
 
   // Agrupamento de estatísticas rápidas do motorista ativo
   const stats = useMemo(() => {
-    const total = telemetryEvents.length;
+    const total = telemetryTotal;
     const critical = telemetryEvents.filter(e => e.severidade === 'Gravíssimo' || e.severidade === 'Grave').length;
     const yawning = telemetryEvents.filter(e => String(e.nome_evento).toLowerCase().includes('bocejo')).length;
     return { total, critical, yawning };
-  }, [telemetryEvents]);
+  }, [telemetryEvents, telemetryTotal]);
 
   const severityColor = (sev) => {
     const s = String(sev).toLowerCase();
@@ -753,10 +756,15 @@ export default function DossiesPage() {
 
             {/* Linha do tempo dos alertas brutos de fadiga (telemetria) */}
             <div className="card">
-              <div className="card-header">
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="card-title">
                   <i className="ti ti-activity-heartbeat" style={{ color: 'var(--accent-500)' }}></i> Histórico de Telemetria (Eventos Brutos de Fadiga)
                 </div>
+                {telemetryTotal > telemetryEvents.length && (
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Exibindo {telemetryEvents.length} de {telemetryTotal} eventos
+                  </span>
+                )}
               </div>
               
               <div style={{ padding: 16, maxHeight: 400, overflowY: 'auto' }}>

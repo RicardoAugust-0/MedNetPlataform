@@ -2,12 +2,23 @@ import React, { useState } from 'react';
 import { iniciais } from '../../../utils';
 import PlatformBadge from '../../PlatformBadge';
 
+const PAGE_SIZE = 10;
+
 // Modo gestão: SEM botões operacionais. Linhas expansíveis pra ver detalhes
 // (eventos, frota, turno, última intervenção).
 export function CriticalSLA({ criticos, slaLimit = 30 }) {
   const [expanded, setExpanded] = useState(null);
+  const [page, setPage] = useState(0);
+
   const overdue = criticos.filter(c => c.abertoMin > slaLimit).length;
   const reincidentes = criticos.filter(c => c.reincidente).length;
+  const totalPages = Math.max(1, Math.ceil(criticos.length / PAGE_SIZE));
+  const paginated = criticos.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const goTo = (p) => {
+    setPage(p);
+    setExpanded(null);
+  };
 
   return (
     <div className="dg-card">
@@ -22,7 +33,7 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
         </div>
       </div>
       <div className="dg-critical">
-        {criticos.map((c, idx) => {
+        {paginated.map((c, idx) => {
           const t = c.abertoMin;
           const cls = t > slaLimit ? 'danger' : t > slaLimit * 0.7 ? 'warn' : '';
           const mm = String(Math.floor(t)).padStart(2, '0');
@@ -90,6 +101,30 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
           );
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => goTo(page - 1)}
+            disabled={page === 0}
+            style={{ padding: '3px 10px' }}
+          >
+            <i className="ti ti-chevron-left"></i>
+          </button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 90, textAlign: 'center' }}>
+            {page + 1} / {totalPages} &nbsp;·&nbsp; {criticos.length} motoristas
+          </span>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => goTo(page + 1)}
+            disabled={page >= totalPages - 1}
+            style={{ padding: '3px 10px' }}
+          >
+            <i className="ti ti-chevron-right"></i>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

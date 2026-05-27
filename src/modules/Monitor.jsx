@@ -285,6 +285,11 @@ export default function Monitor() {
 
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
+      localStorage.setItem('mn_plat_raw_total', JSON.stringify({
+        total: stats.totalEventos || 0,
+        platform: platform.id,
+        date: new Date(loadedAt).toDateString(),
+      }));
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
@@ -353,6 +358,11 @@ export default function Monitor() {
 
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
+      localStorage.setItem('mn_plat_raw_total', JSON.stringify({
+        total: stats.totalEventos || 0,
+        platform: platform.id,
+        date: new Date(loadedAt).toDateString(),
+      }));
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });

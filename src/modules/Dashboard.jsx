@@ -6,7 +6,6 @@ import { useAtendimentos } from "../hooks/useAtendimentos";
 import { useAutoSync } from "../hooks/useAutoSync";
 import { useCarrierAliases } from "../hooks/useCarrierAliases";
 import { useProfiles } from "../hooks/useProfiles.jsx";
-import { useSheetHistory } from "../hooks/useSheetHistory.js";
 import sascar from "../platforms/sascar/index.js";
 import { applyAccent, fmtDate } from "../utils";
 import PlatformBadge from "./PlatformBadge";
@@ -31,7 +30,6 @@ import { useDashboardSettings } from "./dashboard/hooks/useDashboardSettings";
 
 const PERIODOS = [
   { id: "hoje", label: "Hoje" },
-  { id: "turno", label: "Turno" },
 ];
 
 export default function Dashboard() {
@@ -45,6 +43,7 @@ export default function Dashboard() {
     setDensity,
     accent,
     setAccent,
+    sheetHistory,
   } = useApp();
   const { history: atHistoryReal } = useAtendimentos();
   const { resolveAlias } = useCarrierAliases();
@@ -56,7 +55,6 @@ export default function Dashboard() {
     isEnabled: !!me?.sascar_token,
     storageKey: "sascar",
   });
-  const sheetHistory = useSheetHistory();
 
   const drivers = driversReal;
   const atHistory = atHistoryReal;
@@ -93,6 +91,25 @@ export default function Dashboard() {
     useDashboardFilters(resolveAlias);
   const [activeKpi, setActiveKpi] = useState(null);
 
+  // ── Total de eventos brutos da última planilha carregada (via localStorage)
+  const readPlatRawTotal = () => {
+    try {
+      const v = localStorage.getItem('mn_plat_raw_total');
+      if (!v) return null;
+      const p = JSON.parse(v);
+      if (p.date !== new Date().toDateString()) return null; // dado de outro dia
+      return p;
+    } catch { return null; }
+  };
+  const [platRaw, setPlatRaw] = useState(readPlatRawTotal);
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'mn_plat_raw_total') setPlatRaw(readPlatRawTotal());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   // ── Live SLA clock — ticks every 30 s
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -101,9 +118,11 @@ export default function Dashboard() {
   }, []);
   const todayStr = now.toDateString();
 
-  // ── Sheet: carga inicial (4 meses pra cobrir janela de reincidência 90d)
+  // ── Sheet: carga inicial — só executa se ainda não foi carregada (evita reload ao trocar de aba)
   useEffect(() => {
-    sheetHistory.load(buildMesesLookback(3));
+    if (!sheetHistory.loaded) {
+      sheetHistory.load(buildMesesLookback(3));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -656,11 +675,13 @@ export default function Dashboard() {
         <KPI
           icon="ti-circle-check"
           label="Fechados hoje"
-          value={m.encerradosPlataforma}
-          sub={`${m.pctConcluidoPlataforma}% do volume · plataforma`}
+          value={platRaw ? platRaw.total : m.encerradosPlataforma}
+          sub={platRaw
+            ? `eventos processados · ${platRaw.platform}`
+            : `${m.pctConcluidoPlataforma}% do volume · plataforma`}
           compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
-          progress={m.pctConcluidoPlataforma}
+          progress={platRaw ? null : m.pctConcluidoPlataforma}
         />
         <KPI
           icon="ti-clock-hour-4"

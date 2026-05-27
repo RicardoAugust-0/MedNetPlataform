@@ -25,36 +25,32 @@ export function useDashboardMetrics({
 }) {
   // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
   const periodoWindow = useMemo(() => {
-    if (filters.periodo === 'turno') {
-      const isDiurno = now.getHours() >= 6 && now.getHours() < 18;
-      const start = new Date(now);
-      if (isDiurno) {
-        start.setHours(6, 0, 0, 0);
-      } else {
-        if (now.getHours() < 6) start.setDate(start.getDate() - 1);
-        start.setHours(18, 0, 0, 0);
-      }
-      return { start, end: new Date(now) };
-    }
     const start = new Date(now); start.setHours(0, 0, 0, 0);
     return { start, end: new Date(now) };
-  }, [filters.periodo, now]);
+  }, [now]);
+
+  // Verifica se o realizadoPor de uma linha da planilha pertence ao operador filtrado.
+  // A planilha salva apenas o primeiro nome; filters.operador é o nome completo do perfil.
+  const sheetOperadorMatchFn = useMemo(() => {
+    if (filters.operador === 'todos') return () => true;
+    const targetNorm  = filters.operador.trim().toLowerCase();
+    const targetFirst = targetNorm.split(' ')[0];
+    return (realizadoPorRaw) => {
+      if (!realizadoPorRaw) return false;
+      const raw = realizadoPorRaw.trim().toLowerCase();
+      return raw === targetNorm || raw === targetFirst;
+    };
+  }, [filters.operador]);
 
   // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
   const sheetRowsPeriodo = useMemo(() => {
     return sheetHistory.rows.filter(r => {
       const d = parseSheetRowDate(r);
-      if (!d) return false;
-      if (filters.periodo === 'hoje') {
-        if (d.toDateString() !== todayStr) return false;
-      } else {
-        if (d < new Date(periodoWindow.start.getFullYear(), periodoWindow.start.getMonth(), periodoWindow.start.getDate())) return false;
-        if (d > periodoWindow.end) return false;
-      }
+      if (!d || d.toDateString() !== todayStr) return false;
       if (!empresaFilterFn(r.empresa)) return false;
       return true;
     });
-  }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, empresaFilterFn]);
+  }, [sheetHistory.rows, todayStr, empresaFilterFn]);
 
   // ── Atendimentos no período (com filtros: periodo + empresa + operador + tipo)
   const atendimentosHoje = useMemo(() => {
@@ -182,12 +178,20 @@ export function useDashboardMetrics({
     ];
   }, [drivers]);
 
-  const sheetIntervencoesHoje  = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
+  // sheetInterventionsFiltered respeita operador E resultado (PP vs positivo)
+  const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => {
+    if (!r.realizadoPor || !sheetOperadorMatchFn(r.realizadoPor)) return false;
+    const isPP = r.placa && placasPrevia7d.has(r.placa);
+    if (isPP && !showResultado('pos-positivo')) return false;
+    if (!isPP && !showResultado('positivo'))    return false;
+    return true;
+  });
+  const sheetIntervencoesHoje  = sheetInterventionsFiltered.length;
   const sheetSolicitadasHoje   = sheetRowsPeriodo.filter(r => r.solicitadoPor).length;
   const intervencoesRegistradas = fechadosHoje.length + sheetIntervencoesHoje;
 
-  const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-  const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
+  // fechadosHoje já aplica tipo + operador + resultado na plataforma
+  const closedInterventionsFiltered = fechadosHoje;
   const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
   const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
 
@@ -195,7 +199,11 @@ export function useDashboardMetrics({
   const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
   const fechados     = closedInterventionsFiltered.length + sheetInterventionsFiltered.length;
   const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
-  const encerradosPlataforma = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr && (a.tipo === 'intervencao' || a.tipo === 'reportar')).length;
+  const encerradosPlataforma = atHistory.filter(a =>
+    new Date(a.created_at).toDateString() === todayStr &&
+    (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
+    (filters.operador === 'todos' || a.operador === filters.operador)
+  ).length;
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
   // % baseado apenas na plataforma, para KPI "Fechados hoje" (sem cruzar com planilha)
@@ -232,21 +240,17 @@ export function useDashboardMetrics({
   }, [driversAtivos]);
 
   const volumeResultados = useMemo(() => {
-    const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
-
-    const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
+    // fechadosHoje e sheetInterventionsFiltered já aplicam tipo + operador + resultado
+    const platPP = fechadosHoje.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
     const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
-    
-    const ppCount = platPP + sheetPP;
-    const posCount = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - ppCount;
-    
+    const ppCount  = platPP + sheetPP;
+    const posCount = (fechadosHoje.length + sheetInterventionsFiltered.length) - ppCount;
     return [
       { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posCount },
       { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppCount },
       { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAberto },
     ];
-  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia7d, emAberto]);
+  }, [fechadosHoje, sheetInterventionsFiltered, placasPrevia7d, emAberto]);
 
   // Reincidentes em aberto: drivers na fila cujas placas têm histórico recente.
   const reincidentesAtivos = useMemo(
