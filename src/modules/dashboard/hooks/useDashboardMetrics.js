@@ -182,7 +182,8 @@ export function useDashboardMetrics({
     ];
   }, [drivers]);
 
-  const sheetIntervencoesHoje = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
+  const sheetIntervencoesHoje  = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
+  const sheetSolicitadasHoje   = sheetRowsPeriodo.filter(r => r.solicitadoPor).length;
   const intervencoesRegistradas = fechadosHoje.length + sheetIntervencoesHoje;
 
   const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
@@ -582,7 +583,7 @@ export function useDashboardMetrics({
     placasPrevia7d, lastIntervByPlaca,
     // KPIs principais
     fechadosHoje, posPositivo, positivo, fechados, emAberto,
-    encerradosPlataforma, intervencoesRegistradas, sheetIntervencoesHoje,
+    encerradosPlataforma, intervencoesRegistradas, sheetIntervencoesHoje, sheetSolicitadasHoje,
     totalAlertas, pctConcluido, pctConcluidoPlataforma, taxaReinc, reincidentesAtivos,
     // chips
     TIPOS, RESULTADOS,

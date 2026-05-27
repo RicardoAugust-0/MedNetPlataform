@@ -1,73 +1,96 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context';
-import { useAuth } from '../auth/AuthContext.jsx';
-import { useAtendimentos } from '../hooks/useAtendimentos';
-import { useCarrierAliases } from '../hooks/useCarrierAliases';
-import { useProfiles } from '../hooks/useProfiles.jsx';
-import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { fmtDate, applyAccent } from '../utils';
-import './dashboard/dashboard.css';
-import { useAutoSync } from '../hooks/useAutoSync';
-import sascar from '../platforms/sascar/index.js';
-import PlatformBadge from './PlatformBadge';
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext.jsx";
+import { useApp } from "../context";
+import { useAtendimentos } from "../hooks/useAtendimentos";
+import { useAutoSync } from "../hooks/useAutoSync";
+import { useCarrierAliases } from "../hooks/useCarrierAliases";
+import { useProfiles } from "../hooks/useProfiles.jsx";
+import { useSheetHistory } from "../hooks/useSheetHistory.js";
+import sascar from "../platforms/sascar/index.js";
+import { applyAccent, fmtDate } from "../utils";
+import PlatformBadge from "./PlatformBadge";
+import { buildMesesLookback } from "./dashboard/_helpers";
 import {
-  KPI,
-  FilterBar,
-  ProductivityRanking,
-  CriticalSLA,
-  TechAlerts,
-  ClassificationBreakdown,
-  TransportadoraRanking,
-  HourlyActivity,
   Banner,
+  ClassificationBreakdown,
+  CriticalSLA,
+  FilterBar,
+  HourlyActivity,
+  KPI,
+  ProductivityRanking,
   Section,
-} from './dashboard/components';
-import { buildMesesLookback } from './dashboard/_helpers';
-import { useDashboardSettings } from './dashboard/hooks/useDashboardSettings';
-import { useDashboardFilters } from './dashboard/hooks/useDashboardFilters';
-import { useDashboardMetrics } from './dashboard/hooks/useDashboardMetrics';
-import {
-  VolumeDrill, FechadosDrill, EmAbertoDrill,
-} from './dashboard/drills';
+  TechAlerts,
+  TransportadoraRanking,
+} from "./dashboard/components";
+import "./dashboard/dashboard.css";
+import { EmAbertoDrill, FechadosDrill, VolumeDrill } from "./dashboard/drills";
+import { useDashboardFilters } from "./dashboard/hooks/useDashboardFilters";
+import { useDashboardMetrics } from "./dashboard/hooks/useDashboardMetrics";
+import { useDashboardSettings } from "./dashboard/hooks/useDashboardSettings";
 
 const PERIODOS = [
-  { id: 'hoje',  label: 'Hoje'  },
-  { id: 'turno', label: 'Turno' },
+  { id: "hoje", label: "Hoje" },
+  { id: "turno", label: "Turno" },
 ];
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { drivers: driversReal, driversLastChangeAt, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
+  const {
+    drivers: driversReal,
+    driversLastChangeAt,
+    theme,
+    setTheme,
+    density,
+    setDensity,
+    accent,
+    setAccent,
+  } = useApp();
   const { history: atHistoryReal } = useAtendimentos();
   const { resolveAlias } = useCarrierAliases();
   const { profiles } = useProfiles();
   const { profile: me } = useAuth();
-  const isAdmin = me?.role === 'admin';
-  const scSync = useAutoSync({ platform: sascar, isEnabled: !!me?.sascar_token, storageKey: 'sascar' });
+  const isAdmin = me?.role === "admin";
+  const scSync = useAutoSync({
+    platform: sascar,
+    isEnabled: !!me?.sascar_token,
+    storageKey: "sascar",
+  });
   const sheetHistory = useSheetHistory();
 
-  const drivers   = driversReal;
+  const drivers = driversReal;
   const atHistory = atHistoryReal;
 
   // ── UI prefs persistidas em localStorage
   const settings = useDashboardSettings();
   const {
-    slaLimit, setSlaLimit,
-    compareYesterday, setCompareYesterday,
-    showHourly,  setShowHourly,
-    showTransp,  setShowTransp,
-    showClassif, setShowClassif,
-    showTech,    setShowTech,
-    tvMode,      setTvMode,
-    executiveMode, setExecutiveMode,
-    layout,      setLayout,
-    sheetAutoSync, setSheetAutoSync,
-    sheetSyncMin,  setSheetSyncMin,
+    slaLimit,
+    setSlaLimit,
+    compareYesterday,
+    setCompareYesterday,
+    showHourly,
+    setShowHourly,
+    showTransp,
+    setShowTransp,
+    showClassif,
+    setShowClassif,
+    showTech,
+    setShowTech,
+    tvMode,
+    setTvMode,
+    executiveMode,
+    setExecutiveMode,
+    layout,
+    setLayout,
+    sheetAutoSync,
+    setSheetAutoSync,
+    sheetSyncMin,
+    setSheetSyncMin,
   } = settings;
 
   // ── Filtros de tela (persistidos em localStorage)
-  const { filters, setFilters, showTipo, showResultado, empresaFilterFn } = useDashboardFilters(resolveAlias);
+  const { filters, setFilters, showTipo, showResultado, empresaFilterFn } =
+    useDashboardFilters(resolveAlias);
   const [activeKpi, setActiveKpi] = useState(null);
 
   // ── Live SLA clock — ticks every 30 s
@@ -86,36 +109,53 @@ export default function Dashboard() {
 
   // ── Sheet: auto-refresh configurável
   const sheetLoadRef = useRef(sheetHistory.load);
-  useEffect(() => { sheetLoadRef.current = sheetHistory.load; }, [sheetHistory.load]);
+  useEffect(() => {
+    sheetLoadRef.current = sheetHistory.load;
+  }, [sheetHistory.load]);
   useEffect(() => {
     if (!sheetAutoSync) return;
-    const id = setInterval(() => sheetLoadRef.current(buildMesesLookback(3)), Math.max(2, sheetSyncMin) * 60 * 1000);
+    const id = setInterval(
+      () => sheetLoadRef.current(buildMesesLookback(3)),
+      Math.max(2, sheetSyncMin) * 60 * 1000,
+    );
     return () => clearInterval(id);
   }, [sheetAutoSync, sheetSyncMin]);
 
   // ── Métricas derivadas (todos os useMemos)
   const m = useDashboardMetrics({
-    drivers, atHistory, sheetHistory,
-    now, todayStr,
-    filters, showTipo, showResultado, empresaFilterFn,
-    resolveAlias, profiles,
-    compareYesterday, slaLimit,
+    drivers,
+    atHistory,
+    sheetHistory,
+    now,
+    todayStr,
+    filters,
+    showTipo,
+    showResultado,
+    empresaFilterFn,
+    resolveAlias,
+    profiles,
+    compareYesterday,
+    slaLimit,
   });
 
   const hour = now.getHours();
 
   // ── "Atualizado há Xmin" — pega o evento mais recente
   const updatedLabel = (() => {
-    const tDrv = driversLastChangeAt ? new Date(driversLastChangeAt).getTime() : 0;
-    const tAt  = m.lastAtendimentoAt || 0;
-    const tSh  = sheetHistory.loadedAt ? new Date(sheetHistory.loadedAt).getTime() : 0;
+    const tDrv = driversLastChangeAt
+      ? new Date(driversLastChangeAt).getTime()
+      : 0;
+    const tAt = m.lastAtendimentoAt || 0;
+    const tSh = sheetHistory.loadedAt
+      ? new Date(sheetHistory.loadedAt).getTime()
+      : 0;
     const latest = Math.max(tDrv, tAt, tSh);
-    if (!latest) return 'Sem dados';
+    if (!latest) return "Sem dados";
     const diffMin = Math.floor((now.getTime() - latest) / 60000);
-    if (diffMin < 1)  return 'Atualizado agora';
+    if (diffMin < 1) return "Atualizado agora";
     if (diffMin < 60) return `Atualizado há ${diffMin} min`;
     const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24)   return `Atualizado há ${diffH}h`;
+    if (diffH < 24) return `Atualizado há ${diffH}h`;
     return `Atualizado há ${Math.floor(diffH / 24)}d`;
   })();
 
@@ -125,10 +165,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!tweaksOpen) return;
     const onDown = (e) => {
-      if (tweaksRef.current && !tweaksRef.current.contains(e.target)) setTweaksOpen(false);
+      if (tweaksRef.current && !tweaksRef.current.contains(e.target))
+        setTweaksOpen(false);
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
   }, [tweaksOpen]);
 
   return (
@@ -139,7 +180,10 @@ export default function Dashboard() {
           <h1>Gestão à Vista</h1>
           <div className="meta">
             <span>
-              <i className="ti ti-calendar" style={{ fontSize: 12, marginRight: 4 }}></i>
+              <i
+                className="ti ti-calendar"
+                style={{ fontSize: 12, marginRight: 4 }}
+              ></i>
               {fmtDate()}
             </span>
             <span className="sep">·</span>
@@ -149,9 +193,25 @@ export default function Dashboard() {
             {(m.platformCounts.maxtrack > 0 || m.platformCounts.sascar > 0) && (
               <>
                 <span className="sep">·</span>
-                <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                  {m.platformCounts.maxtrack > 0 && <PlatformBadge platformId="maxtrack" count={m.platformCounts.maxtrack} />}
-                  {m.platformCounts.sascar   > 0 && <PlatformBadge platformId="sascar"   count={m.platformCounts.sascar} />}
+                <span
+                  style={{
+                    display: "inline-flex",
+                    gap: 6,
+                    alignItems: "center",
+                  }}
+                >
+                  {m.platformCounts.maxtrack > 0 && (
+                    <PlatformBadge
+                      platformId="maxtrack"
+                      count={m.platformCounts.maxtrack}
+                    />
+                  )}
+                  {m.platformCounts.sascar > 0 && (
+                    <PlatformBadge
+                      platformId="sascar"
+                      count={m.platformCounts.sascar}
+                    />
+                  )}
                 </span>
               </>
             )}
@@ -160,29 +220,61 @@ export default function Dashboard() {
         <div className="dg-greet-actions">
           <div className="dg-tweaks-wrap" ref={tweaksRef}>
             <button
-              className={`dg-btn dg-btn-ghost${tweaksOpen ? ' is-active' : ''}`}
+              className={`dg-btn dg-btn-ghost${tweaksOpen ? " is-active" : ""}`}
               title="Ajustes do painel"
-              onClick={() => setTweaksOpen(v => !v)}
+              onClick={() => setTweaksOpen((v) => !v)}
             >
               <i className="ti ti-adjustments-alt"></i>
             </button>
             {tweaksOpen && (
-              <div className="dg-tweaks-pop" role="dialog" aria-label="Ajustes do painel">
+              <div
+                className="dg-tweaks-pop"
+                role="dialog"
+                aria-label="Ajustes do painel"
+              >
                 <div className="dg-tweaks-head">
-                  <span><i className="ti ti-adjustments-alt"></i> Ajustes do painel</span>
-                  <button className="dg-tweaks-x" onClick={() => setTweaksOpen(false)} title="Fechar"><i className="ti ti-x"></i></button>
+                  <span>
+                    <i className="ti ti-adjustments-alt"></i> Ajustes do painel
+                  </span>
+                  <button
+                    className="dg-tweaks-x"
+                    onClick={() => setTweaksOpen(false)}
+                    title="Fechar"
+                  >
+                    <i className="ti ti-x"></i>
+                  </button>
                 </div>
 
                 <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">SLA (min)</label>
                   <div className="dg-tweaks-sla">
-                    <button onClick={() => setSlaLimit(v => Math.max(5, v - 5))} title="-5"><i className="ti ti-minus"></i></button>
+                    <button
+                      onClick={() => setSlaLimit((v) => Math.max(5, v - 5))}
+                      title="-5"
+                    >
+                      <i className="ti ti-minus"></i>
+                    </button>
                     <input
-                      type="number" min="5" max="240" step="5"
+                      type="number"
+                      min="5"
+                      max="240"
+                      step="5"
                       value={slaLimit}
-                      onChange={(e) => setSlaLimit(Math.max(5, Math.min(240, Number(e.target.value) || 30)))}
+                      onChange={(e) =>
+                        setSlaLimit(
+                          Math.max(
+                            5,
+                            Math.min(240, Number(e.target.value) || 30),
+                          ),
+                        )
+                      }
                     />
-                    <button onClick={() => setSlaLimit(v => Math.min(240, v + 5))} title="+5"><i className="ti ti-plus"></i></button>
+                    <button
+                      onClick={() => setSlaLimit((v) => Math.min(240, v + 5))}
+                      title="+5"
+                    >
+                      <i className="ti ti-plus"></i>
+                    </button>
                   </div>
                 </div>
 
@@ -192,23 +284,58 @@ export default function Dashboard() {
                     <div style={{ marginBottom: 6 }}>
                       <div className="dg-tweaks-toggles">
                         <button
-                          className={`dg-tweaks-toggle${scSync.autoSync ? ' on' : ''}`}
-                          onClick={() => scSync.setAutoSync(v => !v)}
+                          className={`dg-tweaks-toggle${scSync.autoSync ? " on" : ""}`}
+                          onClick={() => scSync.setAutoSync((v) => !v)}
                         >
                           <span className="knob"></span>
-                          <span className="txt">Buscar Sascar automaticamente</span>
+                          <span className="txt">
+                            Buscar Sascar automaticamente
+                          </span>
                         </button>
                       </div>
                       {scSync.autoSync && (
                         <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
-                          <button onClick={() => scSync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                          <button
+                            onClick={() =>
+                              scSync.setSyncIntervalMin((v) =>
+                                Math.max(2, v - 1),
+                              )
+                            }
+                            title="-1 min"
+                          >
+                            <i className="ti ti-minus"></i>
+                          </button>
                           <input
-                            type="number" min="2" max="60" step="1"
+                            type="number"
+                            min="2"
+                            max="60"
+                            step="1"
                             value={scSync.syncIntervalMin}
-                            onChange={(e) => scSync.setSyncIntervalMin(Number(e.target.value) || 5)}
+                            onChange={(e) =>
+                              scSync.setSyncIntervalMin(
+                                Number(e.target.value) || 5,
+                              )
+                            }
                           />
-                          <button onClick={() => scSync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                          <button
+                            onClick={() =>
+                              scSync.setSyncIntervalMin((v) =>
+                                Math.min(60, v + 1),
+                              )
+                            }
+                            title="+1 min"
+                          >
+                            <i className="ti ti-plus"></i>
+                          </button>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "var(--text-muted)",
+                              marginLeft: 4,
+                            }}
+                          >
+                            min
+                          </span>
                         </div>
                       )}
                     </div>
@@ -216,23 +343,57 @@ export default function Dashboard() {
                   <div style={{ marginBottom: 6 }}>
                     <div className="dg-tweaks-toggles">
                       <button
-                        className={`dg-tweaks-toggle${sheetAutoSync ? ' on' : ''}`}
-                        onClick={() => setSheetAutoSync(v => !v)}
+                        className={`dg-tweaks-toggle${sheetAutoSync ? " on" : ""}`}
+                        onClick={() => setSheetAutoSync((v) => !v)}
                       >
                         <span className="knob"></span>
-                        <span className="txt">Buscar planilha automaticamente</span>
+                        <span className="txt">
+                          Buscar planilha automaticamente
+                        </span>
                       </button>
                     </div>
                     {sheetAutoSync && (
                       <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
-                        <button onClick={() => setSheetSyncMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                        <button
+                          onClick={() =>
+                            setSheetSyncMin((v) => Math.max(2, v - 1))
+                          }
+                          title="-1 min"
+                        >
+                          <i className="ti ti-minus"></i>
+                        </button>
                         <input
-                          type="number" min="2" max="60" step="1"
+                          type="number"
+                          min="2"
+                          max="60"
+                          step="1"
                           value={sheetSyncMin}
-                          onChange={(e) => setSheetSyncMin(Math.max(2, Math.min(60, Number(e.target.value) || 10)))}
+                          onChange={(e) =>
+                            setSheetSyncMin(
+                              Math.max(
+                                2,
+                                Math.min(60, Number(e.target.value) || 10),
+                              ),
+                            )
+                          }
                         />
-                        <button onClick={() => setSheetSyncMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
+                        <button
+                          onClick={() =>
+                            setSheetSyncMin((v) => Math.min(60, v + 1))
+                          }
+                          title="+1 min"
+                        >
+                          <i className="ti ti-plus"></i>
+                        </button>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-muted)",
+                            marginLeft: 4,
+                          }}
+                        >
+                          min
+                        </span>
                       </div>
                     )}
                   </div>
@@ -242,15 +403,15 @@ export default function Dashboard() {
                   <label className="dg-tweaks-lb">Apresentação</label>
                   <div className="dg-tweaks-toggles">
                     <button
-                      className={`dg-tweaks-toggle${compareYesterday ? ' on' : ''}`}
-                      onClick={() => setCompareYesterday(v => !v)}
+                      className={`dg-tweaks-toggle${compareYesterday ? " on" : ""}`}
+                      onClick={() => setCompareYesterday((v) => !v)}
                     >
                       <span className="knob"></span>
                       <span className="txt">Comparar com ontem</span>
                     </button>
                     <button
-                      className={`dg-tweaks-toggle${executiveMode ? ' on' : ''}`}
-                      onClick={() => setExecutiveMode(v => !v)}
+                      className={`dg-tweaks-toggle${executiveMode ? " on" : ""}`}
+                      onClick={() => setExecutiveMode((v) => !v)}
                     >
                       <span className="knob"></span>
                       <span className="txt">Modo executivo</span>
@@ -262,15 +423,17 @@ export default function Dashboard() {
                   <label className="dg-tweaks-lb">Layout</label>
                   <div className="dg-tweaks-seg">
                     {[
-                      { v: 'balanced', l: 'Balanceado' },
-                      { v: 'cinema',   l: 'Cinema' },
-                      { v: 'compact',  l: 'Compacto' },
-                    ].map(o => (
+                      { v: "balanced", l: "Balanceado" },
+                      { v: "cinema", l: "Cinema" },
+                      { v: "compact", l: "Compacto" },
+                    ].map((o) => (
                       <button
                         key={o.v}
-                        className={`dg-tweaks-seg-btn${layout === o.v ? ' on' : ''}`}
+                        className={`dg-tweaks-seg-btn${layout === o.v ? " on" : ""}`}
                         onClick={() => setLayout(o.v)}
-                      >{o.l}</button>
+                      >
+                        {o.l}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -278,10 +441,31 @@ export default function Dashboard() {
                 <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">Seções visíveis</label>
                   <div className="dg-tweaks-chips">
-                    <button className={`dg-tweaks-chip${showHourly  ? ' on' : ''}`} onClick={() => setShowHourly(v  => !v)}><i className="ti ti-chart-bar"></i> Atividade por hora</button>
-                    <button className={`dg-tweaks-chip${showClassif ? ' on' : ''}`} onClick={() => setShowClassif(v => !v)}><i className="ti ti-chart-pie"></i> Tipo & Resultado</button>
-                    <button className={`dg-tweaks-chip${showTech    ? ' on' : ''}`} onClick={() => setShowTech(v    => !v)}><i className="ti ti-tools"></i> Atenção técnica</button>
-                    <button className={`dg-tweaks-chip${showTransp  ? ' on' : ''}`} onClick={() => setShowTransp(v  => !v)}><i className="ti ti-building-community"></i> Transportadoras</button>
+                    <button
+                      className={`dg-tweaks-chip${showHourly ? " on" : ""}`}
+                      onClick={() => setShowHourly((v) => !v)}
+                    >
+                      <i className="ti ti-chart-bar"></i> Atividade por hora
+                    </button>
+                    <button
+                      className={`dg-tweaks-chip${showClassif ? " on" : ""}`}
+                      onClick={() => setShowClassif((v) => !v)}
+                    >
+                      <i className="ti ti-chart-pie"></i> Tipo & Resultado
+                    </button>
+                    <button
+                      className={`dg-tweaks-chip${showTech ? " on" : ""}`}
+                      onClick={() => setShowTech((v) => !v)}
+                    >
+                      <i className="ti ti-tools"></i> Atenção técnica
+                    </button>
+                    <button
+                      className={`dg-tweaks-chip${showTransp ? " on" : ""}`}
+                      onClick={() => setShowTransp((v) => !v)}
+                    >
+                      <i className="ti ti-building-community"></i>{" "}
+                      Transportadoras
+                    </button>
                   </div>
                 </div>
 
@@ -289,44 +473,51 @@ export default function Dashboard() {
                   <label className="dg-tweaks-lb">Aparência</label>
                   <div className="dg-tweaks-seg" style={{ marginBottom: 6 }}>
                     {[
-                      { v: 'light', l: 'Claro',  i: 'ti-sun'  },
-                      { v: 'dark',  l: 'Escuro', i: 'ti-moon' },
-                    ].map(o => (
+                      { v: "light", l: "Claro", i: "ti-sun" },
+                      { v: "dark", l: "Escuro", i: "ti-moon" },
+                    ].map((o) => (
                       <button
                         key={o.v}
-                        className={`dg-tweaks-seg-btn${theme === o.v ? ' on' : ''}`}
+                        className={`dg-tweaks-seg-btn${theme === o.v ? " on" : ""}`}
                         onClick={() => setTheme(o.v)}
-                      ><i className={`ti ${o.i}`}></i> {o.l}</button>
+                      >
+                        <i className={`ti ${o.i}`}></i> {o.l}
+                      </button>
                     ))}
                   </div>
                   <div className="dg-tweaks-seg" style={{ marginBottom: 6 }}>
                     {[
-                      { v: 'compact', l: 'Compacta' },
-                      { v: 'normal',  l: 'Normal'   },
-                      { v: 'cozy',    l: 'Espaçada' },
-                    ].map(o => (
+                      { v: "compact", l: "Compacta" },
+                      { v: "normal", l: "Normal" },
+                      { v: "cozy", l: "Espaçada" },
+                    ].map((o) => (
                       <button
                         key={o.v}
-                        className={`dg-tweaks-seg-btn${density === o.v ? ' on' : ''}`}
+                        className={`dg-tweaks-seg-btn${density === o.v ? " on" : ""}`}
                         onClick={() => setDensity(o.v)}
-                      >{o.l}</button>
+                      >
+                        {o.l}
+                      </button>
                     ))}
                   </div>
                   <div className="dg-tweaks-swatches">
                     {[
-                      { id: 'vinho', color: '#9E1A45' },
-                      { id: 'roxo',  color: '#7C5CFF' },
-                      { id: 'azul',  color: '#3F76C2' },
-                      { id: 'verde', color: '#2DA75A' },
-                      { id: 'ambar', color: '#E8A020' },
-                      { id: 'rosa',  color: '#E2548E' },
-                    ].map(a => (
+                      { id: "vinho", color: "#9E1A45" },
+                      { id: "roxo", color: "#7C5CFF" },
+                      { id: "azul", color: "#3F76C2" },
+                      { id: "verde", color: "#2DA75A" },
+                      { id: "ambar", color: "#E8A020" },
+                      { id: "rosa", color: "#E2548E" },
+                    ].map((a) => (
                       <button
                         key={a.id}
-                        className={`dg-tweaks-sw${accent === a.id ? ' on' : ''}`}
+                        className={`dg-tweaks-sw${accent === a.id ? " on" : ""}`}
                         style={{ background: a.color }}
                         title={a.id}
-                        onClick={() => { setAccent(a.id); applyAccent(a.id); }}
+                        onClick={() => {
+                          setAccent(a.id);
+                          applyAccent(a.id);
+                        }}
                       />
                     ))}
                   </div>
@@ -336,12 +527,18 @@ export default function Dashboard() {
                   <div className="dg-tweaks-foot">
                     <button
                       className="dg-tweaks-link"
-                      onClick={() => { setTweaksOpen(false); navigate('/admin'); }}
+                      onClick={() => {
+                        setTweaksOpen(false);
+                        navigate("/admin");
+                      }}
                       title="Unificar nomes diferentes da mesma transportadora"
                     >
                       <i className="ti ti-arrows-shuffle"></i>
                       Configurar aliases de transportadora
-                      <i className="ti ti-arrow-right" style={{ marginLeft: 'auto' }}></i>
+                      <i
+                        className="ti ti-arrow-right"
+                        style={{ marginLeft: "auto" }}
+                      ></i>
                     </button>
                   </div>
                 )}
@@ -350,44 +547,72 @@ export default function Dashboard() {
           </div>
           {!!me?.sascar_token && scSync.autoSync && (
             <button
-              className={`dg-btn dg-btn-ghost${scSync.syncError ? ' dg-sync-error' : ''}`}
-              title={scSync.syncError || (scSync.lastSyncAt ? `Sascar — último sync: ${scSync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Sascar — aguardando primeiro sync')}
+              className={`dg-btn dg-btn-ghost${scSync.syncError ? " dg-sync-error" : ""}`}
+              title={
+                scSync.syncError ||
+                (scSync.lastSyncAt
+                  ? `Sascar — último sync: ${scSync.lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                  : "Sascar — aguardando primeiro sync")
+              }
               onClick={() => !scSync.syncing && scSync.doSync()}
               disabled={scSync.syncing}
             >
-              <i className={`ti ti-refresh${scSync.syncing ? ' dg-spin' : ''}`}></i>
-              {' Sascar '}
+              <i
+                className={`ti ti-refresh${scSync.syncing ? " dg-spin" : ""}`}
+              ></i>
+              {" Sascar "}
               {scSync.syncing
-                ? '…'
+                ? "…"
                 : scSync.lastSyncAt
-                  ? scSync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                  : 'Auto'}
+                  ? scSync.lastSyncAt.toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Auto"}
             </button>
           )}
           {sheetAutoSync && (
             <button
-              className={`dg-btn dg-btn-ghost${sheetHistory.error ? ' dg-sync-error' : ''}`}
-              title={sheetHistory.error || (sheetHistory.loadedAt ? `Planilha — última leitura: ${new Date(sheetHistory.loadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Planilha — aguardando primeira leitura')}
-              onClick={() => !sheetHistory.loading && sheetHistory.load(buildMesesLookback(3))}
+              className={`dg-btn dg-btn-ghost${sheetHistory.error ? " dg-sync-error" : ""}`}
+              title={
+                sheetHistory.error ||
+                (sheetHistory.loadedAt
+                  ? `Planilha — última leitura: ${new Date(sheetHistory.loadedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                  : "Planilha — aguardando primeira leitura")
+              }
+              onClick={() =>
+                !sheetHistory.loading &&
+                sheetHistory.load(buildMesesLookback(3))
+              }
               disabled={sheetHistory.loading}
             >
-              <i className={`ti ti-refresh${sheetHistory.loading ? ' dg-spin' : ''}`}></i>
-              {' Planilha '}
+              <i
+                className={`ti ti-refresh${sheetHistory.loading ? " dg-spin" : ""}`}
+              ></i>
+              {" Planilha "}
               {sheetHistory.loading
-                ? '…'
+                ? "…"
                 : sheetHistory.loadedAt
-                  ? new Date(sheetHistory.loadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                  : 'Auto'}
+                  ? new Date(sheetHistory.loadedAt).toLocaleTimeString(
+                      "pt-BR",
+                      { hour: "2-digit", minute: "2-digit" },
+                    )
+                  : "Auto"}
             </button>
           )}
           <button
             className="dg-btn dg-btn-ghost"
-            title={tvMode ? 'Mostrar menu' : 'Modo TV'}
-            onClick={() => setTvMode(v => !v)}
+            title={tvMode ? "Mostrar menu" : "Modo TV"}
+            onClick={() => setTvMode((v) => !v)}
           >
-            <i className={`ti ${tvMode ? 'ti-layout-sidebar-right-expand' : 'ti-layout-sidebar-left-collapse'}`}></i>
+            <i
+              className={`ti ${tvMode ? "ti-layout-sidebar-right-expand" : "ti-layout-sidebar-left-collapse"}`}
+            ></i>
           </button>
-          <button className="dg-btn dg-btn-primary" onClick={() => navigate('/monitor/intervencao')}>
+          <button
+            className="dg-btn dg-btn-primary"
+            onClick={() => navigate("/monitor/intervencao")}
+          >
             <i className="ti ti-truck-delivery"></i> Abrir Monitor
           </button>
         </div>
@@ -409,7 +634,7 @@ export default function Dashboard() {
         <Banner
           tone="danger"
           icon="ti-clock-exclamation"
-          title={`${m.slaVencidos} alerta${m.slaVencidos > 1 ? 's' : ''} com SLA vencido — requer atenção imediata`}
+          title={`${m.slaVencidos} alerta${m.slaVencidos > 1 ? "s" : ""} com SLA vencido — requer atenção imediata`}
           sub={`Motoristas gravíssimos aguardando há mais de ${slaLimit} minutos.`}
         />
       )}
@@ -424,8 +649,8 @@ export default function Dashboard() {
           sub={`encerrados + em aberto · ${m.pctConcluido}% concluído`}
           compareValue={m.ONTEM?.total}
           progress={m.pctConcluido}
-          onClick={() => setActiveKpi(activeKpi === 'total' ? null : 'total')}
-          active={activeKpi === 'total'}
+          onClick={() => setActiveKpi(activeKpi === "total" ? null : "total")}
+          active={activeKpi === "total"}
           accent="#F26931"
         />
         <KPI
@@ -441,30 +666,58 @@ export default function Dashboard() {
           icon="ti-clock-hour-4"
           label="Em aberto agora"
           value={m.emAberto}
-          sub={m.slaVencidos > 0
-            ? `${m.slaVencidos} vencido${m.slaVencidos > 1 ? 's' : ''} · ${m.criticos.length} críticos`
-            : `${m.criticos.length} em estado crítico`}
+          sub={
+            m.slaVencidos > 0
+              ? `${m.slaVencidos} vencido${m.slaVencidos > 1 ? "s" : ""} · ${m.criticos.length} críticos`
+              : `${m.criticos.length} em estado crítico`
+          }
           compareValue={m.ONTEM?.emAberto}
           accent="var(--warning-500)"
           pulse={m.slaVencidos > 0}
-          onClick={() => setActiveKpi(activeKpi === 'aberto' ? null : 'aberto')}
-          active={activeKpi === 'aberto'}
+          onClick={() => setActiveKpi(activeKpi === "aberto" ? null : "aberto")}
+          active={activeKpi === "aberto"}
         />
         <KPI
           icon="ti-headset"
-          label="Intervenções"
+          label="Intervenções realizadas"
           value={m.intervencoesRegistradas}
-          sub={`${m.encerradosPlataforma} plataforma · ${m.sheetIntervencoesHoje} planilha`}
+          sub={`${m.sheetSolicitadasHoje} solicitadas · ${m.encerradosPlataforma} plataforma · ${m.sheetIntervencoesHoje} planilha`}
           accent="#2A8DD9"
-          onClick={() => setActiveKpi(activeKpi === 'intervencoes' ? null : 'intervencoes')}
-          active={activeKpi === 'intervencoes'}
+          onClick={() =>
+            setActiveKpi(activeKpi === "intervencoes" ? null : "intervencoes")
+          }
+          active={activeKpi === "intervencoes"}
         />
       </div>
 
       {/* Drill panels */}
-      {activeKpi === 'total'        && <VolumeDrill   TIPOS={m.volumeTipos} RESULTADOS={m.volumeResultados} transpStats={m.transpStats} />}
-      {activeKpi === 'aberto'       && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.emAbertoTipos} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
-      {activeKpi === 'intervencoes' && <FechadosDrill positivo={m.positivo} posPositivo={m.posPositivo} fechados={m.fechados} taxaReinc={m.taxaReinc} pctConcluido={m.pctConcluido} equipe={m.equipe} />}
+      {activeKpi === "total" && (
+        <VolumeDrill
+          TIPOS={m.volumeTipos}
+          RESULTADOS={m.volumeResultados}
+          transpStats={m.transpStats}
+        />
+      )}
+      {activeKpi === "aberto" && (
+        <EmAbertoDrill
+          criticos={m.criticos}
+          slaVencidos={m.slaVencidos}
+          emAberto={m.emAberto}
+          TIPOS={m.emAbertoTipos}
+          driversAtivos={m.driversAtivos}
+          transpStats={m.transpStats}
+        />
+      )}
+      {activeKpi === "intervencoes" && (
+        <FechadosDrill
+          positivo={m.positivo}
+          posPositivo={m.posPositivo}
+          fechados={m.fechados}
+          taxaReinc={m.taxaReinc}
+          pctConcluido={m.pctConcluido}
+          equipe={m.equipe}
+        />
+      )}
 
       {/* Seção: Pulso da operação */}
       <Section icon="ti-radio" label="Pulso da operação" />
@@ -473,17 +726,29 @@ export default function Dashboard() {
         {/* Coluna principal — críticos + atividade horária */}
         <div className="dg-col">
           <CriticalSLA criticos={m.criticos} slaLimit={slaLimit} />
-          {showHourly && !executiveMode && <HourlyActivity hourly={m.HOURLY} currentHour={hour} />}
+          {showHourly && !executiveMode && (
+            <HourlyActivity hourly={m.HOURLY} currentHour={hour} />
+          )}
         </div>
 
         {/* Coluna lateral — classificação + alertas técnicos + transportadoras */}
         <div className="dg-col">
-          {showClassif && <ClassificationBreakdown tipos={m.TIPOS} resultados={m.RESULTADOS} />}
-          {showTech && !executiveMode && m.tecnicos.length > 0 && <TechAlerts tecnicos={m.tecnicos} />}
-          {showTransp && !executiveMode && <TransportadoraRanking transportadoras={m.transpStats.slice(0, 6)} />}
+          {showClassif && (
+            <ClassificationBreakdown
+              tipos={m.TIPOS}
+              resultados={m.RESULTADOS}
+            />
+          )}
+          {showTech && !executiveMode && m.tecnicos.length > 0 && (
+            <TechAlerts tecnicos={m.tecnicos} />
+          )}
+          {showTransp && !executiveMode && (
+            <TransportadoraRanking
+              transportadoras={m.transpStats.slice(0, 6)}
+            />
+          )}
         </div>
       </div>
-
 
       {/* Seção: Produtividade */}
       <Section icon="ti-users" label="Produtividade da equipe" />
