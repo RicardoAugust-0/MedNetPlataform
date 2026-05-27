@@ -198,6 +198,10 @@ export function useDashboardMetrics({
   const encerradosPlataforma = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr && (a.tipo === 'intervencao' || a.tipo === 'reportar')).length;
   const totalAlertas = fechados + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
+  // % baseado apenas na plataforma, para KPI "Fechados hoje" (sem cruzar com planilha)
+  const pctConcluidoPlataforma = (encerradosPlataforma + emAberto) > 0
+    ? Math.round((encerradosPlataforma / (encerradosPlataforma + emAberto)) * 100)
+    : 0;
   const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
 
   // Filtered versions for drill-down details
@@ -467,20 +471,21 @@ export function useDashboardMetrics({
   }, [drivers, empresaFilterFn]);
 
   // ── Produtividade da equipe ─────────────────────────────────────────────────
-  const equipe = useMemo(() => {
+  // Calculado diretamente (sem useMemo) para garantir que a planilha carregada
+  // de forma assíncrona seja sempre refletida — o useMemo ficava stale quando
+  // sheetRowsPeriodo atualizava após o mount e a tabela atendimentos está vazia.
+  const equipe = (() => {
     const getFullOperatorName = (shortOrFullName) => {
       if (!shortOrFullName) return '';
       const norm = shortOrFullName.trim().toLowerCase();
-      
+
       const excludeNames = new Set(['', '—', '-', 'auto-descarte', 'limpeza', 'descarte', 'não realizado', 'nao realizado', 'sem contato', 'sistema']);
       if (excludeNames.has(norm)) return '';
 
-      // Ignore timestamps, dates or pure numbers
       if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(norm)) return '';
       if (/^\d{1,4}[-/]\d{1,2}([-/]\d{1,4})?$/.test(norm)) return '';
       if (/^\d+$/.test(norm)) return '';
 
-      // Find match in profiles
       const exact = profiles.find(p => p.nome && p.nome.trim().toLowerCase() === norm);
       if (exact) return exact.nome;
 
@@ -517,9 +522,17 @@ export function useDashboardMetrics({
     });
 
     sheetRowsPeriodo.forEach(r => {
-      if (!r.realizadoPor) return;
-      const opName = getFullOperatorName(r.realizadoPor);
-      if (!opName) return;
+      const raw = (r.realizadoPor || '').trim();
+      if (!raw) return;
+      // Descarta horários (00:52), datas (27/05) e números puros antes de usar como nome
+      if (/^\d{1,2}:\d{2}/.test(raw)) return;
+      if (/^\d{1,4}[-/]\d{1,2}/.test(raw)) return;
+      if (/^\d+$/.test(raw)) return;
+      const normRaw = raw.toLowerCase();
+      const skipSet = new Set(['—', '-', 'auto-descarte', 'limpeza', 'descarte', 'não realizado', 'nao realizado', 'sem contato', 'sistema']);
+      if (skipSet.has(normRaw)) return;
+      // Após filtragem, nome resolvido via perfis ou o nome bruto da planilha
+      const opName = getFullOperatorName(raw) || raw;
       if (!opMap[opName]) opMap[opName] = { nome: opName, interv: 0, pp: 0, reportes: 0 };
       opMap[opName].interv++;
       if (r.placa && placasPrevia30d.has(r.placa)) opMap[opName].pp++;
@@ -540,7 +553,7 @@ export function useDashboardMetrics({
         const tb = b.tratados.fadigaPos + b.tratados.fadigaPP + b.tratados.compPos;
         return tb - ta;
       });
-  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia30d, profiles]);
+  })();
 
   // Contagem de drivers ativos por plataforma — base absoluta
   const platformCounts = useMemo(() => {
@@ -571,7 +584,7 @@ export function useDashboardMetrics({
     // KPIs principais
     fechadosHoje, posPositivo, positivo, fechados, emAberto,
     encerradosPlataforma, intervencoesRegistradas, sheetIntervencoesHoje,
-    totalAlertas, pctConcluido, taxaReinc, reincidentesAtivos,
+    totalAlertas, pctConcluido, pctConcluidoPlataforma, taxaReinc, reincidentesAtivos,
     // chips
     TIPOS, RESULTADOS,
     // volume e tipos filtrados para os drills

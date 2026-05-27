@@ -22,7 +22,6 @@ import {
   HourlyActivity,
   Banner,
   Section,
-  SheetInsights,
 } from './dashboard/components';
 import { buildMesesLookback } from './dashboard/_helpers';
 import { useDashboardSettings } from './dashboard/hooks/useDashboardSettings';
@@ -63,7 +62,6 @@ export default function Dashboard() {
     tvMode,      setTvMode,
     executiveMode, setExecutiveMode,
     layout,      setLayout,
-    showSheet,   setShowSheet,
     sheetAutoSync, setSheetAutoSync,
     sheetSyncMin,  setSheetSyncMin,
   } = settings;
@@ -284,7 +282,6 @@ export default function Dashboard() {
                     <button className={`dg-tweaks-chip${showClassif ? ' on' : ''}`} onClick={() => setShowClassif(v => !v)}><i className="ti ti-chart-pie"></i> Tipo & Resultado</button>
                     <button className={`dg-tweaks-chip${showTech    ? ' on' : ''}`} onClick={() => setShowTech(v    => !v)}><i className="ti ti-tools"></i> Atenção técnica</button>
                     <button className={`dg-tweaks-chip${showTransp  ? ' on' : ''}`} onClick={() => setShowTransp(v  => !v)}><i className="ti ti-building-community"></i> Transportadoras</button>
-                    <button className={`dg-tweaks-chip${showSheet   ? ' on' : ''}`} onClick={() => setShowSheet(v   => !v)}><i className="ti ti-table"></i> Planilha</button>
                   </div>
                 </div>
 
@@ -435,10 +432,10 @@ export default function Dashboard() {
           icon="ti-circle-check"
           label="Fechados hoje"
           value={m.encerradosPlataforma}
-          sub={`${m.pctConcluido}% do volume`}
+          sub={`${m.pctConcluidoPlataforma}% do volume · plataforma`}
           compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
-          progress={m.pctConcluido}
+          progress={m.pctConcluidoPlataforma}
         />
         <KPI
           icon="ti-clock-hour-4"
@@ -457,7 +454,7 @@ export default function Dashboard() {
           icon="ti-headset"
           label="Intervenções"
           value={m.intervencoesRegistradas}
-          sub={`${m.encerradosPlataforma} sistema · ${m.sheetIntervencoesHoje} planilha`}
+          sub={`${m.encerradosPlataforma} plataforma · ${m.sheetIntervencoesHoje} planilha`}
           accent="#2A8DD9"
           onClick={() => setActiveKpi(activeKpi === 'intervencoes' ? null : 'intervencoes')}
           active={activeKpi === 'intervencoes'}
@@ -487,25 +484,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Seção: Planilha de intervenções */}
-      {showSheet && !executiveMode && (
-        <>
-          <Section icon="ti-table" label="Planilha de intervenções" />
-          <SheetInsights
-            tmaMin={m.sheetTMA.avg}
-            tmaSampleSize={m.sheetTMA.n}
-            criticidade={m.sheetCriticidade}
-            classificacao={m.sheetClassificacao}
-            pendencias={m.sheetPendencias}
-            totalHoje={m.sheetRowsPeriodo.length}
-            loading={sheetHistory.loading}
-            error={sheetHistory.error}
-            ageMin={m.sheetAgeMin}
-            syncing={sheetHistory.loading}
-            onRefresh={() => sheetHistory.load(buildMesesLookback(3))}
-          />
-        </>
-      )}
 
       {/* Seção: Produtividade */}
       <Section icon="ti-users" label="Produtividade da equipe" />
