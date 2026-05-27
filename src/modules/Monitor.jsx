@@ -41,18 +41,16 @@ function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes)
 
 /* ── Google Sheets via Supabase Edge Function ── */
 async function postToSheets(payload, accessToken) {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/append-sheet`;
   try {
-    const res = await fetch(url, {
+    const { data, error } = await supabase.functions.invoke('append-sheet', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(payload),
+      body: payload,
     });
-    const data = await res.json();
-    if (!data.ok) console.warn('[Sheets]', data.error);
+    if (error) throw error;
+    if (!data?.ok) console.warn('[Sheets]', data?.error);
   } catch (e) {
     console.warn('[Sheets] falha ao registrar na planilha:', e.message);
   }

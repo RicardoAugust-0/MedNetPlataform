@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- MedNet Â· Baseline schema (migration.sql + v2 + v3 + v4 + v6)
 -- Applied before Supabase migration tracking was set up.
 -- ============================================================
@@ -24,7 +24,13 @@ create index if not exists atendimentos_operador_id_idx on public.atendimentos (
 create index if not exists atendimentos_tipo_idx        on public.atendimentos (tipo);
 create index if not exists atendimentos_placa_idx       on public.atendimentos (placa);
 
-alter publication supabase_realtime add table public.atendimentos;
+do $$
+begin
+  alter publication supabase_realtime add table public.atendimentos;
+exception
+  when others then null;
+end;
+$$;
 
 --  Templates
 create table if not exists public.templates (
@@ -356,7 +362,13 @@ insert into public.app_settings (key, value)
 values ('maintenance', '{"enabled": false, "message": ""}'::jsonb)
 on conflict (key) do nothing;
 
-alter publication supabase_realtime add table public.app_settings;
+do $$
+begin
+  alter publication supabase_realtime add table public.app_settings;
+exception
+  when others then null;
+end;
+$$;
 
 
 -- Migration v9: personalização de perfil + bucket avatars
@@ -519,7 +531,13 @@ create trigger drivers_queue_touch_updated_at
 
 -- Realtime: envia old row em UPDATE/DELETE para os clientes saberem o que mudou
 alter table public.drivers_queue replica identity full;
-alter publication supabase_realtime add table public.drivers_queue;
+do $$
+begin
+  alter publication supabase_realtime add table public.drivers_queue;
+exception
+  when others then null;
+end;
+$$;
 
 -- Sem RLS (mesmo padrão de public.atendimentos atualmente)
 

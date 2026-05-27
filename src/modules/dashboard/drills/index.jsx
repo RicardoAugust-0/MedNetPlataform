@@ -120,9 +120,7 @@ export function EmAbertoDrill({ criticos, slaVencidos, emAberto, TIPOS, driversA
           {TIPOS.map(c => (
             <div key={c.id} className="dg-drill-line">
               <span>{c.label}</span>
-              <span className="v" style={{ color: c.color }}>{driversAtivos.filter(d =>
-                c.id === 'fadiga' ? isFadigaDriver(d) : !isFadigaDriver(d)
-              ).length}</span>
+              <span className="v" style={{ color: c.color }}>{c.count}</span>
             </div>
           ))}
         </div>

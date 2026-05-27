@@ -19,14 +19,13 @@ export function useSheetHistory() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
-      const params = meses ? `?meses=${encodeURIComponent(meses)}` : '';
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/read-sheet${params}`;
-
-      const res = await fetch(url, {
+      const { data, error: fnErr } = await supabase.functions.invoke('read-sheet', {
+        method: 'GET',
+        queryParams: meses ? { meses } : undefined,
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Erro ao ler planilha Google Sheets.');
+      if (fnErr) throw new Error(fnErr.message);
+      if (!data?.ok) throw new Error(data?.error || 'Erro ao ler planilha Google Sheets.');
 
       setRows(data.rows || []);
       setLoaded(true);

@@ -93,20 +93,17 @@ export default function Admin() {
     if (!inviteEmail) return;
     setInviting(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ email: inviteEmail }),
-      }
-    );
-    const json = await res.json();
-    if (json.error) {
-      toast(json.error, 'error');
+    const { data, error } = await supabase.functions.invoke('invite-user', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`,
+      },
+      body: { email: inviteEmail },
+    });
+    if (error) {
+      toast(error.message, 'error');
+    } else if (data?.error) {
+      toast(data.error, 'error');
     } else {
       toast(`Convite enviado para ${inviteEmail}`, 'success');
       setInviteEmail('');

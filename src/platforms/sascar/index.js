@@ -45,21 +45,19 @@ const sascar = {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
 
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pull-sascar`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
+      const { data, error: fnErr } = await supabase.functions.invoke('pull-sascar', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
         },
-      );
+      });
 
-      const data = await res.json();
-      if (!res.ok) {
-        const err = new Error(data.error || `Erro Sascar: HTTP ${res.status}`);
-        if (data.code) err.code = data.code;
+      if (fnErr) {
+        throw fnErr;
+      }
+      if (!data || data.error) {
+        const err = new Error(data?.error || 'Erro Sascar');
+        if (data?.code) err.code = data.code;
         throw err;
       }
 

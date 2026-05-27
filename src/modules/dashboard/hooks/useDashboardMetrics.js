@@ -40,6 +40,22 @@ export function useDashboardMetrics({
     return { start, end: new Date(now) };
   }, [filters.periodo, now]);
 
+  // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
+  const sheetRowsPeriodo = useMemo(() => {
+    return sheetHistory.rows.filter(r => {
+      const d = parseSheetRowDate(r);
+      if (!d) return false;
+      if (filters.periodo === 'hoje') {
+        if (d.toDateString() !== todayStr) return false;
+      } else {
+        if (d < new Date(periodoWindow.start.getFullYear(), periodoWindow.start.getMonth(), periodoWindow.start.getDate())) return false;
+        if (d > periodoWindow.end) return false;
+      }
+      if (!empresaFilterFn(r.empresa)) return false;
+      return true;
+    });
+  }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, empresaFilterFn]);
+
   // ── Atendimentos no período (com filtros: periodo + empresa + operador + tipo)
   const atendimentosHoje = useMemo(() => {
     return atHistory.filter(a => {
@@ -138,15 +154,25 @@ export function useDashboardMetrics({
   const RESULTADOS = useMemo(() => {
     const atsHojeFull = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr);
     const fechadosFull = atsHojeFull.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
-    const posFull = fechadosFull.length - ppFull;
+    
+    const sheetRowsToday = sheetHistory.rows.filter(r => {
+      const d = parseSheetRowDate(r);
+      return d && d.toDateString() === todayStr;
+    });
+    const sheetFechadosToday = sheetRowsToday.filter(r => r.realizadoPor);
+    const sheetPpToday = sheetFechadosToday.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+    const sheetPosToday = sheetFechadosToday.length - sheetPpToday;
+
+    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length + sheetPpToday;
+    const posFull = (fechadosFull.length - (ppFull - sheetPpToday)) + sheetPosToday;
     const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
+
     return [
       { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
       { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
       { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
     ];
-  }, [atHistory, drivers, todayStr, placasPrevia30d]);
+  }, [atHistory, sheetHistory.rows, todayStr, placasPrevia30d, drivers]);
 
   const TIPOS = useMemo(() => {
     const fadigaCount  = drivers.filter(d => (d.alertas || 0) > 0).length;
@@ -157,14 +183,66 @@ export function useDashboardMetrics({
     ];
   }, [drivers]);
 
-  const posPositivo  = RESULTADOS.find(r => r.id === 'pos-positivo')?.count ?? 0;
-  const positivo     = RESULTADOS.find(r => r.id === 'positivo')?.count ?? 0;
-  const fechados     = fechadosHoje.length;
+  const sheetIntervencoesHoje = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
+  const intervencoesRegistradas = fechadosHoje.length + sheetIntervencoesHoje;
+
+  const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
+  const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
+  const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
+  const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+
+  const posPositivo  = platPP + sheetPP;
+  const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
+  const fechados     = closedInterventionsFiltered.length + sheetInterventionsFiltered.length;
   const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
-  const encerradosPlataforma = fechados;
-  const totalAlertas = encerradosPlataforma + emAberto;
-  const pctConcluido = totalAlertas > 0 ? Math.round((encerradosPlataforma / totalAlertas) * 100) : 0;
+  const encerradosPlataforma = atHistory.filter(a => new Date(a.created_at).toDateString() === todayStr && (a.tipo === 'intervencao' || a.tipo === 'reportar')).length;
+  const totalAlertas = fechados + emAberto;
+  const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
   const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
+
+  // Filtered versions for drill-down details
+  const volumeTipos = useMemo(() => {
+    const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao');
+    const closedReportarFiltered = atendimentosHoje.filter(a => a.tipo === 'reportar');
+    const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
+
+    const activeFadigaFiltered = driversAtivos.filter(d => (d.alertas || 0) > 0).length;
+    const activeComportFiltered = driversAtivos.filter(d => (d.alertas || 0) === 0 && (d.reportaveis || 0) > 0).length;
+
+    const fadigaCount = closedInterventionsFiltered.length + sheetInterventionsFiltered.length + activeFadigaFiltered;
+    const comportCount = closedReportarFiltered.length + activeComportFiltered;
+
+    return [
+      { id: 'fadiga',        label: 'Fadiga',        color: '#E24B4A', count: fadigaCount },
+      { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount },
+    ];
+  }, [atendimentosHoje, sheetRowsPeriodo, driversAtivos]);
+
+  const emAbertoTipos = useMemo(() => {
+    const fadigaCount = driversAtivos.filter(d => (d.alertas || 0) > 0).length;
+    const comportCount = driversAtivos.filter(d => (d.alertas || 0) === 0 && (d.reportaveis || 0) > 0).length;
+    return [
+      { id: 'fadiga',        label: 'Fadiga',        color: '#E24B4A', count: fadigaCount },
+      { id: 'comportamento', label: 'Comportamento', color: '#E8A020', count: comportCount },
+    ];
+  }, [driversAtivos]);
+
+  const volumeResultados = useMemo(() => {
+    const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
+    const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
+
+    const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
+    const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+    
+    const ppCount = platPP + sheetPP;
+    const posCount = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - ppCount;
+    
+    return [
+      { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posCount },
+      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppCount },
+      { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAberto },
+    ];
+  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia30d, emAberto]);
 
   // Reincidentes em aberto: drivers na fila cujas placas têm histórico recente.
   const reincidentesAtivos = useMemo(
@@ -213,16 +291,14 @@ export function useDashboardMetrics({
     return driversIntervencao
       .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))
       .map(d => {
-        const abertoMin  = d.ultimoEvento ? (nowMs - new Date(d.ultimoEvento).getTime()) / 60000 : 0;
-        const hasFadiga  = d.tipos?.some(t =>
-          tiposFadiga.some(f => t.toLowerCase().includes(f.toLowerCase()))
-        );
-        const tipo       = hasFadiga ? 'fadiga' : 'comportamento';
+        const tipo       = d.alertas > 0 ? 'fadiga' : 'comportamento';
         const reincidente = d.placa && placasPrevia30d.has(d.placa);
         const lastInterv = lastIntervByPlaca.get(d.placa);
         const ultimaIntervencao = lastInterv
           ? `${Math.floor((nowMs - new Date(lastInterv.created_at).getTime()) / 86400000)}d`
           : null;
+        const lastEvt = d.ultimoEvento || d.ultimoEventoReportar;
+        const abertoMin = lastEvt ? (nowMs - new Date(lastEvt).getTime()) / 60000 : 0;
         return {
           nome: d.nome,
           placa: d.placa,
@@ -243,24 +319,7 @@ export function useDashboardMetrics({
 
   const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
 
-  // ── Sheet: linhas no período (com filtro de empresa) ──────────────────────
-  const sheetRowsPeriodo = useMemo(() => {
-    return sheetHistory.rows.filter(r => {
-      const d = parseSheetRowDate(r);
-      if (!d) return false;
-      if (filters.periodo === 'hoje') {
-        if (d.toDateString() !== todayStr) return false;
-      } else {
-        if (d < new Date(periodoWindow.start.getFullYear(), periodoWindow.start.getMonth(), periodoWindow.start.getDate())) return false;
-        if (d > periodoWindow.end) return false;
-      }
-      if (!empresaFilterFn(r.empresa)) return false;
-      return true;
-    });
-  }, [sheetHistory.rows, todayStr, periodoWindow, filters.periodo, empresaFilterFn]);
-
-  const sheetIntervencoesHoje = sheetRowsPeriodo.filter(r => r.realizadoPor).length;
-  const intervencoesRegistradas = fechados + sheetIntervencoesHoje;
+  // ── Sheet: TMA, criticidade, classificação e pendências ──────────────────────
 
   const sheetTMA = useMemo(() => {
     const deltas = [];
@@ -409,19 +468,66 @@ export function useDashboardMetrics({
 
   // ── Produtividade da equipe ─────────────────────────────────────────────────
   const equipe = useMemo(() => {
+    const getFullOperatorName = (shortOrFullName) => {
+      if (!shortOrFullName) return '';
+      const norm = shortOrFullName.trim().toLowerCase();
+      
+      const excludeNames = new Set(['', '—', '-', 'auto-descarte', 'limpeza', 'descarte', 'não realizado', 'nao realizado', 'sem contato', 'sistema']);
+      if (excludeNames.has(norm)) return '';
+
+      // Ignore timestamps, dates or pure numbers
+      if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(norm)) return '';
+      if (/^\d{1,4}[-/]\d{1,2}([-/]\d{1,4})?$/.test(norm)) return '';
+      if (/^\d+$/.test(norm)) return '';
+
+      // Find match in profiles
+      const exact = profiles.find(p => p.nome && p.nome.trim().toLowerCase() === norm);
+      if (exact) return exact.nome;
+
+      const firstNameMatch = profiles.find(p => {
+        if (!p.nome) return false;
+        const parts = p.nome.trim().toLowerCase().split(' ');
+        return parts[0] === norm || parts.includes(norm);
+      });
+      if (firstNameMatch) return firstNameMatch.nome;
+
+      const inputParts = norm.split(' ');
+      const profileMatchByInputFirst = profiles.find(p => {
+        if (!p.nome) return false;
+        const pFirst = p.nome.trim().toLowerCase().split(' ')[0];
+        return pFirst === inputParts[0];
+      });
+      if (profileMatchByInputFirst) return profileMatchByInputFirst.nome;
+
+      return shortOrFullName;
+    };
+
     const opMap = {};
     atendimentosHoje.forEach(a => {
       if (!a.operador || a.tipo === 'limpeza') return;
-      if (!opMap[a.operador]) opMap[a.operador] = { nome: a.operador, interv: 0, pp: 0, reportes: 0 };
+      const opName = getFullOperatorName(a.operador);
+      if (!opName) return;
+      if (!opMap[opName]) opMap[opName] = { nome: opName, interv: 0, pp: 0, reportes: 0 };
       if (a.tipo === 'intervencao') {
-        opMap[a.operador].interv++;
-        if (a.placa && placasPrevia30d.has(a.placa)) opMap[a.operador].pp++;
+        opMap[opName].interv++;
+        if (a.placa && placasPrevia30d.has(a.placa)) opMap[opName].pp++;
       } else if (a.tipo === 'reportar') {
-        opMap[a.operador].reportes++;
+        opMap[opName].reportes++;
       }
     });
+
+    sheetRowsPeriodo.forEach(r => {
+      if (!r.realizadoPor) return;
+      const opName = getFullOperatorName(r.realizadoPor);
+      if (!opName) return;
+      if (!opMap[opName]) opMap[opName] = { nome: opName, interv: 0, pp: 0, reportes: 0 };
+      opMap[opName].interv++;
+      if (r.placa && placasPrevia30d.has(r.placa)) opMap[opName].pp++;
+    });
+
     const colors = ['#9E1A45', '#2A8DD9', '#2DA75A', '#E8A020', '#7A1235', '#C24A6A'];
     return Object.values(opMap)
+      .filter(op => op.interv + op.reportes > 0)
       .map((op, idx) => ({
         nome:         op.nome,
         cargo:        '',
@@ -434,7 +540,7 @@ export function useDashboardMetrics({
         const tb = b.tratados.fadigaPos + b.tratados.fadigaPP + b.tratados.compPos;
         return tb - ta;
       });
-  }, [atendimentosHoje, placasPrevia30d]);
+  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia30d, profiles]);
 
   // Contagem de drivers ativos por plataforma — base absoluta
   const platformCounts = useMemo(() => {
@@ -468,6 +574,8 @@ export function useDashboardMetrics({
     totalAlertas, pctConcluido, taxaReinc, reincidentesAtivos,
     // chips
     TIPOS, RESULTADOS,
+    // volume e tipos filtrados para os drills
+    volumeTipos, emAbertoTipos, volumeResultados,
     // ontem
     ONTEM,
     // críticos

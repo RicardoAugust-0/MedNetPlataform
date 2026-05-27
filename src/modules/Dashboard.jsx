@@ -457,7 +457,7 @@ export default function Dashboard() {
           icon="ti-headset"
           label="Intervenções"
           value={m.intervencoesRegistradas}
-          sub={`${m.fechados} registradas · ${m.sheetIntervencoesHoje} planilha`}
+          sub={`${m.encerradosPlataforma} sistema · ${m.sheetIntervencoesHoje} planilha`}
           accent="#2A8DD9"
           onClick={() => setActiveKpi(activeKpi === 'intervencoes' ? null : 'intervencoes')}
           active={activeKpi === 'intervencoes'}
@@ -465,8 +465,8 @@ export default function Dashboard() {
       </div>
 
       {/* Drill panels */}
-      {activeKpi === 'total'        && <VolumeDrill   TIPOS={m.TIPOS} RESULTADOS={m.RESULTADOS} transpStats={m.transpStats} />}
-      {activeKpi === 'aberto'       && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.TIPOS} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
+      {activeKpi === 'total'        && <VolumeDrill   TIPOS={m.volumeTipos} RESULTADOS={m.volumeResultados} transpStats={m.transpStats} />}
+      {activeKpi === 'aberto'       && <EmAbertoDrill criticos={m.criticos} slaVencidos={m.slaVencidos} emAberto={m.emAberto} TIPOS={m.emAbertoTipos} driversAtivos={m.driversAtivos} transpStats={m.transpStats} />}
       {activeKpi === 'intervencoes' && <FechadosDrill positivo={m.positivo} posPositivo={m.posPositivo} fechados={m.fechados} taxaReinc={m.taxaReinc} pctConcluido={m.pctConcluido} equipe={m.equipe} />}
 
       {/* Seção: Pulso da operação */}
