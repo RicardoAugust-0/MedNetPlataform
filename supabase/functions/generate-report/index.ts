@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
 
     // Body da request
     const body: RequestBody = await req.json();
-    const { transportadora, months = 3, platform_id = 'maxtrack' } = body;
+    const { transportadora, months = 3, platform_id } = body;
     if (!transportadora?.trim()) return json({ error: 'transportadora é obrigatório' }, 400);
 
     // Configuração de IA (provider + model padrão)
@@ -127,17 +127,36 @@ Deno.serve(async (req) => {
     }
     const apiKey = credRow.api_key;
 
+    // Carrega aliases de transportadoras para fazer busca cruzada (Monitor <-> Planilha)
+    const { data: aliasesRow } = await sbSvc.from('app_settings').select('value').eq('key', 'carrier_aliases').maybeSingle();
+    const aliases = aliasesRow?.value || {};
+
+    const rawNames = [transportadora.trim()];
+    // Se for chave (nome no Monitor), adiciona o valor (nome na planilha)
+    if (aliases[transportadora.trim()]) {
+      rawNames.push(aliases[transportadora.trim()]);
+    }
+    // Se for valor (nome na planilha), adiciona a chave (nome no Monitor)
+    const monitorName = Object.keys(aliases).find(k => aliases[k] === transportadora.trim());
+    if (monitorName) {
+      rawNames.push(monitorName);
+    }
+
     // Consulta driver_events
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - months);
 
-    const { data: events, error: evErr } = await sbSvc
+    let evQuery = sbSvc
       .from('driver_events')
       .select('nome, placa, frota, nome_evento, categoria_bucket, severidade, turno, ocorrido_em')
-      .ilike('transportadora', `%${transportadora.trim()}%`)
-      .eq('platform_id', platform_id)
-      .gte('ocorrido_em', cutoff.toISOString())
-      .order('ocorrido_em', { ascending: false });
+      .in('transportadora', rawNames)
+      .gte('ocorrido_em', cutoff.toISOString());
+
+    if (platform_id) {
+      evQuery = evQuery.eq('platform_id', platform_id);
+    }
+
+    const { data: events, error: evErr } = await evQuery.order('ocorrido_em', { ascending: false });
 
     if (evErr) throw new Error('Erro ao consultar driver_events: ' + evErr.message);
     if (!events || events.length === 0) {

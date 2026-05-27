@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 function buildSascarUrl() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -50,8 +52,17 @@ export default function UploadArea({
   rpaLastRunAt = null,
   rpaLastRunStatus = null,
 }) {
-  const rpaAgeMin = rpaLastRunAt
-    ? Math.floor((Date.now() - new Date(rpaLastRunAt)) / 60000) : null;
+  const [rpaAgeMin, setRpaAgeMin] = useState(null);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!rpaLastRunAt) {
+      setRpaAgeMin(null);
+      return;
+    }
+    setRpaAgeMin(Math.floor((Date.now() - new Date(rpaLastRunAt)) / 60000));
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [rpaLastRunAt]);
   const rpaAgeLabel = rpaAgeMin === null ? null
     : rpaAgeMin < 2   ? 'agora'
     : rpaAgeMin < 60  ? `${rpaAgeMin} min atrás`

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { supabase } from '../supabase.js';
 import { uploadAvatar, removeAvatar } from '../lib/uploadAvatar';
 import { iniciais } from '../utils.js';
 
@@ -130,7 +129,15 @@ function AvatarSection({ profile, updateProfile }) {
 function SascarSection({ profile }) {
   const configured  = !!profile?.sascar_token;
   const savedAt     = profile?.sascar_token_saved_at ? new Date(profile.sascar_token_saved_at) : null;
-  const ageMin      = savedAt ? Math.floor((Date.now() - savedAt.getTime()) / 60000) : null;
+  const [ageMin, setAgeMin] = useState(null);
+  
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!savedAt) { setAgeMin(null); return; }
+    setAgeMin(Math.floor((Date.now() - savedAt.getTime()) / 60000));
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [profile?.sascar_token_saved_at]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tokenValid  = configured && ageMin !== null && ageMin < 30;
   const bookmarkRef = useRef(null);
 
@@ -239,10 +246,12 @@ export default function Profile() {
   // Sincroniza quando o perfil termina de carregar.
   useEffect(() => {
     if (!profile) return;
+    /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
     if (profile.nome     && !nome)     setNome(profile.nome);
     if (profile.cargo    && !cargo)    setCargo(profile.cargo);
     if (profile.telefone && !telefone) setTelefone(profile.telefone);
     if (profile.bio      && !bio)      setBio(profile.bio);
+    /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   }, [profile]);
 
   const [novaSenha,    setNovaSenha]    = useState('');

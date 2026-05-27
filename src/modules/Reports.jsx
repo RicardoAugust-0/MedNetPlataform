@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
+import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 
 // Espelhado em Admin.jsx (AiCredentialsCard)
 const AI_PROVIDERS = [
@@ -49,6 +50,7 @@ function renderMarkdown(md) {
 
 export default function Reports() {
   const toast = useToast();
+  const { resolveMonitorName } = useCarrierAliases();
 
   const [transps,        setTransps]        = useState([]);
   const [loadingTransps, setLoadingTransps] = useState(true);
@@ -87,15 +89,16 @@ export default function Reports() {
 
   // Carrega transportadoras disponíveis em driver_events
   useEffect(() => {
-    supabase.from('driver_events').select('transportadora').not('transportadora', 'is', null).limit(2000)
+    supabase.from('driver_events').select('transportadora').not('transportadora', 'is', null).limit(4000)
       .then(({ data }) => {
         if (!data) return;
-        const uniq = [...new Set(data.map(r => r.transportadora).filter(Boolean))].sort();
+        const cleaned = data.map(r => resolveMonitorName(r.transportadora)).filter(Boolean);
+        const uniq = [...new Set(cleaned)].sort();
         setTransps(uniq);
         if (uniq.length > 0) setTransportadora(uniq[0]);
         setLoadingTransps(false);
       });
-  }, []);
+  }, [resolveMonitorName]);
 
   const generate = async () => {
     if (!transportadora) return;

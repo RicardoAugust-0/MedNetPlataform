@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { exportCSV, EmptyState } from './utils';
 import { useSheetHistory } from '../../hooks/useSheetHistory.js';
 
@@ -96,12 +96,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
     });
   }, [history, histPeriod, histTipo, histSearch]);
 
-  useEffect(() => {
-    if (histPeriod !== 'intervalo') {
-      setRangeHistory([]);
-      setRangeError(null);
-    }
-  }, [histPeriod]);
+
 
   const handleRangeSearch = async () => {
     if (!histFrom || !histTo) return;

@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast.jsx';
 import { useApp } from '../context.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
+import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 
 // Converte markdown simples em HTML
 function renderMarkdown(md) {
@@ -31,6 +32,7 @@ export default function DossiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile, session } = useAuth();
   const { theme } = useApp();
+  const { resolveMonitorName } = useCarrierAliases();
 
   const initialDriverName = searchParams.get('driver') || '';
 
@@ -48,6 +50,10 @@ export default function DossiesPage() {
     polissonografia: '',
     historico_clinico: '',
     ultimo_exame_em: '',
+    placa: '',
+    transportadora: '',
+    frota: '',
+    turno: 'diurno',
   });
   const [savingHealth, setSavingHealth] = useState(false);
   const [editingHealth, setEditingHealth] = useState(false);
@@ -75,7 +81,7 @@ export default function DossiesPage() {
       });
   }, []);
 
-  // Busca lista de motoristas únicos cadastrados nas tabelas do Supabase
+  // Busca lista de motoristas únicos cadastrados nas tabelas do Supabase (roda apenas na montagem)
   useEffect(() => {
     async function loadDrivers() {
       if (!isSupabaseConfigured) {
@@ -84,66 +90,91 @@ export default function DossiesPage() {
       }
       try {
         setLoadingList(true);
-        
-        // Puxa motoristas de driver_events
+
+        // 1. Puxa prontuários já cadastrados (contendo possíveis edições manuais)
+        const { data: healthList } = await supabase
+          .from('driver_health')
+          .select('motorista_nome, placa, transportadora, frota, turno');
+
+        // 2. Puxa motoristas de driver_events
         const { data: eventsData } = await supabase
           .from('driver_events')
           .select('nome, placa, transportadora, frota, turno')
           .not('nome', 'is', null);
 
-        // Puxa motoristas de atendimentos
+        // 3. Puxa motoristas de atendimentos
         const { data: atendData } = await supabase
           .from('atendimentos')
           .select('motorista, placa, transportadora');
 
         // Consolida e remove duplicados
         const map = new Map();
-        
-        if (eventsData) {
-          eventsData.forEach(r => {
-            const key = String(r.nome).trim().toUpperCase();
-            if (key && !map.has(key)) {
+
+        // Insere prontuários do driver_health primeiro (dados prioritários)
+        if (healthList) {
+          healthList.forEach(r => {
+            const key = String(r.motorista_nome).trim().toUpperCase();
+            if (key) {
               map.set(key, {
-                nome: r.nome,
-                placa: r.placa,
+                nome: r.motorista_nome,
+                placa: r.placa || '',
                 transportadora: r.transportadora || '—',
                 frota: r.frota || '',
                 turno: r.turno || 'diurno',
+                isEdited: true, // flag de prioridade
               });
             }
           });
         }
 
+        // Adiciona dados do driver_events
+        if (eventsData) {
+          eventsData.forEach(r => {
+            const key = String(r.nome).trim().toUpperCase();
+            if (key) {
+              const existing = map.get(key);
+              if (!existing) {
+                map.set(key, {
+                  nome: r.nome,
+                  placa: r.placa || '',
+                  transportadora: r.transportadora || '—',
+                  frota: r.frota || '',
+                  turno: r.turno || 'diurno',
+                });
+              } else if (!existing.isEdited) {
+                // Se ainda não editado no prontuário, complementa dados vazios
+                if (r.placa && !existing.placa) existing.placa = r.placa;
+                if (r.transportadora && existing.transportadora === '—') existing.transportadora = r.transportadora;
+                if (r.frota && !existing.frota) existing.frota = r.frota;
+              }
+            }
+          });
+        }
+
+        // Adiciona dados do atendimentos
         if (atendData) {
           atendData.forEach(r => {
             const key = String(r.motorista).trim().toUpperCase();
-            if (key && !map.has(key)) {
-              map.set(key, {
-                nome: r.motorista,
-                placa: r.placa || '',
-                transportadora: r.transportadora || '—',
-                frota: '',
-                turno: 'diurno',
-              });
+            if (key) {
+              const existing = map.get(key);
+              if (!existing) {
+                map.set(key, {
+                  nome: r.motorista,
+                  placa: r.placa || '',
+                  transportadora: r.transportadora || '—',
+                  frota: '',
+                  turno: 'diurno',
+                });
+              } else if (!existing.isEdited) {
+                if (r.placa && !existing.placa) existing.placa = r.placa;
+                if (r.transportadora && existing.transportadora === '—') existing.transportadora = r.transportadora;
+              }
             }
           });
         }
 
         const consolidated = Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
         setDriversList(consolidated);
-
-        // Seleciona o motorista inicial se fornecido por query param
-        if (initialDriverName) {
-          const match = consolidated.find(d => d.nome.toLowerCase() === initialDriverName.toLowerCase());
-          if (match) {
-            setSelectedDriver(match);
-          } else {
-            // Se não encontrou na lista, mas temos o parâmetro, cria um temporário
-            setSelectedDriver({ nome: initialDriverName, placa: '', transportadora: '—', frota: '', turno: 'diurno' });
-          }
-        } else if (consolidated.length > 0) {
-          setSelectedDriver(consolidated[0]);
-        }
       } catch (err) {
         console.warn('Erro ao carregar lista de motoristas:', err);
       } finally {
@@ -151,7 +182,23 @@ export default function DossiesPage() {
       }
     }
     loadDrivers();
-  }, [initialDriverName]);
+  }, []); // Dependência vazia, roda apenas uma vez no mount!
+
+  // Seleciona o motorista com base no initialDriverName ou na lista carregada (decupado de loadDrivers)
+  useEffect(() => {
+    if (loadingList) return;
+    if (initialDriverName) {
+      const match = driversList.find(d => d.nome.toLowerCase() === initialDriverName.toLowerCase());
+      if (match) {
+        setSelectedDriver(match);
+      } else if (driversList.length > 0) {
+        // Cria motorista temporário se veio parametrizado mas não está na listagem
+        setSelectedDriver({ nome: initialDriverName, placa: '', transportadora: '—', frota: '', turno: 'diurno' });
+      }
+    } else if (driversList.length > 0) {
+      setSelectedDriver(driversList[0]);
+    }
+  }, [driversList, initialDriverName, loadingList]);
 
   // Carrega prontuário, telemetria e atendimentos do motorista selecionado
   useEffect(() => {
@@ -163,7 +210,16 @@ export default function DossiesPage() {
       setAiReport(null);
 
       // Reset
-      setHealthData({ escala_epworth: 0, polissonografia: '', historico_clinico: '', ultimo_exame_em: '' });
+      setHealthData({
+        escala_epworth: 0,
+        polissonografia: '',
+        historico_clinico: '',
+        ultimo_exame_em: '',
+        placa: selectedDriver.placa || '',
+        transportadora: selectedDriver.transportadora || '',
+        frota: selectedDriver.frota || '',
+        turno: selectedDriver.turno || 'diurno',
+      });
       setTelemetryEvents([]);
       setAtendimentosList([]);
 
@@ -189,6 +245,10 @@ export default function DossiesPage() {
             polissonografia: healthRecord.polissonografia ?? '',
             historico_clinico: healthRecord.historico_clinico ?? '',
             ultimo_exame_em: healthRecord.ultimo_exame_em ?? '',
+            placa: healthRecord.placa ?? selectedDriver.placa ?? '',
+            transportadora: healthRecord.transportadora ?? selectedDriver.transportadora ?? '',
+            frota: healthRecord.frota ?? selectedDriver.frota ?? '',
+            turno: healthRecord.turno ?? selectedDriver.turno ?? 'diurno',
           });
         }
 
@@ -243,6 +303,10 @@ export default function DossiesPage() {
         polissonografia: healthData.polissonografia || null,
         historico_clinico: healthData.historico_clinico || null,
         ultimo_exame_em: healthData.ultimo_exame_em || null,
+        placa: healthData.placa || null,
+        transportadora: healthData.transportadora || null,
+        frota: healthData.frota || null,
+        turno: healthData.turno || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -254,6 +318,22 @@ export default function DossiesPage() {
 
       toast('Dados clínicos de saúde salvos com sucesso!', 'success');
       setEditingHealth(false);
+
+      // Atualiza o motorista selecionado e a lista na memória para refletir imediatamente!
+      setSelectedDriver(prev => ({
+        ...prev,
+        placa: payload.placa || '',
+        transportadora: payload.transportadora || '—',
+        frota: payload.frota || '',
+        turno: payload.turno || 'diurno',
+      }));
+      setDriversList(prev => prev.map(d => d.nome.toUpperCase() === selectedDriver.nome.toUpperCase() ? {
+        ...d,
+        placa: payload.placa || '',
+        transportadora: payload.transportadora || '—',
+        frota: payload.frota || '',
+        turno: payload.turno || 'diurno',
+      } : d));
     } catch (err) {
       toast('Erro ao salvar prontuário: ' + err.message, 'error');
     } finally {
@@ -378,7 +458,7 @@ export default function DossiesPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   <span>{d.placa || 'Sem placa'}</span>
-                  <span>{d.transportadora}</span>
+                  <span>{resolveMonitorName(d.transportadora)}</span>
                 </div>
               </div>
             ))}
@@ -401,7 +481,7 @@ export default function DossiesPage() {
                   <div style={{ display: 'flex', gap: 12, color: 'var(--text-muted)', fontSize: 12, marginTop: 6, flexWrap: 'wrap' }}>
                     <span><strong style={{ color: 'var(--text-primary)' }}>Placa:</strong> {selectedDriver.placa || '—'}</span>
                     <span>·</span>
-                    <span><strong style={{ color: 'var(--text-primary)' }}>Transportadora:</strong> {selectedDriver.transportadora}</span>
+                    <span><strong style={{ color: 'var(--text-primary)' }}>Transportadora:</strong> {resolveMonitorName(selectedDriver.transportadora)}</span>
                     {selectedDriver.frota && (
                       <>
                         <span>·</span>
@@ -496,6 +576,51 @@ export default function DossiesPage() {
                           onChange={e => setHealthData(prev => ({ ...prev, historico_clinico: e.target.value }))}
                           style={{ minHeight: 90, height: '100%' }}
                         />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="form-group">
+                          <label className="form-label">Placa</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.placa}
+                            onChange={e => setHealthData(prev => ({ ...prev, placa: e.target.value }))}
+                            placeholder="Placa do veículo"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Transportadora</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.transportadora}
+                            onChange={e => setHealthData(prev => ({ ...prev, transportadora: e.target.value }))}
+                            placeholder="Nome da transportadora"
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="form-group">
+                          <label className="form-label">Frota</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.frota}
+                            onChange={e => setHealthData(prev => ({ ...prev, frota: e.target.value }))}
+                            placeholder="Identificação da frota"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Turno predominante</label>
+                          <select
+                            className="form-control"
+                            value={healthData.turno}
+                            onChange={e => setHealthData(prev => ({ ...prev, turno: e.target.value }))}
+                          >
+                            <option value="diurno">Diurno</option>
+                            <option value="noturno">Noturno</option>
+                          </select>
+                        </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
                         <button type="button" className="btn btn-ghost" onClick={() => setEditingHealth(false)} disabled={savingHealth}>Cancelar</button>

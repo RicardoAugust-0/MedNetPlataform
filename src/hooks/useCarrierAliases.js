@@ -56,5 +56,12 @@ export function useCarrierAliases() {
   // Resolve o nome da transportadora para o nome usado na planilha de intervenções.
   const resolveAlias = useCallback((name) => aliases[name] || name, [aliases]);
 
-  return { aliases, loading, setAliases, resolveAlias };
+  // Resolve o nome da planilha/raw de volta para o nome do Monitor (clean).
+  const resolveMonitorName = useCallback((name) => {
+    if (!name) return '';
+    const clean = Object.keys(aliases).find(key => aliases[key] === name);
+    return clean || name;
+  }, [aliases]);
+
+  return { aliases, loading, setAliases, resolveAlias, resolveMonitorName };
 }
