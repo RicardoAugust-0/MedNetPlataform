@@ -20,7 +20,13 @@ export const COLUMNS = {
   duracao:        'Duração',
   analise_ia:     'Análise de IA',
   id_evento:      'Id do Evento',
+  status:         'Status',
 };
+
+export const FINALIZADO_STATUS = new Set([
+  'Finalizado',
+  'Auto Finalizado (complementar)',
+]);
 
 // Eventos que disparam INTERVENÇÃO IMEDIATA (coluna "Nome" do CSV).
 export const INTERVENCAO_EVENTOS = [

@@ -19,6 +19,7 @@ import { buildClearMap, isAfterClear } from '../shared/history.js';
 import { emptyDriver, emptyStats } from '../base.js';
 import {
   COLUMNS,
+  FINALIZADO_STATUS,
   INTERVENCAO_EVENTOS,
   TECNICO_EVENTOS,
   MIN_MOVING_SPEED_KMH,
@@ -92,11 +93,13 @@ export async function parse(file, { history = [] } = {}) {
   const iDuracao  = findCol(headers, COLUMNS.duracao);
   const iAnalise  = findCol(headers, COLUMNS.analise_ia);
   const iIdEvento = findCol(headers, COLUMNS.id_evento);
+  const iStatus   = findCol(headers, COLUMNS.status);
 
   const clearMap = buildClearMap(history);
 
   let filtradosPorVelocidade = 0;
   let filtradosPorHistorico  = 0;
+  let totalFechados          = 0;
 
   const byPlaca = {};
   // Linhas brutas aprovadas no filtro — usadas pelo writer VPS para driver_events.
@@ -106,14 +109,63 @@ export async function parse(file, { history = [] } = {}) {
     const placa = String(row[iPlaca] || '').trim();
     if (!placa) continue;
 
+    const statusRaw = iStatus >= 0 ? String(row[iStatus] || '').trim() : '';
+    const isFinalizado = FINALIZADO_STATUS.has(statusRaw);
+
     // Velocidade Maxtrack já vem em km/h (não dividir por 10).
     const speed = iVel >= 0 ? parseSpeed(row[iVel]) : null;
+    const eventDate = iHora >= 0 ? parseEventDate(row[iHora]) : null;
+
+    if (isFinalizado) {
+      totalFechados++;
+
+      const nomeEvento = iEvento  >= 0 ? String(row[iEvento]  || '').trim() : '';
+      const sevRaw     = iSev     >= 0 ? String(row[iSev]     || '').trim() : '';
+      const descricao  = iDescricao >= 0 ? String(row[iDescricao] || '').trim() : '';
+      const localidade = iLocal   >= 0 ? String(row[iLocal]   || '').trim() : '';
+      const analise    = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
+      const idEvento   = iIdEvento >= 0 ? String(row[iIdEvento] || '').trim() : '';
+      const duracao    = iDuracao >= 0 ? parseDuracao(row[iDuracao]) : null;
+
+      const nomeNorm   = normalize(nomeEvento);
+      const bucket     = INTERVENCAO_NORM.includes(nomeNorm) ? 'intervencao'
+                       : TECNICO_NORM.includes(nomeNorm)     ? 'tecnico'
+                       : 'reportar';
+
+      const motoristaNome = iNome >= 0 && row[iNome] ? String(row[iNome]).trim() : null;
+      const cpfVal = iCpf >= 0 && row[iCpf] ? String(row[iCpf]).trim() : null;
+      const matriculaVal = iMatric >= 0 && row[iMatric] ? String(row[iMatric]).trim() : null;
+      const transportadoraVal = iTransp >= 0 ? String(row[iTransp] || '').trim() || '—' : '—';
+      const frotaVal = iFrota >= 0 ? String(row[iFrota] || '').trim() : '';
+
+      rawEventRows.push({
+        platform_id:          'maxtrack',
+        placa,
+        nome:                 motoristaNome,
+        cpf:                  cpfVal,
+        matricula:            matriculaVal,
+        transportadora:       transportadoraVal,
+        frota:                frotaVal,
+        nome_evento:          nomeEvento,
+        descricao:            descricao || null,
+        categoria_bucket:     bucket,
+        severidade:           mapSeveridade(sevRaw),
+        turno:                eventDate ? parseTurno(eventDate) : 'diurno',
+        localidade:           localidade || null,
+        velocidade_kmh:       speed,
+        duracao_seg:          duracao,
+        analise_ia_plataforma: analise || null,
+        raw_event_type_id:    idEvento || null,
+        ocorrido_em:          eventDate ? eventDate.toISOString() : null,
+      });
+
+      continue;
+    }
+
     if (speed !== null && speed < MIN_MOVING_SPEED_KMH) {
       filtradosPorVelocidade++;
       continue;
     }
-
-    const eventDate = iHora >= 0 ? parseEventDate(row[iHora]) : null;
 
     const clearAt = clearMap[placa];
     if (clearAt && eventDate && !isAfterClear(eventDate, clearAt)) {
@@ -250,6 +302,7 @@ export async function parse(file, { history = [] } = {}) {
     totalEventos:           rows.slice(1).filter(r => String(r[iPlaca] || '').trim()).length,
     filtradosPorVelocidade,
     filtradosPorHistorico,
+    totalFechados,
   };
 
   return { drivers, stats, rawEventRows };
