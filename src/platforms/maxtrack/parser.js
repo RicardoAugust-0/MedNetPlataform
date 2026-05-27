@@ -1,7 +1,7 @@
 // Parser de planilhas Maxtrack.
 //
-// Recebe um File (xlsx/xls/csv) + contexto { history } e devolve { drivers, stats }
-// no formato canônico definido em ../base.js.
+// Recebe um File (xlsx/xls/csv) + contexto { history } e devolve { drivers, stats }.
+// Formato canônico definido em ../base.js.
 //
 // Regras aplicadas:
 //   1. Velocidade < MIN_MOVING_SPEED_KMH → ignorado
@@ -9,6 +9,9 @@
 //   3. Classificação em INTERVENÇÃO / TÉCNICO / REPORTAR
 //   4. Filtro de histórico via buildClearMap / isAfterClear
 //   5. Severidade máxima e turno predominante
+//
+// Nota: exportações Maxtrack em CSV usam ponto-e-vírgula como delimitador.
+// XLSX.read com { type: 'array' } não detecta isso; usamos { type: 'string', FS: ';' }.
 
 import { normalize } from '../shared/normalize.js';
 import { parseSpeed, parseEventDate, parseTurno, maxSeveridade } from '../shared/parsers.js';
@@ -27,6 +30,13 @@ const TECNICO_NORM     = TECNICO_EVENTOS.map(normalize);
 
 function mapSeveridade(raw) {
   return SEV_MAP[raw] || 'Normal';
+}
+
+// Duração vem como "15.661 segundos" — extrai só o número.
+function parseDuracao(raw) {
+  if (raw == null || raw === '') return null;
+  const n = parseFloat(String(raw).split(' ')[0]);
+  return Number.isFinite(n) ? n : null;
 }
 
 // Detecta o índice de uma coluna pelo nome (case-insensitive, sem acentos).
@@ -49,23 +59,39 @@ export function detect({ fileName = '', headers = [] } = {}) {
 export async function parse(file, { history = [] } = {}) {
   const XLSX = await import('xlsx');
 
-  const buf     = await file.arrayBuffer();
-  const wb      = XLSX.read(buf, { type: 'array', cellDates: true });
-  const sheet   = wb.Sheets[wb.SheetNames[0]];
-  const rows    = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  // Maxtrack CSV usa ponto-e-vírgula — XLSX precisa de { type: 'string', FS: ';' }.
+  const isCSV = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+  let wb;
+  if (isCSV) {
+    const text = await file.text();
+    wb = XLSX.read(text, { type: 'string', FS: ';' });
+  } else {
+    const buf = await file.arrayBuffer();
+    wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  }
+
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
   if (rows.length < 2) return { drivers: [], stats: emptyStats() };
 
   const headers = rows[0].map(String);
 
-  const iPlaca   = findCol(headers, COLUMNS.placa);
-  const iNome    = findCol(headers, COLUMNS.motorista);
-  const iTransp  = findCol(headers, COLUMNS.transportadora);
-  const iFrota   = findCol(headers, COLUMNS.frota);
-  const iEvento  = findCol(headers, COLUMNS.evento);
-  const iSev     = findCol(headers, COLUMNS.severidade);
-  const iHora    = findCol(headers, COLUMNS.hora);
-  const iVel     = findCol(headers, COLUMNS.velocidade);
+  const iPlaca    = findCol(headers, COLUMNS.placa);
+  const iNome     = findCol(headers, COLUMNS.motorista);
+  const iCpf      = findCol(headers, COLUMNS.cpf);
+  const iMatric   = findCol(headers, COLUMNS.matricula);
+  const iTransp   = findCol(headers, COLUMNS.transportadora);
+  const iFrota    = findCol(headers, COLUMNS.frota);
+  const iEvento   = findCol(headers, COLUMNS.evento);
+  const iDescricao= findCol(headers, COLUMNS.descricao);
+  const iSev      = findCol(headers, COLUMNS.severidade);
+  const iHora     = findCol(headers, COLUMNS.hora);
+  const iVel      = findCol(headers, COLUMNS.velocidade);
+  const iLocal    = findCol(headers, COLUMNS.localidade);
+  const iDuracao  = findCol(headers, COLUMNS.duracao);
+  const iAnalise  = findCol(headers, COLUMNS.analise_ia);
+  const iIdEvento = findCol(headers, COLUMNS.id_evento);
 
   const clearMap = buildClearMap(history);
 
@@ -73,11 +99,14 @@ export async function parse(file, { history = [] } = {}) {
   let filtradosPorHistorico  = 0;
 
   const byPlaca = {};
+  // Linhas brutas aprovadas no filtro — usadas pelo writer VPS para driver_events.
+  const rawEventRows = [];
 
   for (const row of rows.slice(1)) {
     const placa = String(row[iPlaca] || '').trim();
     if (!placa) continue;
 
+    // Velocidade Maxtrack já vem em km/h (não dividir por 10).
     const speed = iVel >= 0 ? parseSpeed(row[iVel]) : null;
     if (speed !== null && speed < MIN_MOVING_SPEED_KMH) {
       filtradosPorVelocidade++;
@@ -96,6 +125,8 @@ export async function parse(file, { history = [] } = {}) {
       byPlaca[placa] = {
         placa,
         nome:           null,
+        cpf:            null,
+        matricula:      null,
         transportadora: iTransp >= 0 ? String(row[iTransp] || '').trim() || '—' : '—',
         frota:          iFrota  >= 0 ? String(row[iFrota]  || '').trim() : '',
         eventos:        [],
@@ -104,19 +135,53 @@ export async function parse(file, { history = [] } = {}) {
     }
 
     const entry = byPlaca[placa];
-    if (!entry.nome && iNome >= 0 && row[iNome]) entry.nome = String(row[iNome]).trim();
+    if (!entry.nome      && iNome   >= 0 && row[iNome])   entry.nome      = String(row[iNome]).trim();
+    if (!entry.cpf       && iCpf    >= 0 && row[iCpf])    entry.cpf       = String(row[iCpf]).trim();
+    if (!entry.matricula && iMatric >= 0 && row[iMatric]) entry.matricula = String(row[iMatric]).trim();
 
-    const nomeEvento  = iEvento >= 0 ? String(row[iEvento] || '').trim() : '';
-    const sevRaw      = iSev    >= 0 ? String(row[iSev]    || '').trim() : '';
+    const nomeEvento = iEvento  >= 0 ? String(row[iEvento]  || '').trim() : '';
+    const sevRaw     = iSev     >= 0 ? String(row[iSev]     || '').trim() : '';
+    const descricao  = iDescricao >= 0 ? String(row[iDescricao] || '').trim() : '';
+    const localidade = iLocal   >= 0 ? String(row[iLocal]   || '').trim() : '';
+    const analise    = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
+    const idEvento   = iIdEvento >= 0 ? String(row[iIdEvento] || '').trim() : '';
+    const duracao    = iDuracao >= 0 ? parseDuracao(row[iDuracao]) : null;
+
+    const nomeNorm   = normalize(nomeEvento);
+    const bucket     = INTERVENCAO_NORM.includes(nomeNorm) ? 'intervencao'
+                     : TECNICO_NORM.includes(nomeNorm)     ? 'tecnico'
+                     : 'reportar';
 
     entry.eventos.push({
       _nome:       nomeEvento,
-      _nomeNorm:   normalize(nomeEvento),
+      _nomeNorm:   nomeNorm,
       _severidade: mapSeveridade(sevRaw),
       _eventDate:  eventDate,
     });
 
     entry.turnos.push(eventDate ? parseTurno(eventDate) : 'diurno');
+
+    // Linha bruta para ingestão no driver_events (VPS writer).
+    rawEventRows.push({
+      platform_id:          'maxtrack',
+      placa,
+      nome:                 entry.nome,
+      cpf:                  entry.cpf,
+      matricula:            entry.matricula,
+      transportadora:       entry.transportadora,
+      frota:                entry.frota,
+      nome_evento:          nomeEvento,
+      descricao:            descricao || null,
+      categoria_bucket:     bucket,
+      severidade:           mapSeveridade(sevRaw),
+      turno:                eventDate ? parseTurno(eventDate) : 'diurno',
+      localidade:           localidade || null,
+      velocidade_kmh:       speed,
+      duracao_seg:          duracao,
+      analise_ia_plataforma: analise || null,
+      raw_event_type_id:    idEvento || null,
+      ocorrido_em:          eventDate ? eventDate.toISOString() : null,
+    });
   }
 
   const drivers = Object.values(byPlaca).map(d => {
@@ -187,5 +252,5 @@ export async function parse(file, { history = [] } = {}) {
     filtradosPorHistorico,
   };
 
-  return { drivers, stats };
+  return { drivers, stats, rawEventRows };
 }

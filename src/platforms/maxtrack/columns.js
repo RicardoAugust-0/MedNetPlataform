@@ -3,44 +3,51 @@
 export const MIN_MOVING_SPEED_KMH = 10;
 
 // Mapa de colunas esperadas na planilha exportada pelo portal Maxtrack.
-// Os nomes refletem o cabeçalho padrão da exportação.
+// Nomes conferidos contra exportação real (.csv, delimitador ponto-e-vírgula).
 export const COLUMNS = {
-  placa: "Placa",
-  motorista: "Motorista",
-  transportadora: "Empresa",
-  frota: "Frota",
-  evento: "Evento",
-  severidade: "Criticidade",
-  hora: "Data/Hora",
-  velocidade: "Velocidade",
+  placa:          'Identificador/Placa',
+  motorista:      'Motorista',
+  cpf:            'CPF',
+  matricula:      'Matricula do Motorista',
+  transportadora: 'Empresa',
+  frota:          'Frota',
+  evento:         'Nome',
+  descricao:      'Descrição',
+  severidade:     'Criticidade',
+  hora:           'Data',
+  velocidade:     'Velocidade Inicial',
+  localidade:     'Localidade',
+  duracao:        'Duração',
+  analise_ia:     'Análise de IA',
+  id_evento:      'Id do Evento',
 };
 
-// Eventos que disparam INTERVENÇÃO IMEDIATA.
+// Eventos que disparam INTERVENÇÃO IMEDIATA (coluna "Nome" do CSV).
 export const INTERVENCAO_EVENTOS = [
-  "Detecção de bocejo",
-  "Detecção olhos fechados ou falta de atenção - N1",
-  "Detecção olhos fechados ou falta de atenção - N2",
-  "Somatório de olhos fechados ou falta de atenção na ultima hora - N1",
+  'Detecção de bocejo',
+  'Detecção olhos fechados ou falta de atenção - N1',
+  'Detecção olhos fechados ou falta de atenção - N2',
+  'Somatório de olhos fechados ou falta de atenção na ultima hora - N1',
 ];
 
 // Eventos TÉCNICOS (não acionáveis pelo operador).
-export const TECNICO_EVENTOS = ["Câmera obstruída"];
+export const TECNICO_EVENTOS = ['Câmera obstruída'];
 
 // Mapeamento de severidade Maxtrack → canônico (base.js usa Gravíssimo/Grave/Normal).
 export const SEV_MAP = {
-  Gravíssimo: "Gravíssimo",
-  Grave: "Grave",
-  Médio: "Normal",
+  Gravíssimo: 'Gravíssimo',
+  Grave:      'Grave',
+  Médio:      'Normal',
 };
 
 // Taxonomia agregada para filtros do Monitor.
 export const TAXONOMY = {
   intervencao: [
-    "Bocejo",
-    "Olhos fechados N1",
-    "Olhos fechados N2",
-    "Somatório olhos última hora",
+    'Bocejo',
+    'Olhos fechados N1',
+    'Olhos fechados N2',
+    'Somatório olhos última hora',
   ],
-  reportar: ["Risco / Comportamento indevido"],
-  tecnico: ["Câmera obstruída"],
+  reportar: ['Risco / Comportamento indevido'],
+  tecnico:  ['Câmera obstruída'],
 };
