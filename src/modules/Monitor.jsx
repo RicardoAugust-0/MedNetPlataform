@@ -695,6 +695,7 @@ export default function Monitor() {
           history={history} histLoading={histLoading} histError={histError}
           loadByRange={loadByRange}
           currentPage={currentPage} setCurrentPage={setCurrentPage} pageSize={pageSize}
+          initialSearch={searchParams.get('placa') || ''}
         />
       )}
 
