@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { PANEL_TITLES } from '../data';
 import { fmtTime } from '../utils';
 
 export default function Topbar() {
-  const { activePanel, theme, setTheme } = useApp();
+  const { theme, setTheme } = useApp();
+  const location = useLocation();
   const [clock, setClock] = useState(fmtTime());
 
   useEffect(() => {
@@ -12,11 +14,11 @@ export default function Topbar() {
     return () => clearInterval(id);
   }, []);
 
-  const meta = PANEL_TITLES[activePanel] || { t: activePanel, s: '' };
-  // Turno: diurno 06h-18h, noturno 18h-06h (docs PROJECT.md §8.1)
+  const panelId = location.pathname.split('/')[1] || 'dashboard';
+  const meta = PANEL_TITLES[panelId] || { t: panelId, s: '' };
   const hour = new Date().getHours();
   const turno = hour >= 6 && hour < 18 ? 'diurno' : 'noturno';
-  const subtitle = activePanel === 'dashboard' ? `${meta.s} · turno ${turno}` : meta.s;
+  const subtitle = panelId === 'dashboard' ? `${meta.s} · turno ${turno}` : meta.s;
 
   return (
     <header className="topbar">

@@ -1,5 +1,6 @@
 // deno-lint-ignore-file
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
@@ -70,7 +71,11 @@ async function notificarCriticos(criticos) {
 }
 
 export default function Monitor() {
-  const { drivers, replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, filters, setFilters, setActivePanel, platformId, setPlatformId } = useApp();
+  const navigate = useNavigate();
+  const { tab: activeTab = 'intervencao' } = useParams();
+  const [searchParams] = useSearchParams();
+
+  const { drivers, replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, filters, setFilters, platformId, setPlatformId } = useApp();
   const { profile, session } = useAuth();
   const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
@@ -136,7 +141,6 @@ export default function Monitor() {
     return () => window.removeEventListener('keydown', onKey);
   }, [templateModal]);
 
-  const [activeTab,  setActiveTab]  = useState('intervencao');
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => setCurrentPage(1), [activeTab]);
   const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
@@ -281,7 +285,7 @@ export default function Monitor() {
       const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
       const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
       setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
-      setActiveTab('intervencao');
+      navigate('/monitor/intervencao', { replace: true });
       notificarCriticos(merged.filter(d => d.alertas >= 5));
 
       // Auto-register platform-specific discards silently in the background
@@ -336,7 +340,7 @@ export default function Monitor() {
       const autoDescMsg   = (stats.autoDescartes || []).length > 0 ? ` · ${stats.autoDescartes.reduce((s, x) => s + x.count, 0)} auto-descartado(s)` : '';
       const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
       setStatusMsg(`${platform.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
-      setActiveTab('intervencao');
+      navigate('/monitor/intervencao', { replace: true });
       notificarCriticos(merged.filter(d => d.alertas >= 5));
       for (const item of (stats.autoDescartes || [])) {
         registrar({
@@ -351,7 +355,7 @@ export default function Monitor() {
         setStatusMsg(`Token Sascar expirado. Clique no Favorito Sascar no portal para renovar e tente novamente.`);
       } else if (err.code === 'NO_TOKEN') {
         setStatusMsg(`Token Sascar não configurado. Acesse Meu Perfil → Integrações → Sascar.`);
-        setActivePanel('perfil');
+        navigate('/perfil');
       } else {
         setStatusMsg(`Erro ao buscar ${platform.name}: ${err.message}`);
       }
@@ -593,7 +597,7 @@ export default function Monitor() {
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
         hasSascarToken={!!profile?.sascar_token} sascarTokenSavedAt={profile?.sascar_token_saved_at || null}
-        setActivePanel={setActivePanel}
+        onNavigateToPerfil={() => navigate('/perfil')}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
         autoRefresh={autoRefresh} autoRefreshMin={autoRefreshMin}
@@ -617,7 +621,7 @@ export default function Monitor() {
           ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
           ['historico',   'ti-history',     'Histórico',         history.length,     null],
         ].map(([id, icon, lbl, cnt, color]) => (
-          <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
+          <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => navigate('/monitor/' + id)}>
             <i className={`ti ${icon}`} style={color ? { color } : {}}></i> {lbl}
             <span className="tab-count">{cnt}</span>
           </div>
@@ -709,7 +713,7 @@ export default function Monitor() {
 
       <MonitorModals
         templateModal={templateModal} setTemplateModal={setTemplateModal}
-        templates={templates} applyTemplate={applyTemplate} setActivePanel={setActivePanel}
+        templates={templates} applyTemplate={applyTemplate} onNavigateToTemplates={() => navigate('/templates')}
         dossieDriver={dossieDriver} setDossieDriver={setDossieDriver}
         dossieLoading={dossieLoading} dossieData={dossieData}
         discardModal={discardModal} setDiscardModal={setDiscardModal} onDiscardConfirm={performDiscard}

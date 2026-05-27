@@ -14,7 +14,7 @@ export default function MonitorModals({
   setTemplateModal,
   templates,
   applyTemplate,
-  setActivePanel,
+  onNavigateToTemplates,
   dossieDriver,
   setDossieDriver,
   dossieLoading,
@@ -85,7 +85,7 @@ export default function MonitorModals({
                 Nenhum template de contato cadastrado.
                 <div style={{ marginTop: 8 }}>
                   <button className="btn btn-sm btn-ghost" style={{ textDecoration:'underline' }}
-                    onClick={() => { setTemplateModal(null); setActivePanel('templates'); }}>
+                    onClick={() => { setTemplateModal(null); onNavigateToTemplates?.(); }}>
                     Criar um agora
                   </button>
                 </div>

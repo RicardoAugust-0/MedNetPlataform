@@ -5,18 +5,18 @@ export const APP_CONFIG = {
 };
 
 export const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard',      icon: 'ti-layout-dashboard', group: 'Operação' },
-  { id: 'monitor',   label: 'Monitor de Frota', icon: 'ti-truck-delivery', group: 'Operação' },
-  { id: 'agenda',    label: 'Agenda',         icon: 'ti-calendar-event',   group: 'Operação' },
-  { id: 'crosscheck', label: 'Cross-Check',   icon: 'ti-list-check',      group: 'Operação' },
-  { id: 'templates', label: 'Templates',      icon: 'ti-message-2',        group: 'Conhecimento' },
-  { id: 'workspace', label: 'Workspace',      icon: 'ti-notebook',         group: 'Conhecimento' },
-  { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
-  { id: 'links',     label: 'Links Rápidos',  icon: 'ti-link',             group: 'Conhecimento' },
-  { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
-  { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
-  { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
-  { id: 'relatorios', label: 'Relatórios IA', icon: 'ti-report-analytics', group: 'Conta', adminOnly: true },
+  { id: 'dashboard',  label: 'Dashboard',       icon: 'ti-layout-dashboard', group: 'Operação',     path: '/dashboard' },
+  { id: 'monitor',    label: 'Monitor de Frota', icon: 'ti-truck-delivery',  group: 'Operação',     path: '/monitor/intervencao' },
+  { id: 'agenda',     label: 'Agenda',           icon: 'ti-calendar-event',  group: 'Operação',     path: '/agenda' },
+  { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Operação',     path: '/crosscheck' },
+  { id: 'templates',  label: 'Templates',        icon: 'ti-message-2',       group: 'Conhecimento', path: '/templates' },
+  { id: 'workspace',  label: 'Workspace',        icon: 'ti-notebook',        group: 'Conhecimento', path: '/workspace' },
+  { id: 'notas',      label: 'Bloco de Notas',   icon: 'ti-file-text',       group: 'Conhecimento', path: '/notas' },
+  { id: 'links',      label: 'Links Rápidos',    icon: 'ti-link',            group: 'Conhecimento', path: '/links' },
+  { id: 'perfil',     label: 'Meu Perfil',       icon: 'ti-user-circle',     group: 'Conta',        path: '/perfil' },
+  { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Conta',        path: '/admin',      adminOnly: true },
+  { id: 'analytics',  label: 'Analytics',        icon: 'ti-chart-pie',       group: 'Conta',        path: '/analytics',  adminOnly: true },
+  { id: 'relatorios', label: 'Relatórios IA',    icon: 'ti-report-analytics',group: 'Conta',        path: '/relatorios', adminOnly: true },
 ];
 
 export const PANEL_TITLES = {

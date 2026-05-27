@@ -11,7 +11,6 @@ function save(k, v) {
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
-  const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
   const { drivers, loading: driversLoading, lastChangeAt: driversLastChangeAt, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
@@ -23,7 +22,6 @@ export function AppProvider({ children }) {
   const [rhythm,      setRhythmState]      = useState(() => load('rhythm',   'operacional'));
 
   // Setters memoizados — referência estável evita re-render dos consumers.
-  const setActivePanel = useCallback((v) => { setActivePanelState(v); save('activePanel', v); }, []);
   const setPlatformId  = useCallback((v) => { setPlatformIdState(v);  save('platformId',  v); }, []);
   const setTheme       = useCallback((v) => { setThemeState(v);       save('theme',       v); }, []);
   const setDensity     = useCallback((v) => { setDensityState(v);     save('density',     v); }, []);
@@ -34,7 +32,6 @@ export function AppProvider({ children }) {
 
   // Sem useMemo no value, todo consumer de useApp() re-renderiza a cada render do Provider.
   const value = useMemo(() => ({
-    activePanel, setActivePanel,
     drivers, driversLoading, driversLastChangeAt,
     replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
     filters, setFilters,
@@ -46,7 +43,6 @@ export function AppProvider({ children }) {
     vibe, setVibe,
     rhythm, setRhythm,
   }), [
-    activePanel, setActivePanel,
     drivers, driversLoading, driversLastChangeAt,
     replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
     filters, setFilters,

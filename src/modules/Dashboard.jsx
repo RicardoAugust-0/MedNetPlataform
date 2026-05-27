@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos';
@@ -37,7 +38,8 @@ const PERIODOS = [
 ];
 
 export default function Dashboard() {
-  const { drivers: driversReal, driversLastChangeAt, setActivePanel, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
+  const navigate = useNavigate();
+  const { drivers: driversReal, driversLastChangeAt, theme, setTheme, density, setDensity, accent, setAccent } = useApp();
   const { history: atHistoryReal } = useAtendimentos();
   const { resolveAlias } = useCarrierAliases();
   const { profiles } = useProfiles();
@@ -337,7 +339,7 @@ export default function Dashboard() {
                   <div className="dg-tweaks-foot">
                     <button
                       className="dg-tweaks-link"
-                      onClick={() => { setTweaksOpen(false); setActivePanel('admin'); }}
+                      onClick={() => { setTweaksOpen(false); navigate('/admin'); }}
                       title="Unificar nomes diferentes da mesma transportadora"
                     >
                       <i className="ti ti-arrows-shuffle"></i>
@@ -388,7 +390,7 @@ export default function Dashboard() {
           >
             <i className={`ti ${tvMode ? 'ti-layout-sidebar-right-expand' : 'ti-layout-sidebar-left-collapse'}`}></i>
           </button>
-          <button className="dg-btn dg-btn-primary" onClick={() => setActivePanel('monitor')}>
+          <button className="dg-btn dg-btn-primary" onClick={() => navigate('/monitor/intervencao')}>
             <i className="ti ti-truck-delivery"></i> Abrir Monitor
           </button>
         </div>

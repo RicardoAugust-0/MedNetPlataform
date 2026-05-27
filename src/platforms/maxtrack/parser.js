@@ -115,7 +115,7 @@ export async function parse(file, { history = [] } = {}) {
 
     const eventDate = iHora >= 0 ? parseEventDate(row[iHora]) : null;
 
-    const clearAt = clearMap.get(placa);
+    const clearAt = clearMap[placa];
     if (clearAt && eventDate && !isAfterClear(eventDate, clearAt)) {
       filtradosPorHistorico++;
       continue;

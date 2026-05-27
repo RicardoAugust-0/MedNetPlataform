@@ -64,10 +64,10 @@ function SheetRow({ row }) {
   );
 }
 
-export default function HistoryTab({ history, histLoading, histError, loadByRange, currentPage, setCurrentPage, pageSize }) {
-  const [histPeriod, setHistPeriod] = useState('hoje');
+export default function HistoryTab({ history, histLoading, histError, loadByRange, currentPage, setCurrentPage, pageSize, initialSearch = '' }) {
+  const [histPeriod, setHistPeriod] = useState(initialSearch ? 'todos' : 'hoje');
   const [histTipo, setHistTipo]     = useState('');
-  const [histSearch, setHistSearch] = useState('');
+  const [histSearch, setHistSearch] = useState(initialSearch);
   const [histFrom, setHistFrom]     = useState('');
   const [histTo, setHistTo]         = useState('');
 

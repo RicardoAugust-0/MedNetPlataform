@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useApp } from "./context.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import { supabase } from "./supabase.js";
@@ -24,14 +25,11 @@ import Analytics from "./modules/Analytics.jsx";
 import CrossCheck from "./modules/CrossCheck.jsx";
 import Reports from "./modules/Reports.jsx";
 
-function Panel({ id, children }) {
-  const { activePanel } = useApp();
-  if (activePanel !== id) return null;
-  return (
-    <div className="panel active">
-      {children}
-    </div>
-  );
+function AdminGuard({ children }) {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  if (profile.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  return children;
 }
 
 function ReminderNotifier() {
@@ -79,8 +77,6 @@ function ReminderNotifier() {
   return null;
 }
 
-// Detecta #sascar-token=... na URL (enviado pelo bookmarklet do portal Sascar).
-// Salva o token no perfil do operador e limpa o hash sem recarregar a página.
 function SascarTokenHandler() {
   const { profile, updateProfile } = useAuth();
   const toast = useToast();
@@ -94,7 +90,6 @@ function SascarTokenHandler() {
     const token = param.get('sascar-token');
     if (!token || !profile?.id) return;
 
-    // Limpa o hash imediatamente para não ficar visível na URL
     window.history.replaceState(null, '', window.location.pathname);
 
     const savedAt = new Date().toISOString();
@@ -142,22 +137,23 @@ function AppShell() {
         <div className="main-area">
           <Topbar />
           <div className="content-area">
-            <Panel id="dashboard"><Dashboard /></Panel>
-            <Panel id="monitor"><Monitor /></Panel>
-            <Panel id="agenda"><Agenda /></Panel>
-            <Panel id="templates"><Templates /></Panel>
-            <Panel id="workspace"><Workspace /></Panel>
-            <Panel id="notas"><Notes /></Panel>
-            <Panel id="links"><Links /></Panel>
-            <Panel id="perfil"><Profile /></Panel>
-            <Panel id="crosscheck"><CrossCheck /></Panel>
-            {profile?.role === 'admin' && (
-              <>
-                <Panel id="admin"><Admin /></Panel>
-                <Panel id="analytics"><Analytics /></Panel>
-                <Panel id="relatorios"><Reports /></Panel>
-              </>
-            )}
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/monitor" element={<Navigate to="/monitor/intervencao" replace />} />
+              <Route path="/monitor/:tab" element={<Monitor />} />
+              <Route path="/agenda" element={<Agenda />} />
+              <Route path="/crosscheck" element={<CrossCheck />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/workspace" element={<Workspace />} />
+              <Route path="/notas" element={<Notes />} />
+              <Route path="/links" element={<Links />} />
+              <Route path="/perfil" element={<Profile />} />
+              <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
+              <Route path="/analytics" element={<AdminGuard><Analytics /></AdminGuard>} />
+              <Route path="/relatorios" element={<AdminGuard><Reports /></AdminGuard>} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
           </div>
         </div>
         {profile?.role === 'admin' && maintenance.enabled && (

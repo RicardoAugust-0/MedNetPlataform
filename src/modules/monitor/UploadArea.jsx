@@ -42,7 +42,7 @@ export default function UploadArea({
   historyAgeMin,
   reloadHistory,
   histLoading,
-  setActivePanel,
+  onNavigateToPerfil,
   autoRefresh,
   autoRefreshMin,
   onAutoRefreshChange,
@@ -241,7 +241,7 @@ export default function UploadArea({
               </span>
               <button
                 className="btn btn-sm btn-ghost"
-                onClick={() => setActivePanel?.('perfil')}
+                onClick={() => onNavigateToPerfil?.()}
               >
                 <i className="ti ti-settings"></i> Configurar
               </button>
