@@ -1,6 +1,6 @@
 // deno-lint-ignore-file
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase.js';
+import { supabase, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 
@@ -35,6 +35,9 @@ const PERIOD_OPTS = [
 function renderMarkdown(md) {
   if (!md) return '';
   let html = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
     .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
@@ -89,8 +92,12 @@ export default function Reports() {
 
   // Carrega transportadoras disponíveis em driver_events
   useEffect(() => {
-    supabase.from('driver_events').select('transportadora').not('transportadora', 'is', null).limit(4000)
-      .then(({ data }) => {
+    supabase.rpc('get_distinct_transportadoras')
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Erro ao buscar transportadoras:', error.message);
+          return;
+        }
         if (!data) return;
         const cleaned = data.map(r => resolveMonitorName(r.transportadora)).filter(Boolean);
         const uniq = [...new Set(cleaned)].sort();
@@ -113,7 +120,10 @@ export default function Reports() {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
 
-      if (fnErr) throw new Error(fnErr.message);
+      if (fnErr) {
+        const errMsg = await getFunctionErrorMessage(fnErr);
+        throw new Error(errMsg);
+      }
       if (data?.error) throw new Error(data.error);
 
       setReport({ text: data.report, meta: data.meta });

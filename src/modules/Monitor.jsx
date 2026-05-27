@@ -18,7 +18,7 @@ import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { supabase } from '../supabase.js';
+import { supabase, getFunctionErrorMessage } from '../supabase.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -49,7 +49,10 @@ async function postToSheets(payload, accessToken) {
       },
       body: payload,
     });
-    if (error) throw error;
+    if (error) {
+      const errMsg = await getFunctionErrorMessage(error);
+      throw new Error(errMsg);
+    }
     if (!data?.ok) console.warn('[Sheets]', data?.error);
   } catch (e) {
     console.warn('[Sheets] falha ao registrar na planilha:', e.message);

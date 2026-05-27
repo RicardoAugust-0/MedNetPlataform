@@ -7,7 +7,7 @@
 
 import { TAXONOMY, DINON_CARRIERS_NORM } from './columns.js';
 import { parse, detect } from './parser.js';
-import { supabase } from '../../supabase.js';
+import { supabase, getFunctionErrorMessage } from '../../supabase.js';
 import { normalize } from '../shared/normalize.js';
 
 const isFumo = tipo => /\bfum(o|ando|ante|ar)\b/i.test(tipo);
@@ -53,7 +53,8 @@ const sascar = {
       });
 
       if (fnErr) {
-        throw fnErr;
+        const errMsg = await getFunctionErrorMessage(fnErr);
+        throw new Error(errMsg);
       }
       if (!data || data.error) {
         const err = new Error(data?.error || 'Erro Sascar');

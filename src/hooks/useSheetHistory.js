@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 
 export function useSheetHistory() {
   const [rows, setRows]       = useState([]);
@@ -24,7 +24,10 @@ export function useSheetHistory() {
         queryParams: meses ? { meses } : undefined,
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
-      if (fnErr) throw new Error(fnErr.message);
+      if (fnErr) {
+        const errMsg = await getFunctionErrorMessage(fnErr);
+        throw new Error(errMsg);
+      }
       if (!data?.ok) throw new Error(data?.error || 'Erro ao ler planilha Google Sheets.');
 
       setRows(data.rows || []);

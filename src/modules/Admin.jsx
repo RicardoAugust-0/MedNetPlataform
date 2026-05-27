@@ -6,7 +6,7 @@ import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useToast } from '../hooks/useToast.jsx';
-import { supabase } from '../supabase.js';
+import { supabase, getFunctionErrorMessage } from '../supabase.js';
 import { iniciais } from '../utils.js';
 import { exportCSV } from './monitor/utils.jsx';
 
@@ -101,7 +101,8 @@ export default function Admin() {
       body: { email: inviteEmail },
     });
     if (error) {
-      toast(error.message, 'error');
+      const errMsg = await getFunctionErrorMessage(error);
+      toast(errMsg, 'error');
     } else if (data?.error) {
       toast(data.error, 'error');
     } else {

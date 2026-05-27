@@ -1,7 +1,7 @@
 // deno-lint-ignore-file
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
 import { useApp } from '../context.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -12,6 +12,9 @@ import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 function renderMarkdown(md) {
   if (!md) return '';
   let html = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
     .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
@@ -364,7 +367,10 @@ export default function DossiesPage() {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        const errMsg = await getFunctionErrorMessage(error);
+        throw new Error(errMsg);
+      }
       if (data?.error) throw new Error(data.error);
 
       setAiReport(data.report);
