@@ -34,7 +34,6 @@ A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
   - `append-sheet`: registra atendimento em planilha Google.
   - `invite-user`: envia convite a novos operadores (apenas admin).
   - `pull-sascar`: busca alarmes do dia via API Sascar usando token do operador (bookmarklet).
-  - `pull-maxtrack`: autentica no portal Maxtrack com credenciais do operador e busca eventos do dia em janelas de 15 min paralelas.
 - **Google Apps Script:** Webhook de backup que reaproveita o payload da
   `append-sheet`.
 
@@ -78,7 +77,7 @@ src/
 │   │   ├── columns.js    # Mapa de colunas e taxonomia
 │   │   └── parser.js     # Parser xlsx/csv comentado
 │   ├── maxtrack/         # Adapter Maxtrack (scraper)
-│   │   ├── index.js      # Metadata + bloco scraper (chama pull-maxtrack)
+│   │   ├── index.js      # Metadata + bloco spreadsheet (parse de xlsx/csv)
 │   │   ├── columns.js    # Categorias, severidades e taxonomia
 │   │   └── parser.js     # parseApiResponse — transforma resposta da Edge Function
 │   └── _template/        # Esqueleto para novas plataformas
@@ -94,8 +93,7 @@ supabase/
     ├── append-sheet/index.ts   # Append Google Sheets
     ├── read-sheet/index.ts     # Leitura das abas mensais do Sheets
     ├── invite-user/index.ts    # Convite de operadores
-    ├── pull-sascar/index.ts    # Busca automática Sascar (alarm/page)
-    └── pull-maxtrack/index.ts  # Busca automática Maxtrack (event/events/load)
+    └── pull-sascar/index.ts    # Busca automática Sascar (alarm/page)
 ```
 
 ---
@@ -317,9 +315,8 @@ Edita `nome`, `cargo` e senha. E-mail é read-only.
 | Integração | O que armazena | Como configurar |
 |---|---|---|
 | Sascar | `sascar_token` em `profiles` | Arrastar o **bookmarklet** até a barra de favoritos; clicar uma vez por turno após login no portal |
-| Maxtrack | `maxtrack_email` + `maxtrack_password` em `profiles` | Preencher e-mail e senha do portal Maxtrack no formulário |
 
-Senha Maxtrack nunca é carregada em estado React — gravada direto no Supabase via `service_role` e lida exclusivamente pela Edge Function `pull-maxtrack`. O token Sascar é enviado via URL hash (`#sascar-token=…`) pelo bookmarklet e capturado por `SascarTokenHandler` em `App.jsx`.
+O token Sascar é enviado via URL hash (`#sascar-token=…`) pelo bookmarklet e capturado por `SascarTokenHandler` em `App.jsx`.
 
 ### 5.10. Administração (`modules/Admin.jsx`, admin-only)
 Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
@@ -440,52 +437,30 @@ Falsos positivos: **excluídos pelo servidor** via filtro `alarmLevelIds: '15,14
 
 ---
 
-## 5.14. Integração automática Maxtrack (Scraper)
+## 5.14. Integração Maxtrack (Planilha)
 
-A Maxtrack é integrada via **scraper server-side** — sem bookmarklet. O operador cadastra suas credenciais uma única vez em **Meu Perfil → Integrações → Maxtrack** e o MedNet faz login automaticamente a cada busca.
+A Maxtrack é integrada via **upload manual de planilha** — o mesmo fluxo da Sascar em modo `spreadsheet`. O operador exporta o relatório do portal e carrega o arquivo (`.xlsx`, `.csv`) diretamente no Monitor.
 
-### Como funciona
+### Colunas esperadas na planilha
 
-1. Operador salva e-mail e senha Maxtrack em **Meu Perfil → Integrações**.
-2. No Monitor, seleciona a aba Maxtrack e clica **"Buscar eventos"**.
-3. A Edge Function `pull-maxtrack` autentica em `POST /security/login` (sem CAPTCHA), extrai `PLAY_SESSION` cookie e `empresa.uid` (`cco`) da resposta.
-4. Divide o dia em **96 janelas de 15 minutos** e busca todas em paralelo (`Promise.all`) via `POST /event/events/load`.
-5. Deduplica eventos por `_id` (bordas de janelas adjacentes podem repetir).
-6. Devolve o payload ao adapter `maxtrack/parser.js` para transformação no formato canônico.
-
-### Por que janelas de 15 min?
-
-A API `/event/events/load` retorna no máximo ~30 eventos por chamada. Janelas de 15 min garantem que nenhuma janela estoure esse limite mesmo nos horários de pico.
-
-### Endpoints utilizados
-
-| Finalidade | Endpoint |
+| Coluna | Campo no adapter |
 |---|---|
-| Autenticação | `POST /security/login` |
-| Eventos do dia | `POST /event/events/load` |
+| `Placa` | identificador do veículo |
+| `Motorista` | nome do condutor |
+| `Empresa` | transportadora |
+| `Frota` | número de frota |
+| `Evento` | nome do evento |
+| `Criticidade` | severidade (Gravíssimo/Grave/Médio) |
+| `Data/Hora` | timestamp do evento |
+| `Velocidade` | em km/h — eventos < 10 km/h são descartados |
 
-### Categorias de evento (Maxtrack)
+### Mapeamento de severidade
 
-| `categoryId` | Categoria |
+| Criticidade na planilha | Canônico |
 |---|---|
-| `57` | Análise de Fadiga (Global) → INTERVENÇÃO |
-| `63` | Análise desatenção/fadiga (Global) → INTERVENÇÃO |
-
-Severidade via `criticalityLevel.id`:
-
-| `id` | Severidade |
-|---|---|
-| `4` | Gravíssimo |
-| `3` | Grave |
-| `2` | Normal (Médio) |
-
-### Modal de credenciais não configuradas
-
-Se o operador tentar buscar eventos Maxtrack sem ter configurado e-mail/senha, um **modal bloqueante** aparece redirecionando para Meu Perfil → Integrações. A busca não pode ser iniciada sem credenciais.
-
-### Sidebar badge
-
-Motoristas Maxtrack aparecem no badge de alertas da sidebar com limiar **≥ 8 alertas** (vs > 5 para Sascar), pois o volume de eventos Maxtrack tende a ser maior.
+| `Gravíssimo` | Gravíssimo |
+| `Grave` | Grave |
+| `Médio` | Normal |
 
 ---
 
@@ -720,7 +695,7 @@ npm run lint      # ESLint
 | Plataforma | Modo | Status |
 |---|---|---|
 | Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper beta |
-| Maxtrack | scraper (credenciais por operador) | 🧪 beta |
+| Maxtrack | spreadsheet (upload manual) | ✅ ativa |
 | Autotrack | a definir | 📋 planejada |
 | Trimble | a definir | 📋 planejada |
 | Cobli | a definir | 📋 planejada |

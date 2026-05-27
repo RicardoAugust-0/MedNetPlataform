@@ -15,10 +15,8 @@ import MonitorFilters from './monitor/MonitorFilters';
 import UploadArea from './monitor/UploadArea';
 import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
-import MaxtrackClosedTab from './monitor/MaxtrackClosedTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { useMaxtrackClosed } from '../hooks/useMaxtrackClosed.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -81,7 +79,6 @@ export default function Monitor() {
   const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
   const { resolveAlias } = useCarrierAliases();
   const sheetHistory   = useSheetHistory();
-  const maxtrackClosed = useMaxtrackClosed();
 
   // Carrega dados do Sheets em background ao montar o Monitor
   useEffect(() => {
@@ -564,58 +561,11 @@ export default function Monitor() {
                      activeTab === 'reportar'    ? reportarList :
                      activeTab === 'tecnicos'    ? tecList : [];
                      
-  const totalPages = (activeTab !== 'historico' && activeTab !== 'encerrados') ? Math.ceil(activeList.length / pageSize) || 1 : 1;
+  const totalPages = activeTab !== 'historico' ? Math.ceil(activeList.length / pageSize) || 1 : 1;
   const paginate = (list) => list.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  /* ── Modal de credenciais ausentes (scraper sem login configurado) ── */
-  const needsCredentials = platform?.inputType === 'scraper' && !profile?.maxtrack_email;
 
   return (
     <div className="monitor-grid">
-
-      {needsCredentials && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 900,
-          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }}>
-          <div style={{
-            background: 'var(--surface-1)', borderRadius: 'var(--radius-lg)',
-            padding: '36px 32px', maxWidth: 420, width: '100%',
-            boxShadow: 'var(--shadow-xl)', textAlign: 'center',
-            border: '1px solid var(--border-md)',
-          }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
-              background: 'rgba(var(--warning-rgb, 245,158,11),0.12)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <i className="ti ti-lock" style={{ fontSize: 26, color: 'var(--warning-500)' }}></i>
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>
-              Credenciais Maxtrack não configuradas
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
-              Para usar a integração automática com a Maxtrack, configure seu login
-              de acesso ao portal em <strong>Meu Perfil</strong>.
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button
-                className="btn btn-primary"
-                onClick={() => setActivePanel('perfil')}
-              >
-                <i className="ti ti-user"></i> Ir para Meu Perfil
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => setPlatformId('sascar')}
-              >
-                Usar Sascar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <UploadArea
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
@@ -643,7 +593,6 @@ export default function Monitor() {
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
           ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
-          ...(platformId === 'maxtrack' ? [['encerrados', 'ti-circle-check', 'Encerrados', maxtrackClosed.events.length, 'var(--success-500, #22c55e)']] : []),
           ['historico',   'ti-history',     'Histórico',         history.length,     null],
         ].map(([id, icon, lbl, cnt, color]) => (
           <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
@@ -651,7 +600,7 @@ export default function Monitor() {
             <span className="tab-count">{cnt}</span>
           </div>
         ))}
-        {activeTab !== 'historico' && activeTab !== 'encerrados' && activeList.length > 0 && (
+        {activeTab !== 'historico' && activeList.length > 0 && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button
               className="btn btn-sm btn-ghost"
@@ -714,17 +663,6 @@ export default function Monitor() {
             </div>
       )}
 
-      {/* Tab: Encerrados Maxtrack */}
-      {activeTab === 'encerrados' && (
-        <MaxtrackClosedTab
-          events={maxtrackClosed.events}
-          loading={maxtrackClosed.loading}
-          error={maxtrackClosed.error}
-          fetchedAt={maxtrackClosed.fetchedAt}
-          buscar={maxtrackClosed.buscar}
-        />
-      )}
-
       {/* Tab: Histórico */}
       {activeTab === 'historico' && (
         <HistoryTab
@@ -735,7 +673,7 @@ export default function Monitor() {
       )}
 
       {/* Queue Pagination */}
-      {activeTab !== 'historico' && activeTab !== 'encerrados' && totalPages > 1 && (
+      {activeTab !== 'historico' && totalPages > 1 && (
         <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
           <button className="btn btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
             <i className="ti ti-chevron-left"></i>

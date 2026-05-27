@@ -21,7 +21,7 @@ despachar parse/pull, sem precisar conhecer nenhum detalhe.
 | `api` | A plataforma tem API REST com credenciais. | O adapter expõe `api.pull(ctx)` — chamado em polling. |
 | `scraper` | Sem API; é preciso scrapear o portal. | O adapter expõe `scraper.pull(ctx)` que chama uma Edge Function dedicada. |
 
-Sascar suporta `spreadsheet` (padrão) e `scraper` via bookmarklet (beta). Maxtrack usa `scraper` com credenciais por operador (beta).
+Sascar suporta `spreadsheet` (padrão) e `scraper` via bookmarklet (beta). Maxtrack usa `spreadsheet` (upload manual de planilha).
 
 ### 1.2. Sascar — modo duplo (spreadsheet + scraper)
 
@@ -278,25 +278,14 @@ A Edge Function correspondente deve:
 
 ---
 
-## 5.1. Maxtrack — implementação de referência (modo scraper com credenciais)
+## 5.1. Maxtrack — implementação de referência (modo spreadsheet)
 
-A Maxtrack é a implementação de referência do modo `scraper` com credenciais por operador. Pode ser usada como modelo para plataformas similares.
+A Maxtrack opera em modo `spreadsheet`: o operador exporta o relatório do portal e faz upload manual (`.xlsx`, `.csv`), exatamente como a Sascar.
 
 **Arquivos:**
-- `src/platforms/maxtrack/index.js` — `inputType: 'scraper'`, bloco `scraper.pull()` que chama `pull-maxtrack`
-- `src/platforms/maxtrack/columns.js` — `SEV_MAP`, `FATIGUE_CATEGORIES`, `CRITICALITY_LEVELS`, `TAXONOMY`
-- `src/platforms/maxtrack/parser.js` — `parseApiResponse(apiData, {history})`, usa `buildClearMap`/`isAfterClear`
-- `supabase/functions/pull-maxtrack/index.ts` — login, `buildWindows()`, `Promise.all()`, deduplicação por `_id`
-
-**Fluxo da Edge Function:**
-1. Autentica requisição MedNet (JWT do operador).
-2. Lê `maxtrack_email` + `maxtrack_password` de `profiles` via `service_role`.
-3. Faz `POST /security/login` no portal Maxtrack — extrai `PLAY_SESSION` cookie e `empresa.uid` (`cco`).
-4. Gera 96 janelas de 15 min cobrindo o dia BRT até agora.
-5. Busca todas as janelas em paralelo via `Promise.all`.
-6. Deduplica por `_id` e retorna `{ events, count }`.
-
-**Modal bloqueante:** se credenciais não configuradas, o Monitor exibe modal impedindo busca e redirecionando para **Meu Perfil → Integrações**.
+- `src/platforms/maxtrack/index.js` — `inputType: 'spreadsheet'`, bloco `spreadsheet.{ detect, parse }`
+- `src/platforms/maxtrack/columns.js` — `COLUMNS`, `SEV_MAP`, `INTERVENCAO_EVENTOS`, `TAXONOMY`
+- `src/platforms/maxtrack/parser.js` — `detect(headers)` + `parse(file, {history})`, mesmo padrão da Sascar
 
 ---
 
@@ -413,10 +402,10 @@ src/platforms/
 │   ├── index.js            # Metadata + blocos spreadsheet e scraper
 │   ├── columns.js          # Mapa de colunas e taxonomia
 │   └── parser.js           # Parser xlsx/csv totalmente comentado
-├── maxtrack/               # Adapter scraper (implementação real)
-│   ├── index.js            # Metadata + bloco scraper (chama pull-maxtrack)
-│   ├── columns.js          # Categorias, severidades e taxonomia Maxtrack
-│   └── parser.js           # parseApiResponse — transforma resposta da Edge Function
+├── maxtrack/               # Adapter spreadsheet
+│   ├── index.js            # Metadata + bloco spreadsheet (detect + parse xlsx/csv)
+│   ├── columns.js          # COLUMNS, SEV_MAP, taxonomia Maxtrack
+│   └── parser.js           # detect + parse — mesmo padrão da Sascar
 └── _template/              # Esqueleto para copiar
     └── index.js
 ```

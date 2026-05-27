@@ -8,7 +8,6 @@ import { useSheetHistory } from '../hooks/useSheetHistory.js';
 import { fmtDate, applyAccent } from '../utils';
 import './dashboard/dashboard.css';
 import { useAutoSync } from '../hooks/useAutoSync';
-import maxtrack from '../platforms/maxtrack/index.js';
 import sascar from '../platforms/sascar/index.js';
 import PlatformBadge from './PlatformBadge';
 import {
@@ -31,7 +30,6 @@ import { useDashboardMetrics } from './dashboard/hooks/useDashboardMetrics';
 import {
   VolumeDrill, FechadosDrill, EmAbertoDrill,
 } from './dashboard/drills';
-import { useMaxtrackClosed } from '../hooks/useMaxtrackClosed';
 
 const PERIODOS = [
   { id: 'hoje',  label: 'Hoje'  },
@@ -45,11 +43,8 @@ export default function Dashboard() {
   const { profiles } = useProfiles();
   const { profile: me } = useAuth();
   const isAdmin = me?.role === 'admin';
-  const mxSync = useAutoSync({ platform: maxtrack, isEnabled: !!me?.maxtrack_email, storageKey: 'maxtrack' });
-  const scSync = useAutoSync({ platform: sascar,   isEnabled: !!me?.sascar_token,   storageKey: 'sascar'   });
+  const scSync = useAutoSync({ platform: sascar, isEnabled: !!me?.sascar_token, storageKey: 'sascar' });
   const sheetHistory = useSheetHistory();
-  const maxtrackClosed = useMaxtrackClosed();
-  const hasMaxtrack = !!me?.maxtrack_email;
 
   const drivers   = driversReal;
   const atHistory = atHistoryReal;
@@ -98,12 +93,6 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [sheetAutoSync, sheetSyncMin]);
 
-  // ── Auto-fetch Maxtrack closed events on mount
-  useEffect(() => {
-    if (hasMaxtrack) maxtrackClosed.buscar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // ── Métricas derivadas (todos os useMemos)
   const m = useDashboardMetrics({
     drivers, atHistory, sheetHistory,
@@ -111,8 +100,6 @@ export default function Dashboard() {
     filters, showTipo, showResultado, empresaFilterFn,
     resolveAlias, profiles,
     compareYesterday, slaLimit,
-    maxtrackClosedCount: maxtrackClosed.events.length,
-    hasMaxtrack,
   });
 
   const hour = now.getHours();
@@ -201,34 +188,31 @@ export default function Dashboard() {
 
                 <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">Atualização automática</label>
-                  {[
-                    { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
-                    { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
-                  ].filter(p => p.enabled).map(({ label, sync }) => (
-                    <div key={label} style={{ marginBottom: 6 }}>
+                  {!!me?.sascar_token && (
+                    <div style={{ marginBottom: 6 }}>
                       <div className="dg-tweaks-toggles">
                         <button
-                          className={`dg-tweaks-toggle${sync.autoSync ? ' on' : ''}`}
-                          onClick={() => sync.setAutoSync(v => !v)}
+                          className={`dg-tweaks-toggle${scSync.autoSync ? ' on' : ''}`}
+                          onClick={() => scSync.setAutoSync(v => !v)}
                         >
                           <span className="knob"></span>
-                          <span className="txt">Buscar {label} automaticamente</span>
+                          <span className="txt">Buscar Sascar automaticamente</span>
                         </button>
                       </div>
-                      {sync.autoSync && (
+                      {scSync.autoSync && (
                         <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
-                          <button onClick={() => sync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
+                          <button onClick={() => scSync.setSyncIntervalMin(v => Math.max(2, v - 1))} title="-1 min"><i className="ti ti-minus"></i></button>
                           <input
                             type="number" min="2" max="60" step="1"
-                            value={sync.syncIntervalMin}
-                            onChange={(e) => sync.setSyncIntervalMin(Number(e.target.value) || 5)}
+                            value={scSync.syncIntervalMin}
+                            onChange={(e) => scSync.setSyncIntervalMin(Number(e.target.value) || 5)}
                           />
-                          <button onClick={() => sync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
+                          <button onClick={() => scSync.setSyncIntervalMin(v => Math.min(60, v + 1))} title="+1 min"><i className="ti ti-plus"></i></button>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>min</span>
                         </div>
                       )}
                     </div>
-                  ))}
+                  )}
                   <div style={{ marginBottom: 6 }}>
                     <div className="dg-tweaks-toggles">
                       <button
@@ -365,26 +349,22 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {[
-            { label: 'Maxtrack', enabled: !!me?.maxtrack_email, sync: mxSync },
-            { label: 'Sascar',   enabled: !!me?.sascar_token,   sync: scSync },
-          ].filter(p => p.enabled && p.sync.autoSync).map(({ label, sync }) => (
+          {!!me?.sascar_token && scSync.autoSync && (
             <button
-              key={label}
-              className={`dg-btn dg-btn-ghost${sync.syncError ? ' dg-sync-error' : ''}`}
-              title={sync.syncError || (sync.lastSyncAt ? `${label} — último sync: ${sync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : `${label} — aguardando primeiro sync`)}
-              onClick={() => !sync.syncing && sync.doSync()}
-              disabled={sync.syncing}
+              className={`dg-btn dg-btn-ghost${scSync.syncError ? ' dg-sync-error' : ''}`}
+              title={scSync.syncError || (scSync.lastSyncAt ? `Sascar — último sync: ${scSync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Sascar — aguardando primeiro sync')}
+              onClick={() => !scSync.syncing && scSync.doSync()}
+              disabled={scSync.syncing}
             >
-              <i className={`ti ti-refresh${sync.syncing ? ' dg-spin' : ''}`}></i>
-              {` ${label} `}
-              {sync.syncing
+              <i className={`ti ti-refresh${scSync.syncing ? ' dg-spin' : ''}`}></i>
+              {' Sascar '}
+              {scSync.syncing
                 ? '…'
-                : sync.lastSyncAt
-                  ? sync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                : scSync.lastSyncAt
+                  ? scSync.lastSyncAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                   : 'Auto'}
             </button>
-          ))}
+          )}
           {sheetAutoSync && (
             <button
               className={`dg-btn dg-btn-ghost${sheetHistory.error ? ' dg-sync-error' : ''}`}
@@ -453,7 +433,7 @@ export default function Dashboard() {
           icon="ti-circle-check"
           label="Fechados hoje"
           value={m.encerradosPlataforma}
-          sub={hasMaxtrack && maxtrackClosed.loading ? 'carregando…' : `${m.pctConcluido}% do volume`}
+          sub={`${m.pctConcluido}% do volume`}
           compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
           progress={m.pctConcluido}

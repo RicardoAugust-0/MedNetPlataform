@@ -22,8 +22,6 @@ export function useDashboardMetrics({
   filters, showTipo, showResultado, empresaFilterFn,
   resolveAlias, profiles,
   compareYesterday, slaLimit,
-  maxtrackClosedCount = 0,
-  hasMaxtrack = false,
 }) {
   // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
   const periodoWindow = useMemo(() => {
@@ -163,7 +161,7 @@ export function useDashboardMetrics({
   const positivo     = RESULTADOS.find(r => r.id === 'positivo')?.count ?? 0;
   const fechados     = fechadosHoje.length;
   const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
-  const encerradosPlataforma = hasMaxtrack ? maxtrackClosedCount : fechados;
+  const encerradosPlataforma = fechados;
   const totalAlertas = encerradosPlataforma + emAberto;
   const pctConcluido = totalAlertas > 0 ? Math.round((encerradosPlataforma / totalAlertas) * 100) : 0;
   const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
