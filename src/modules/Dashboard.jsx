@@ -9,6 +9,7 @@ import { useProfiles } from "../hooks/useProfiles.jsx";
 import sascar from "../platforms/sascar/index.js";
 import { applyAccent, fmtDate } from "../utils";
 import PlatformBadge from "./PlatformBadge";
+import { supabase, isSupabaseConfigured } from "../supabase.js";
 import { buildMesesLookback } from "./dashboard/_helpers";
 import {
   Banner,
@@ -91,7 +92,7 @@ export default function Dashboard() {
     useDashboardFilters(resolveAlias);
   const [activeKpi, setActiveKpi] = useState(null);
 
-  // ── Total de eventos brutos da última planilha carregada (via localStorage)
+  // ── Total de eventos brutos da última planilha carregada (via Supabase / localStorage)
   const readPlatRawTotal = () => {
     try {
       const v = localStorage.getItem('mn_plat_raw_total');
@@ -102,11 +103,61 @@ export default function Dashboard() {
     } catch { return null; }
   };
   const [platRaw, setPlatRaw] = useState(readPlatRawTotal);
+
   useEffect(() => {
+    // 1. Escuta mudanças locais de localStorage no mesmo navegador (outras abas)
     const onStorage = (e) => {
       if (e.key === 'mn_plat_raw_total') setPlatRaw(readPlatRawTotal());
     };
     window.addEventListener('storage', onStorage);
+
+    // 2. Busca inicial no Supabase se configurado
+    if (isSupabaseConfigured) {
+      supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'plat_raw_total')
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.value) {
+            const p = data.value;
+            if (p.date === new Date().toDateString()) {
+              setPlatRaw(p);
+              try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch {}
+            }
+          }
+        });
+
+      // 3. Inscrição em tempo real no Supabase para sincronizar entre dispositivos
+      const channelName = `plat-raw-total-live-${crypto.randomUUID()}`;
+      const channel = supabase
+        .channel(channelName)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.plat_raw_total' },
+          ({ new: row, eventType }) => {
+            if (eventType === 'DELETE') {
+              setPlatRaw(null);
+              try { localStorage.removeItem('mn_plat_raw_total'); } catch {}
+            } else if (row?.value) {
+              const p = row.value;
+              if (p.date === new Date().toDateString()) {
+                setPlatRaw(p);
+                try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch {}
+              } else {
+                setPlatRaw(null);
+                try { localStorage.removeItem('mn_plat_raw_total'); } catch {}
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        window.removeEventListener('storage', onStorage);
+        supabase.removeChannel(channel);
+      };
+    }
+
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 

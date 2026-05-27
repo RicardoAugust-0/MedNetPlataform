@@ -18,7 +18,7 @@ import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { supabase, getFunctionErrorMessage } from '../supabase.js';
+import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -288,11 +288,24 @@ export default function Monitor() {
 
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
-      localStorage.setItem('mn_plat_raw_total', JSON.stringify({
+      const platRawData = {
         total: stats.totalFechados || 0,
         platform: platform.id,
         date: new Date(loadedAt).toDateString(),
-      }));
+      };
+      localStorage.setItem('mn_plat_raw_total', JSON.stringify(platRawData));
+      if (isSupabaseConfigured) {
+        supabase
+          .from('app_settings')
+          .upsert({
+            key: 'plat_raw_total',
+            value: platRawData,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'key' })
+          .then(({ error }) => {
+            if (error) console.warn('[Monitor] Erro ao sincronizar plat_raw_total:', error.message);
+          });
+      }
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
@@ -361,11 +374,24 @@ export default function Monitor() {
 
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
-      localStorage.setItem('mn_plat_raw_total', JSON.stringify({
+      const platRawData = {
         total: stats.totalFechados || 0,
         platform: platform.id,
         date: new Date(loadedAt).toDateString(),
-      }));
+      };
+      localStorage.setItem('mn_plat_raw_total', JSON.stringify(platRawData));
+      if (isSupabaseConfigured) {
+        supabase
+          .from('app_settings')
+          .upsert({
+            key: 'plat_raw_total',
+            value: platRawData,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'key' })
+          .then(({ error }) => {
+            if (error) console.warn('[Monitor] Erro ao sincronizar plat_raw_total:', error.message);
+          });
+      }
       setSheetLoadedAt(loadedAt);
       setSheetAgeMin(0);
       setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
