@@ -16,7 +16,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setSession(null);
+      const saved = localStorage.getItem('dev-mock-session');
+      setSession(saved ? JSON.parse(saved) : null);
       return;
     }
 
@@ -44,7 +45,8 @@ export function AuthProvider({ children }) {
     const initialCargo = meta?.cargo || 'Operador';
 
     if (!isSupabaseConfigured) {
-      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role: 'operador' });
+      const role = session.user.id === 'mock-admin' ? 'admin' : 'operador';
+      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role });
       return;
     }
 
@@ -128,17 +130,29 @@ export function AuthProvider({ children }) {
 
   const signIn = async (email, password) => {
     if (!isSupabaseConfigured) {
-      if (email === 'admin@mednet.com.br') {
-        setSession({ user: { id: 'mock-admin', email, user_metadata: { nome: 'Admin Teste', cargo: 'Gerente' } } });
-        return { error: null };
-      }
-      setSession({ user: { id: 'mock-user', email, user_metadata: { nome: 'Operador Teste', cargo: 'Operador' } } });
+      const isAdmin = email === 'admin@mednet.com.br';
+      const mockSession = {
+        user: {
+          id: isAdmin ? 'mock-admin' : 'mock-user',
+          email,
+          user_metadata: { nome: isAdmin ? 'Admin Teste' : 'Operador Teste', cargo: isAdmin ? 'Gerente' : 'Operador' },
+        },
+      };
+      localStorage.setItem('dev-mock-session', JSON.stringify(mockSession));
+      setSession(mockSession);
       return { error: null };
     }
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const signOut = () => supabase.auth.signOut();
+  const signOut = () => {
+    if (!isSupabaseConfigured) {
+      localStorage.removeItem('dev-mock-session');
+      setSession(null);
+      return Promise.resolve();
+    }
+    return supabase.auth.signOut();
+  };
 
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });

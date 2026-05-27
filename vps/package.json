@@ -1,0 +1,14 @@
+{
+  "name": "mednet-rpa-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Robô Playwright que baixa relatórios Maxtrack e alimenta o Supabase.",
+  "scripts": {
+    "start": "node bot/index.js",
+    "archive": "node bot/archive.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "playwright": "^1"
+  }
+}

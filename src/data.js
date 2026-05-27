@@ -16,6 +16,7 @@ export const NAV_ITEMS = [
   { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
   { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
   { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
+  { id: 'relatorios', label: 'Relatórios IA', icon: 'ti-report-analytics', group: 'Conta', adminOnly: true },
 ];
 
 export const PANEL_TITLES = {
@@ -28,7 +29,8 @@ export const PANEL_TITLES = {
   links:     { t: 'Links Rápidos',          s: 'Acessos a sistemas e ferramentas' },
   perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
   admin:     { t: 'Administração',          s: 'Gerenciamento da equipe' },
-  analytics: { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
+  analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
+  relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
   crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
 };
 

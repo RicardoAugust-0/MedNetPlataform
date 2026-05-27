@@ -17,6 +17,7 @@ import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
+import { supabase } from '../supabase.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -168,6 +169,26 @@ export default function Monitor() {
 
   const [autoRefresh, setAutoRefresh] = useState(() => localStorage.getItem('mn_auto_refresh') === 'true');
   const [autoRefreshMin, setAutoRefreshMin] = useState(() => parseInt(localStorage.getItem('mn_auto_refresh_min') || '5'));
+
+  const [rpaLastRunAt,     setRpaLastRunAt]     = useState(null);
+  const [rpaLastRunStatus, setRpaLastRunStatus] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from('app_settings').select('value').eq('key', 'rpa_config').maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data?.value) return;
+        setRpaLastRunAt(data.value.last_run_at || null);
+        setRpaLastRunStatus(data.value.last_run_status || null);
+      });
+    const ch = supabase.channel('rpa_config_monitor-' + crypto.randomUUID())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings', filter: 'key=eq.rpa_config' }, (p) => {
+        setRpaLastRunAt(p.new?.value?.last_run_at || null);
+        setRpaLastRunStatus(p.new?.value?.last_run_status || null);
+      })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, []);
 
   // Ref sempre atualizado com a versão mais recente de handleScrape (evita closure stale no setInterval)
   const handleScrapeRef = useRef(null);
@@ -578,6 +599,7 @@ export default function Monitor() {
         autoRefresh={autoRefresh} autoRefreshMin={autoRefreshMin}
         onAutoRefreshChange={(v) => { setAutoRefresh(v); localStorage.setItem('mn_auto_refresh', String(v)); }}
         onAutoRefreshMinChange={(v) => { setAutoRefreshMin(v); localStorage.setItem('mn_auto_refresh_min', String(v)); }}
+        rpaLastRunAt={rpaLastRunAt} rpaLastRunStatus={rpaLastRunStatus}
       />
 
       <MonitorFilters

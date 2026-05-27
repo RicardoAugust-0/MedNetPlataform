@@ -22,6 +22,7 @@ import Agenda from "./modules/Agenda.jsx";
 import Admin from "./modules/Admin.jsx";
 import Analytics from "./modules/Analytics.jsx";
 import CrossCheck from "./modules/CrossCheck.jsx";
+import Reports from "./modules/Reports.jsx";
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
@@ -154,6 +155,7 @@ function AppShell() {
               <>
                 <Panel id="admin"><Admin /></Panel>
                 <Panel id="analytics"><Analytics /></Panel>
+                <Panel id="relatorios"><Reports /></Panel>
               </>
             )}
           </div>

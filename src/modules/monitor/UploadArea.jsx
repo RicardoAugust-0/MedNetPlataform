@@ -47,7 +47,19 @@ export default function UploadArea({
   autoRefreshMin,
   onAutoRefreshChange,
   onAutoRefreshMinChange,
+  rpaLastRunAt = null,
+  rpaLastRunStatus = null,
 }) {
+  const rpaAgeMin = rpaLastRunAt
+    ? Math.floor((Date.now() - new Date(rpaLastRunAt)) / 60000) : null;
+  const rpaAgeLabel = rpaAgeMin === null ? null
+    : rpaAgeMin < 2   ? 'agora'
+    : rpaAgeMin < 60  ? `${rpaAgeMin} min atrás`
+    : `${Math.floor(rpaAgeMin / 60)}h atrás`;
+  const rpaAgeColor = rpaLastRunStatus === 'error' ? 'var(--danger-500)'
+    : rpaAgeMin === null ? null
+    : rpaAgeMin < 60  ? 'var(--success-500, #22c55e)'
+    : 'var(--warning-500)';
   const historyAgeLabel = historyAgeMin == null ? null
     : historyAgeMin < 1  ? 'agora'
     : historyAgeMin < 60 ? `${historyAgeMin}min`
@@ -93,6 +105,21 @@ export default function UploadArea({
           >
             <i className="ti ti-clock" style={{ fontSize: 10 }}></i>
             {sheetAgeLabel}
+          </span>
+        )}
+
+        {/* Chip: última atualização pelo robô RPA (Maxtrack) */}
+        {platform?.id === 'maxtrack' && rpaAgeLabel && (
+          <span
+            title={rpaLastRunStatus === 'error' ? 'Último ciclo do robô retornou erro' : 'Última atualização automática pelo robô'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, padding: '2px 10px', borderRadius: 99, fontWeight: 600,
+              flexShrink: 0, background: rpaAgeColor + '22', color: rpaAgeColor,
+            }}
+          >
+            <i className={`ti ${rpaLastRunStatus === 'error' ? 'ti-robot-off' : 'ti-robot'}`} style={{ fontSize: 10 }}></i>
+            robô {rpaAgeLabel}
           </span>
         )}
 
