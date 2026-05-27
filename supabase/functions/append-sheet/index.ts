@@ -99,26 +99,29 @@ Deno.serve(async (req) => {
 
     // Aba do mês atual
     const aba = getMesAtual();
-    const range = `${aba}!A:P`;
 
-    // Linha a inserir (16 colunas — A até P)
+    // Usamos apenas A:H para detecção da última linha com dados reais.
+    // A coluna I contém =SE(ÉCÉL.VAZIA(N:N);"NÃO";"SIM") em ~1000 linhas pré-preenchidas;
+    // incluir A:P faria a API entender que a tabela termina na linha 1000+ e inserir lá.
+    const range = `${aba}!A:H`;
+
+    // Linha a inserir (15 colunas — A até O)
     const values = [[
-      payload.data            || '',   // A: DATA
-      payload.empresa         || '',   // B: EMPRESA
-      payload.sistema         || '',   // C: SISTEMA
-      payload.colaborador     || '',   // D: COLABORADOR
-      payload.placa           || '',   // E: PLACA
-      payload.frota           || '',   // F: FROTA
-      payload.criticidade     || '',   // G: CRITICIDADE
-      payload.classificacao   || '',   // H: CLASSIFICAÇÃO
-      '',                              // I: REALIZADO? (operador preenche)
-      payload.motivo          || '',   // J: MOTIVO
-      '',                              // K: (vazia)
-      payload.solicitadoPor   || '',   // L: SOLICITADO POR
-      payload.horaSolicitacao || '',   // M: DE SOLICITAÇÃO
-      '',                              // N: REALIZADO POR (operador preenche)
-      '',                              // O: DE REALIZAÇÃO (operador preenche)
-      '',                              // P: JUSTIFICATIVA (operador preenche)
+      payload.data            || '',                       // A: DATA
+      payload.empresa         || '',                       // B: EMPRESA
+      payload.sistema         || '',                       // C: SISTEMA
+      payload.colaborador     || '',                       // D: COLABORADOR
+      payload.placa           || '',                       // E: PLACA
+      payload.frota           || '',                       // F: FROTA
+      payload.criticidade     || '',                       // G: CRITICIDADE
+      payload.classificacao   || '',                       // H: CLASSIFICAÇÃO
+      '=SE(ÉCÉL.VAZIA(M:M);"NÃO";"SIM")',                 // I: REALIZADO? (fórmula idêntica às demais linhas)
+      payload.motivo          || '',                       // J: MOTIVO
+      payload.solicitadoPor   || '',                       // K: SOLICITADO POR
+      payload.horaSolicitacao || '',                       // L: HORA SOLICITAÇÃO
+      '',                                                  // M: REALIZADO POR (operador preenche)
+      '',                                                  // N: HORA REALIZAÇÃO (operador preenche)
+      '',                                                  // O: JUSTIFICATIVA (operador preenche)
     ]];
 
     const sheetsRes = await fetch(

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { PANEL_TITLES } from '../data';
-import { fmtDate, fmtTime } from '../utils';
+import { fmtTime } from '../utils';
 
 export default function Topbar() {
-  const { activePanel, theme, setTheme } = useApp();
+  const { theme, setTheme } = useApp();
+  const location = useLocation();
   const [clock, setClock] = useState(fmtTime());
 
   useEffect(() => {
@@ -12,13 +14,35 @@ export default function Topbar() {
     return () => clearInterval(id);
   }, []);
 
-  const meta = PANEL_TITLES[activePanel] || { t: activePanel, s: '' };
+  const panelId = location.pathname.split('/')[1] || 'dashboard';
+  const meta = PANEL_TITLES[panelId] || { t: panelId, s: '' };
+  const hour = new Date().getHours();
+  const turno = hour >= 6 && hour < 18 ? 'diurno' : 'noturno';
+  const subtitle = panelId === 'dashboard' ? `${meta.s} · turno ${turno}` : meta.s;
 
   return (
     <header className="topbar">
-      <div>
+      <div className="topbar-brand">
+        <svg className="topbar-mark" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="mn-topbar-bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#9E1A45"/>
+              <stop offset="100%" stopColor="#5A0F25"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="7" fill="url(#mn-topbar-bg)"/>
+          <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
+          <rect x="23" y="5" width="2" height="8" rx="1" fill="#F26931"/>
+          <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
+        </svg>
+        <div className="topbar-brand-text">
+          <span className="topbar-brand-grupo">GRUPO</span>
+          <span className="topbar-brand-name">Med<b>Net</b></span>
+        </div>
+      </div>
+      <div className="topbar-meta">
         <div className="topbar-title">{meta.t}</div>
-        <div className="topbar-breadcrumb">{meta.s} · {fmtDate()}</div>
+        {subtitle && <div className="topbar-breadcrumb">{subtitle}</div>}
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-actions">

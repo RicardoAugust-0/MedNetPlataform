@@ -5,22 +5,25 @@ export const APP_CONFIG = {
 };
 
 export const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard',      icon: 'ti-layout-dashboard', group: 'Operação' },
-  { id: 'monitor',   label: 'Monitor de Frota', icon: 'ti-truck-delivery', group: 'Operação' },
-  { id: 'agenda',    label: 'Agenda',         icon: 'ti-calendar-event',   group: 'Operação' },
-  { id: 'crosscheck', label: 'Cross-Check',   icon: 'ti-list-check',      group: 'Operação' },
-  { id: 'templates', label: 'Templates',      icon: 'ti-message-2',        group: 'Conhecimento' },
-  { id: 'workspace', label: 'Workspace',      icon: 'ti-notebook',         group: 'Conhecimento' },
-  { id: 'notas',     label: 'Bloco de Notas', icon: 'ti-file-text',        group: 'Conhecimento' },
-  { id: 'links',     label: 'Links Rápidos',  icon: 'ti-link',             group: 'Conhecimento' },
-  { id: 'perfil',    label: 'Meu Perfil',     icon: 'ti-user-circle',      group: 'Conta' },
-  { id: 'admin',     label: 'Administração',  icon: 'ti-shield',           group: 'Conta', adminOnly: true },
-  { id: 'analytics', label: 'Analytics',      icon: 'ti-chart-pie',        group: 'Conta', adminOnly: true },
+  { id: 'dashboard',  label: 'Dashboard',       icon: 'ti-layout-dashboard', group: 'Operação',     path: '/dashboard' },
+  { id: 'monitor',    label: 'Monitor de Frota', icon: 'ti-truck-delivery',  group: 'Operação',     path: '/monitor/intervencao' },
+  { id: 'dossies',    label: 'Dossiês Clínicos', icon: 'ti-steering-wheel',  group: 'Operação',     path: '/dossies' },
+  { id: 'agenda',     label: 'Agenda',           icon: 'ti-calendar-event',  group: 'Operação',     path: '/agenda' },
+  { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Operação',     path: '/crosscheck' },
+  { id: 'templates',  label: 'Templates',        icon: 'ti-message-2',       group: 'Conhecimento', path: '/templates' },
+  { id: 'workspace',  label: 'Workspace',        icon: 'ti-notebook',        group: 'Conhecimento', path: '/workspace' },
+  { id: 'notas',      label: 'Bloco de Notas',   icon: 'ti-file-text',       group: 'Conhecimento', path: '/notas' },
+  { id: 'links',      label: 'Links Rápidos',    icon: 'ti-link',            group: 'Conhecimento', path: '/links' },
+  { id: 'perfil',     label: 'Meu Perfil',       icon: 'ti-user-circle',     group: 'Conta',        path: '/perfil' },
+  { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Conta',        path: '/admin',      adminOnly: true },
+  { id: 'analytics',  label: 'Analytics',        icon: 'ti-chart-pie',       group: 'Conta',        path: '/analytics',  adminOnly: true },
+  { id: 'relatorios', label: 'Relatórios IA',    icon: 'ti-report-analytics',group: 'Conta',        path: '/relatorios', adminOnly: true },
 ];
 
 export const PANEL_TITLES = {
-  dashboard: { t: 'Dashboard',              s: 'Visão geral da operação de hoje' },
+  dashboard: { t: 'Dashboard · Gestão à Vista', s: 'Visão da diretoria' },
   monitor:   { t: 'Monitor de Frota',       s: 'Alertas logísticos & fila de intervenção' },
+  dossies:    { t: 'Dossiês Clínicos',      s: 'Histórico de fadiga, tratativas e prontuário médico dos motoristas' },
   agenda:    { t: 'Agenda & Lembretes',     s: 'Compromissos e ações do dia' },
   templates: { t: 'Templates de Mensagem',  s: 'Scripts prontos para atendimento' },
   workspace: { t: 'Workspace',              s: 'Páginas e procedimentos da equipe' },
@@ -28,7 +31,8 @@ export const PANEL_TITLES = {
   links:     { t: 'Links Rápidos',          s: 'Acessos a sistemas e ferramentas' },
   perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
   admin:     { t: 'Administração',          s: 'Gerenciamento da equipe' },
-  analytics: { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
+  analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
+  relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
   crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
 };
 

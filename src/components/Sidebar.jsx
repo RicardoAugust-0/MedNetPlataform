@@ -1,5 +1,6 @@
 // deno-lint-ignore-file
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from "../context.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { NAV_ITEMS, APP_CONFIG } from "../data.js";
@@ -7,7 +8,9 @@ import { iniciais } from '../utils.js';
 import { usePWA } from '../hooks/usePWA.js';
 
 export default function Sidebar() {
-  const { activePanel, setActivePanel, drivers } = useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { drivers } = useApp();
   const { profile, signOut } = useAuth();
   const [query, setQuery]   = useState('');
   const [open,  setOpen]    = useState(false);
@@ -15,7 +18,12 @@ export default function Sidebar() {
   const paletteRef = useRef(null);
   const { isInstallable, install } = usePWA();
 
-  const alertCount = drivers.filter(d => d.alertas > 0).length;
+  // Maxtrack: só conta no badge se o motorista acumulou 8+ alertas
+  // (intervenção não é solicitada diretamente pela plataforma).
+  // Demais plataformas: conta a partir de 5 alertas (mesmo limiar do Monitor).
+  const alertCount = drivers.filter(d =>
+    d._platformId === 'maxtrack' ? d.alertas >= 8 : d.alertas >= 5
+  ).length;
 
   // Fecha ao clicar fora
   useEffect(() => {
@@ -37,6 +45,11 @@ export default function Sidebar() {
   }, []);
 
   const isAdmin = profile?.role === 'admin';
+
+  const isItemActive = (item) => {
+    const p = location.pathname;
+    return p === '/' + item.id || p.startsWith('/' + item.id + '/');
+  };
 
   const navResults = query.length > 0
     ? NAV_ITEMS.filter(i => (!i.adminOnly || isAdmin) && i.label.toLowerCase().includes(query.toLowerCase()))
@@ -60,7 +73,7 @@ export default function Sidebar() {
     }
     const badge = item.id === 'monitor' ? (alertCount > 0 ? alertCount : null) : (item.badge || null);
     navRows.push(
-      <div key={item.id} className={'nav-item' + (activePanel === item.id ? ' active' : '')} onClick={() => setActivePanel(item.id)}>
+      <div key={item.id} className={'nav-item' + (isItemActive(item) ? ' active' : '')} onClick={() => navigate(item.path)}>
         <i className={`ti ${item.icon} nav-icon`}></i>
         <span className="nav-label">{item.label}</span>
         {badge ? <span className="nav-badge">{badge}</span> : null}
@@ -123,7 +136,7 @@ export default function Sidebar() {
                         style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-1)'}
                         onMouseLeave={e => e.currentTarget.style.background = ''}
-                        onClick={() => { setActivePanel(item.id); setOpen(false); setQuery(''); }}
+                        onClick={() => { navigate(item.path); setOpen(false); setQuery(''); }}
                       >
                         <i className={`ti ${item.icon}`} style={{ color: 'var(--accent-500)', fontSize: 15 }}></i>
                         {item.label}
@@ -139,7 +152,7 @@ export default function Sidebar() {
                         style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-1)'}
                         onMouseLeave={e => e.currentTarget.style.background = ''}
-                        onClick={() => { setActivePanel('monitor'); setOpen(false); setQuery(''); }}
+                        onClick={() => { navigate('/monitor/intervencao'); setOpen(false); setQuery(''); }}
                       >
                         <i className="ti ti-truck" style={{ color: 'var(--text-muted)', fontSize: 14 }}></i>
                         <span style={{ color: 'var(--text-primary)' }}>{d.nome}</span>
@@ -165,7 +178,7 @@ export default function Sidebar() {
             </button>
           </div>
         )}
-        <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => setActivePanel('perfil')} title="Abrir perfil">
+        <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/perfil')} title="Abrir perfil">
           <div className="user-avatar" style={profile?.avatar_url ? { padding: 0, overflow: 'hidden' } : null}>
             {profile?.avatar_url
               ? <img src={profile.avatar_url} alt={profile.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

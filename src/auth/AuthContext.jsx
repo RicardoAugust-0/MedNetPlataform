@@ -16,7 +16,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setSession(null);
+      const saved = localStorage.getItem('dev-mock-session');
+      setSession(saved ? JSON.parse(saved) : null);
       return;
     }
 
@@ -26,7 +27,7 @@ export function AuthProvider({ children }) {
     }
 
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
     });
     return () => subscription.unsubscribe();
@@ -44,7 +45,8 @@ export function AuthProvider({ children }) {
     const initialCargo = meta?.cargo || 'Operador';
 
     if (!isSupabaseConfigured) {
-      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role: 'operador' });
+      const role = session.user.id === 'mock-admin' ? 'admin' : 'operador';
+      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role });
       return;
     }
 
@@ -52,7 +54,7 @@ export function AuthProvider({ children }) {
     const syncProfile = async () => {
       const { data: existing } = await supabase
         .from('profiles')
-        .select('nome, cargo, role, avatar_url, telefone, bio')
+        .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token, sascar_token_saved_at')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -69,9 +71,12 @@ export function AuthProvider({ children }) {
             nome: existing.nome || emailFallback,
             cargo: existing.cargo || 'Operador',
             role: existing.role || 'operador',
-            avatar_url: existing.avatar_url || null,
-            telefone:   existing.telefone   || '',
-            bio:        existing.bio        || '',
+            avatar_url:             existing.avatar_url             || null,
+            telefone:               existing.telefone               || '',
+            bio:                    existing.bio                    || '',
+            maxtrack_email:         existing.maxtrack_email         || '',
+            sascar_token:           existing.sascar_token           || '',
+            sascar_token_saved_at:  existing.sascar_token_saved_at  || null,
           });
         }
         return;
@@ -86,7 +91,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const { data: current } = await supabase
           .from('profiles')
-          .select('nome, cargo, role, avatar_url, telefone, bio')
+          .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email, sascar_token, sascar_token_saved_at')
           .eq('id', session.user.id)
           .maybeSingle();
 
@@ -97,9 +102,12 @@ export function AuthProvider({ children }) {
             nome: current.nome || emailFallback,
             cargo: current.cargo || 'Operador',
             role: current.role || 'operador',
-            avatar_url: current.avatar_url || null,
-            telefone:   current.telefone   || '',
-            bio:        current.bio        || '',
+            avatar_url:            current.avatar_url            || null,
+            telefone:              current.telefone              || '',
+            bio:                   current.bio                   || '',
+            maxtrack_email:        current.maxtrack_email        || '',
+            sascar_token:          current.sascar_token          || '',
+            sascar_token_saved_at: current.sascar_token_saved_at || null,
           });
         }
         return;
@@ -109,7 +117,7 @@ export function AuthProvider({ children }) {
         setProfile({
           id: session.user.id, email: session.user.email,
           nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
-          avatar_url: null, telefone: '', bio: '',
+          avatar_url: null, telefone: '', bio: '', maxtrack_email: '', sascar_token: '',
         });
       }
     };
@@ -122,17 +130,29 @@ export function AuthProvider({ children }) {
 
   const signIn = async (email, password) => {
     if (!isSupabaseConfigured) {
-      if (email === 'admin@mednet.com.br') {
-        setSession({ user: { id: 'mock-admin', email, user_metadata: { nome: 'Admin Teste', cargo: 'Gerente' } } });
-        return { error: null };
-      }
-      setSession({ user: { id: 'mock-user', email, user_metadata: { nome: 'Operador Teste', cargo: 'Operador' } } });
+      const isAdmin = email === 'admin@mednet.com.br';
+      const mockSession = {
+        user: {
+          id: isAdmin ? 'mock-admin' : 'mock-user',
+          email,
+          user_metadata: { nome: isAdmin ? 'Admin Teste' : 'Operador Teste', cargo: isAdmin ? 'Gerente' : 'Operador' },
+        },
+      };
+      localStorage.setItem('dev-mock-session', JSON.stringify(mockSession));
+      setSession(mockSession);
       return { error: null };
     }
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const signOut = () => supabase.auth.signOut();
+  const signOut = () => {
+    if (!isSupabaseConfigured) {
+      localStorage.removeItem('dev-mock-session');
+      setSession(null);
+      return Promise.resolve();
+    }
+    return supabase.auth.signOut();
+  };
 
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });

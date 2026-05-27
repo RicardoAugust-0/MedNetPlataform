@@ -21,7 +21,71 @@ despachar parse/pull, sem precisar conhecer nenhum detalhe.
 | `api` | A plataforma tem API REST com credenciais. | O adapter expõe `api.pull(ctx)` — chamado em polling. |
 | `scraper` | Sem API; é preciso scrapear o portal. | O adapter expõe `scraper.pull(ctx)` que chama uma Edge Function dedicada. |
 
-Sascar é `spreadsheet`. Maxtrack provavelmente será `api` (se houver credenciais) ou `scraper`.
+Sascar suporta `spreadsheet` (padrão) e `scraper` via bookmarklet (beta). Maxtrack usa `spreadsheet` (upload manual de planilha).
+
+### 1.2. Sascar — modo duplo (spreadsheet + scraper)
+
+A Sascar é a única plataforma atualmente com dois modos de ingestão disponíveis:
+
+| Modo | Como funciona | Quando usar |
+|---|---|---|
+| `spreadsheet` | Operador exporta o relatório no portal e faz upload manual (xlsx/csv). | Sempre disponível; não requer configuração extra. |
+| `scraper` (beta) | O MedNet busca os alertas automaticamente usando o `AUTH_TOKEN` do portal Sascar. O operador clica o **bookmarklet** uma vez por turno para enviar o token. | Quando o operador quer eliminar o upload manual. |
+
+#### Por que bookmarklet e não login automático?
+
+O portal Sascar exige **CAPTCHA server-side** no endpoint de login
+(`/gateway/base-server-service/api/v1/user/login`). Isso torna inviável
+qualquer automação de credenciais. A solução é ler o `AUTH_TOKEN` que o portal
+já armazena em `localStorage` após o operador fazer login manualmente, e
+enviá-lo ao MedNet com um único clique em um favorito do navegador (bookmarklet).
+
+#### Fluxo resumido do modo scraper
+
+1. Operador faz login no portal Sascar normalmente (usuário + senha + CAPTCHA).
+2. Clica o bookmarklet salvo na barra de favoritos — o token é capturado e
+   enviado à Edge Function `sascar-token` do MedNet.
+3. O MedNet renova o token automaticamente via
+   `/gateway/base-server-service/api/v1/user/refresh` enquanto houver atividade.
+4. Se o token expirar (idle > 30 min), um banner no MedNet solicita um novo
+   clique no bookmarklet.
+
+O bookmarklet é exibido em **Meu Perfil → Integrações → Sascar** dentro do
+MedNet, pronto para arrastar até a barra de favoritos.
+
+#### Mapeamento de alarmes (Sascar API)
+
+A classificação usa `categoryInfoList[0].categoryId` (campo mais estável que `alarmType`):
+
+| `categoryId` | Categoria MedNet |
+|---|---|
+| `100574` | INTERVENÇÃO (Fadiga) |
+| `100575` | REPORTAR (Distração / Comportamento) |
+| `100573` | TÉCNICO (câmera/vídeo) |
+
+Severidade via `levelInfo.levelId`:
+
+| `levelId` | Severidade |
+|---|---|
+| `15` | Gravíssimo |
+| `14` | Grave |
+| `13` | Normal |
+
+Velocidade: campo `speed` em **1/10 km/h** (620 → 62 km/h). Filtro: `speed < 100` (< 10 km/h) descarta o evento.
+
+Falsos positivos: excluídos pelo servidor via `alarmLevelIds: '15,14,13'` — `stats.falsosPositivos` sempre retorna 0.
+
+Nomes de evento (`alarmType` como fallback quando `categoryId` indisponível):
+
+| `alarmType` | Nome exibido |
+|---|---|
+| `56001` | Bocejo |
+| `56003` | Olho fechado |
+| `56016` | Distração Genérica |
+| `56002` | Sonolência |
+| `56004` | Comportamento indevido |
+| `56010` | Evento reportável |
+| `0` | Perda de vídeo |
 
 ---
 
@@ -214,6 +278,17 @@ A Edge Function correspondente deve:
 
 ---
 
+## 5.1. Maxtrack — implementação de referência (modo spreadsheet)
+
+A Maxtrack opera em modo `spreadsheet`: o operador exporta o relatório do portal e faz upload manual (`.xlsx`, `.csv`), exatamente como a Sascar.
+
+**Arquivos:**
+- `src/platforms/maxtrack/index.js` — `inputType: 'spreadsheet'`, bloco `spreadsheet.{ detect, parse }`
+- `src/platforms/maxtrack/columns.js` — `COLUMNS`, `SEV_MAP`, `INTERVENCAO_EVENTOS`, `TAXONOMY`
+- `src/platforms/maxtrack/parser.js` — `detect(headers)` + `parse(file, {history})`, mesmo padrão da Sascar
+
+---
+
 ## 6. Formato canônico de saída
 
 Independente do modo, o parser/puller devolve:
@@ -323,10 +398,14 @@ src/platforms/
 │   ├── normalize.js        # normalize, containsAll
 │   ├── parsers.js          # parseSpeed, parseEventDate, parseTurno, maxSeveridade
 │   └── history.js          # buildClearMap, isAfterClear
-├── sascar/                 # Adapter de referência
-│   ├── index.js            # Metadata + bloco spreadsheet
+├── sascar/                 # Adapter de referência (spreadsheet + scraper)
+│   ├── index.js            # Metadata + blocos spreadsheet e scraper
 │   ├── columns.js          # Mapa de colunas e taxonomia
-│   └── parser.js           # Parser totalmente comentado
+│   └── parser.js           # Parser xlsx/csv totalmente comentado
+├── maxtrack/               # Adapter spreadsheet
+│   ├── index.js            # Metadata + bloco spreadsheet (detect + parse xlsx/csv)
+│   ├── columns.js          # COLUMNS, SEV_MAP, taxonomia Maxtrack
+│   └── parser.js           # detect + parse — mesmo padrão da Sascar
 └── _template/              # Esqueleto para copiar
     └── index.js
 ```

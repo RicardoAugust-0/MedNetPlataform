@@ -180,6 +180,18 @@ body {
   gap: 14px;
   flex-shrink: 0;
 }
+.topbar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding-right: 14px;
+  border-right: 1px solid var(--border);
+  height: 36px;
+}
+.topbar-mark { flex-shrink: 0; box-shadow: 0 2px 8px var(--accent-glow); border-radius: 7px; }
+.topbar-brand-text { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.topbar-brand-grupo { font-size: 8.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
+.topbar-brand-name { font-size: 13px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.3px; }
+.topbar-brand-name b { color: var(--mednet-orange); font-weight: 800; }
+.topbar-meta { display: flex; flex-direction: column; min-width: 0; }
 .topbar-title { font-size: 14.5px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.1px; }
 .topbar-breadcrumb { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
 .topbar-spacer { flex: 1; }

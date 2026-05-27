@@ -1,36 +1,36 @@
-import { useEffect, useRef } from 'react';
-import { useApp } from "./context.jsx";
+import { useEffect, useRef } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext.jsx";
-import { useReminders, RemindersProvider } from "./hooks/useReminders.jsx";
-import { useToast } from "./hooks/useToast.jsx";
-import { useMaintenance } from "./hooks/useMaintenance.jsx";
-import { applyAccent } from "./utils.js";
 import LoginPage from "./auth/LoginPage.jsx";
 import SetPasswordPage from "./auth/SetPasswordPage.jsx";
 import MaintenancePage from "./components/MaintenancePage.jsx";
-import Profile from "./modules/Profile.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Topbar from "./components/Topbar.jsx";
-import TweaksPanel from "./components/TweaksPanel.jsx";
-import Dashboard from "./modules/Dashboard.jsx";
-import Monitor from "./modules/Monitor.jsx";
-import Templates from "./modules/Templates.jsx";
-import Links from "./modules/Links.jsx";
-import Workspace from "./modules/Workspace.jsx";
-import Notes from "./modules/Notes.jsx";
-import Agenda from "./modules/Agenda.jsx";
+import { useApp } from "./context.jsx";
+import { useMaintenance } from "./hooks/useMaintenance.jsx";
+import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
+import { useToast } from "./hooks/useToast.jsx";
 import Admin from "./modules/Admin.jsx";
+import Agenda from "./modules/Agenda.jsx";
 import Analytics from "./modules/Analytics.jsx";
-import CrossCheck from "./modules/crosscheck/index.jsx";
+import CrossCheck from "./modules/CrossCheck.jsx";
+import Dashboard from "./modules/Dashboard.jsx";
+import DossiesPage from "./modules/DossiesPage.jsx";
+import Links from "./modules/Links.jsx";
+import Monitor from "./modules/Monitor.jsx";
+import Notes from "./modules/Notes.jsx";
+import Profile from "./modules/Profile.jsx";
+import Reports from "./modules/Reports.jsx";
+import Templates from "./modules/Templates.jsx";
+import Workspace from "./modules/Workspace.jsx";
+import { supabase } from "./supabase.js";
+import { applyAccent } from "./utils.js";
 
-function Panel({ id, children }) {
-  const { activePanel } = useApp();
-  if (activePanel !== id) return null;
-  return (
-    <div className="panel active">
-      {children}
-    </div>
-  );
+function AdminGuard({ children }) {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  if (profile.role !== "admin") return <Navigate to="/dashboard" replace />;
+  return children;
 }
 
 function ReminderNotifier() {
@@ -39,10 +39,12 @@ function ReminderNotifier() {
   const notified = useRef(new Set());
 
   const remindersRef = useRef(reminders);
-  useEffect(() => { remindersRef.current = reminders; }, [reminders]);
+  useEffect(() => {
+    remindersRef.current = reminders;
+  }, [reminders]);
 
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
@@ -50,22 +52,27 @@ function ReminderNotifier() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
+      const pad = (n) => String(n).padStart(2, "0");
       const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      remindersRef.current.forEach(r => {
-        if (r.done || r.date !== todayStr || r.time !== hhmm || notified.current.has(r.id)) return;
+      remindersRef.current.forEach((r) => {
+        if (
+          r.done ||
+          r.date !== todayStr ||
+          r.time !== hhmm ||
+          notified.current.has(r.id)
+        )
+          return;
         notified.current.add(r.id);
-        toast(
-          r.title + (r.sub ? ` — ${r.sub}` : ''),
-          'info',
-          { label: 'Marcar como feito', fn: () => toggle(r.id) }
-        );
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('⏰ ' + r.title, {
-            body: r.sub || 'Lembrete da agenda',
-            icon: '/favicon.svg',
-            tag: 'reminder-' + r.id,
+        toast(r.title + (r.sub ? ` — ${r.sub}` : ""), "info", {
+          label: "Marcar como feito",
+          fn: () => toggle(r.id),
+        });
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("⏰ " + r.title, {
+            body: r.sub || "Lembrete da agenda",
+            icon: "/favicon.svg",
+            tag: "reminder-" + r.id,
           });
         }
       });
@@ -73,7 +80,44 @@ function ReminderNotifier() {
     check();
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
+
+function SascarTokenHandler() {
+  const { profile, updateProfile } = useAuth();
+  const toast = useToast();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.includes("sascar-token=")) return;
+
+    const raw = hash.replace(/^#/, "");
+    const param = new URLSearchParams(raw);
+    const token = param.get("sascar-token");
+    if (!token || !profile?.id) return;
+
+    window.history.replaceState(null, "", window.location.pathname);
+
+    const savedAt = new Date().toISOString();
+    supabase
+      .from("profiles")
+      .update({ sascar_token: token, sascar_token_saved_at: savedAt })
+      .eq("id", profile.id)
+      .then(({ error }) => {
+        if (!error) {
+          updateProfile({
+            sascar_token: token,
+            sascar_token_saved_at: savedAt,
+          });
+          toast(
+            "Token Sascar atualizado. Pode buscar os eventos agora.",
+            "success",
+          );
+        }
+      });
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -85,16 +129,18 @@ function AppShell() {
 
   useEffect(() => {
     const r = document.documentElement;
-    r.setAttribute('data-theme', theme);
-    r.setAttribute('data-density', density);
-    r.setAttribute('data-mode', mode);
-    r.setAttribute('data-vibe', vibe);
-    r.setAttribute('data-rhythm', rhythm);
+    r.setAttribute("data-theme", theme);
+    r.setAttribute("data-density", density);
+    r.setAttribute("data-mode", mode);
+    r.setAttribute("data-vibe", vibe);
+    r.setAttribute("data-rhythm", rhythm);
   }, [theme, density, mode, vibe, rhythm]);
 
-  useEffect(() => { applyAccent(accent); }, [accent]);
+  useEffect(() => {
+    applyAccent(accent);
+  }, [accent]);
 
-  if (!maintLoading && maintenance.enabled && profile?.role !== 'admin') {
+  if (!maintLoading && maintenance.enabled && profile?.role !== "admin") {
     return <MaintenancePage message={maintenance.message} />;
   }
 
@@ -102,41 +148,80 @@ function AppShell() {
     <RemindersProvider>
       <div id="app">
         <ReminderNotifier />
+        <SascarTokenHandler />
         <Sidebar />
         <div className="main-area">
           <Topbar />
           <div className="content-area">
-            <Panel id="dashboard"><Dashboard /></Panel>
-            <Panel id="monitor"><Monitor /></Panel>
-            <Panel id="agenda"><Agenda /></Panel>
-            <Panel id="templates"><Templates /></Panel>
-            <Panel id="workspace"><Workspace /></Panel>
-            <Panel id="notas"><Notes /></Panel>
-            <Panel id="links"><Links /></Panel>
-            <Panel id="perfil"><Profile /></Panel>
-            <Panel id="crosscheck"><CrossCheck /></Panel>
-            {profile?.role === 'admin' && (
-              <>
-                <Panel id="admin"><Admin /></Panel>
-                <Panel id="analytics"><Analytics /></Panel>
-              </>
-            )}
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route
+                path="/monitor"
+                element={<Navigate to="/monitor/intervencao" replace />}
+              />
+              <Route path="/monitor/:tab" element={<Monitor />} />
+              <Route path="/dossies" element={<DossiesPage />} />
+              <Route path="/agenda" element={<Agenda />} />
+              <Route path="/crosscheck" element={<CrossCheck />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/workspace" element={<Workspace />} />
+              <Route path="/notas" element={<Notes />} />
+              <Route path="/links" element={<Links />} />
+              <Route path="/perfil" element={<Profile />} />
+              <Route
+                path="/admin"
+                element={
+                  <AdminGuard>
+                    <Admin />
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/analytics"
+                element={
+                  <AdminGuard>
+                    <Analytics />
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/relatorios"
+                element={
+                  <AdminGuard>
+                    <Reports />
+                  </AdminGuard>
+                }
+              />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
           </div>
         </div>
-        {profile?.role === 'admin' && maintenance.enabled && (
-          <div style={{
-            position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-            background: '#F26931', color: '#fff',
-            padding: '8px 16px', borderRadius: 999,
-            fontSize: 12, fontWeight: 600, letterSpacing: 0.3,
-            boxShadow: '0 6px 20px rgba(242,105,49,0.4)',
-            display: 'flex', alignItems: 'center', gap: 6,
-            zIndex: 9999,
-          }}>
-            <i className="ti ti-tools"></i> Plataforma em manutenção (visível só para admins)
+        {profile?.role === "admin" && maintenance.enabled && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#F26931",
+              color: "#fff",
+              padding: "8px 16px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              boxShadow: "0 6px 20px rgba(242,105,49,0.4)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              zIndex: 9999,
+            }}
+          >
+            <i className="ti ti-tools"></i> Plataforma em manutenção (visível só
+            para admins)
           </div>
         )}
-        <TweaksPanel />
       </div>
     </RemindersProvider>
   );
@@ -147,7 +232,8 @@ export default function App() {
 
   if (loading) return null;
 
-  if (session && (authType === 'invite' || authType === 'recovery')) return <SetPasswordPage />;
+  if (session && (authType === "invite" || authType === "recovery"))
+    return <SetPasswordPage />;
 
   if (!session) return <LoginPage />;
 

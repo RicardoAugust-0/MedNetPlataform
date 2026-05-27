@@ -8,7 +8,8 @@
 //
 // O guia detalhado está em docs/PLATFORMS.md.
 
-import sascar from './sascar/index.js';
+import sascar   from './sascar/index.js';
+import maxtrack from './maxtrack/index.js';
 
 // Lista ordenada das plataformas disponíveis na UI.
 // 'active'  → exibida e selecionável no Monitor
@@ -16,7 +17,8 @@ import sascar from './sascar/index.js';
 // 'planned' → exibida desabilitada, apenas informativa
 export const PLATFORMS = [
   sascar,
-  // futuro: maxtrack,
+  maxtrack,
+  // futuro: autotrack,
   // futuro: autotrack,
   // futuro: trimble,
   // futuro: cobli,

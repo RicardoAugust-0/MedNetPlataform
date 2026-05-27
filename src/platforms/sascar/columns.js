@@ -20,7 +20,7 @@ export const COLUMNS = {
 // Eventos que disparam INTERVENÇÃO IMEDIATA (operador liga para o motorista).
 // "Distração Genérica" aparece tanto como Evento quanto como Categoria — o
 // parser detecta ambas as variações.
-export const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado', 'Distração Genérica'];
+export const INTERVENCAO_EVENTOS = ['Bocejo', 'Olho fechado', 'Distração Genérica', 'Sonolência'];
 
 // Eventos puramente TÉCNICOS (não acionáveis pelo operador, apenas registrados).
 export const TECNICO_CATS    = ['Obstrução de Câmera'];
@@ -41,7 +41,7 @@ export const STATUS_FALSO_POSITIVO = 'Falso positivo';
 // Taxonomia agregada (usada pelo Monitor para popular o filtro de eventos).
 // O front pode exibir um subset; isto reflete o que a plataforma sabe gerar.
 export const TAXONOMY = {
-  intervencao: ['Bocejo', 'Olho fechado'],
+  intervencao: ['Bocejo', 'Olho fechado', 'Sonolência'],
   reportar:    ['Distração', 'Uso de celular', 'Fumando'],
   tecnico:     ['Obstrução de Câmera', 'Perda de vídeo', 'Sem motorista'],
 };

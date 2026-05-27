@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { useDriversQueue } from './hooks/useDriversQueue';
+import { useSheetHistory } from './hooks/useSheetHistory';
 
 function load(k, fb) {
   try { const v = localStorage.getItem('mn_' + k); return v ? JSON.parse(v) : fb; } catch { return fb; }
@@ -10,9 +12,8 @@ function save(k, v) {
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
-  const [activePanel, setActivePanelState] = useState(() => load('activePanel', 'dashboard'));
-  const [drivers, setDriversState] = useState(() => { try { const v = localStorage.getItem('mn_drivers_queue'); return v ? JSON.parse(v) : []; } catch { return []; } });
-  const setDrivers = useCallback((val) => { setDriversState(val); try { localStorage.setItem('mn_drivers_queue', JSON.stringify(val)); } catch {} }, []);
+  const { drivers, loading: driversLoading, lastChangeAt: driversLastChangeAt, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
+  const sheetHistory = useSheetHistory();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
@@ -22,36 +23,43 @@ export function AppProvider({ children }) {
   const [vibe,        setVibeState]        = useState(() => load('vibe',     'sobrio'));
   const [rhythm,      setRhythmState]      = useState(() => load('rhythm',   'operacional'));
 
-  const persist = useCallback((setter, key) => (val) => {
-    setter(val);
-    save(key, val);
-  }, []);
+  // Setters memoizados — referência estável evita re-render dos consumers.
+  const setPlatformId  = useCallback((v) => { setPlatformIdState(v);  save('platformId',  v); }, []);
+  const setTheme       = useCallback((v) => { setThemeState(v);       save('theme',       v); }, []);
+  const setDensity     = useCallback((v) => { setDensityState(v);     save('density',     v); }, []);
+  const setAccent      = useCallback((v) => { setAccentState(v);      save('accent',      v); }, []);
+  const setMode        = useCallback((v) => { setModeState(v);        save('mode',        v); }, []);
+  const setVibe        = useCallback((v) => { setVibeState(v);        save('vibe',        v); }, []);
+  const setRhythm      = useCallback((v) => { setRhythmState(v);      save('rhythm',      v); }, []);
 
-  const setActivePanel = persist(setActivePanelState, 'activePanel');
-  const setPlatformId  = persist(setPlatformIdState,  'platformId');
-  const setTheme       = persist(setThemeState,       'theme');
-  const setDensity     = persist(setDensityState,     'density');
-  const setAccent      = persist(setAccentState,      'accent');
-  const setMode        = persist(setModeState,        'mode');
-  const setVibe        = persist(setVibeState,        'vibe');
-  const setRhythm      = persist(setRhythmState,      'rhythm');
+  // Sem useMemo no value, todo consumer de useApp() re-renderiza a cada render do Provider.
+  const value = useMemo(() => ({
+    drivers, driversLoading, driversLastChangeAt,
+    replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
+    filters, setFilters,
+    platformId, setPlatformId,
+    theme, setTheme,
+    density, setDensity,
+    accent, setAccent,
+    mode, setMode,
+    vibe, setVibe,
+    rhythm, setRhythm,
+    sheetHistory,
+  }), [
+    drivers, driversLoading, driversLastChangeAt,
+    replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
+    filters, setFilters,
+    platformId, setPlatformId,
+    theme, setTheme,
+    density, setDensity,
+    accent, setAccent,
+    mode, setMode,
+    vibe, setVibe,
+    rhythm, setRhythm,
+    sheetHistory,
+  ]);
 
-  return (
-    <Ctx.Provider value={{
-      activePanel, setActivePanel,
-      drivers, setDrivers,
-      filters, setFilters,
-      platformId, setPlatformId,
-      theme, setTheme,
-      density, setDensity,
-      accent, setAccent,
-      mode, setMode,
-      vibe, setVibe,
-      rhythm, setRhythm,
-    }}>
-      {children}
-    </Ctx.Provider>
-  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const useApp = () => useContext(Ctx);
