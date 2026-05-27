@@ -54,7 +54,8 @@ src/
 ├── hooks/                # 11 hooks de domínio (atendimentos, templates, notas, etc.)
 ├── lib/                  # uploadImage.js
 ├── modules/              # Painéis principais (Dashboard, Monitor, Agenda, ...)
-│   └── monitor/          # Subcomponentes do Monitor
+│   ├── monitor/          # Subcomponentes do Monitor
+│   └── crosscheck/       # Módulo Cross-Check (index, hook, UploadPanel, MatchCard, utils)
 ├── platforms/            # ⭐ Camada de adapters de plataforma
 │   ├── base.js           # Contrato + helpers (emptyDriver/emptyStats)
 │   ├── index.js          # Registry, getPlatform, detectPlatform
@@ -90,6 +91,7 @@ supabase/
 | `workspace` | Workspace | Conhecimento | — |
 | `notas`     | Bloco de Notas | Conhecimento | — |
 | `links`     | Links Rápidos | Conhecimento | — |
+| `crosscheck`| Cross-Check | Operação | — |
 | `perfil`    | Meu Perfil | Conta | — |
 | `admin`     | Administração | Conta | ✅ |
 | `analytics` | Analytics | Conta | ✅ |
@@ -163,6 +165,20 @@ Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
 ### 5.10. Analytics (`modules/Analytics.jsx`, admin-only)
 Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
 (pie), tendência de 14 dias intervenção × descarte (line).
+
+### 5.11. Cross-Check (`modules/crosscheck/`)
+Compara alertas exportados de duas plataformas diferentes (atualmente Maxtrack
+× Horizon) lado a lado. Faz upload de dois arquivos xlsx/csv e encontra
+correspondências por placa ou por nome de motorista. Permite filtrar por tipo
+de match, ordenar, destacar divergências de contagem e exportar os resultados
+em CSV.
+
+Subcomponentes:
+- `crosscheck/index.jsx` — componente principal (fino, só renderiza)
+- `crosscheck/useCrossCheck.js` — hook com todo o estado e lógica
+- `crosscheck/UploadPanel.jsx` — área de upload para um lado (left/right)
+- `crosscheck/MatchCard.jsx` — card de resultado individual
+- `crosscheck/utils.js` — funções puras (normalização, buildStats, formatação)
 
 ---
 

@@ -21,7 +21,7 @@ import Notes from "./modules/Notes.jsx";
 import Agenda from "./modules/Agenda.jsx";
 import Admin from "./modules/Admin.jsx";
 import Analytics from "./modules/Analytics.jsx";
-import CrossCheck from "./modules/CrossCheck.jsx";
+import CrossCheck from "./modules/crosscheck/index.jsx";
 
 function Panel({ id, children }) {
   const { activePanel } = useApp();
