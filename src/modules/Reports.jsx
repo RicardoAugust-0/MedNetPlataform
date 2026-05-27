@@ -123,8 +123,6 @@ export default function Reports() {
   };
 
   const currentModels = AI_PROVIDERS.find(p => p.id === provider)?.models || [];
-  const modelLabel    = currentModels.find(m => m.id === model)?.label || model;
-  const providerLabel = AI_PROVIDERS.find(p => p.id === provider)?.label || provider;
 
   return (
     <div style={{ maxWidth: 800 }}>

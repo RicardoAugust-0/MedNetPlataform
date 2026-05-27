@@ -15,10 +15,6 @@ export default function MonitorModals({
   templates,
   applyTemplate,
   onNavigateToTemplates,
-  dossieDriver,
-  setDossieDriver,
-  dossieLoading,
-  dossieData,
   discardModal,
   setDiscardModal,
   onDiscardConfirm,
@@ -96,53 +92,7 @@ export default function MonitorModals({
         document.body
       )}
 
-      {/* Dossiê Modal */}
-      {dossieDriver && createPortal(
-        <div className="modal-overlay open" onClick={() => setDossieDriver(null)}>
-          <div className="modal" style={{ width: 500, padding: 24 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  <i className="ti ti-steering-wheel" style={{ marginRight: 8, color: 'var(--accent-500)' }}></i>
-                  Dossiê do Motorista
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{dossieDriver}</div>
-              </div>
-              <button className="btn-icon" onClick={() => setDossieDriver(null)}>
-                <i className="ti ti-x"></i>
-              </button>
-            </div>
 
-            {dossieLoading ? (
-              <div className="empty-state" style={{ minHeight: 200 }}><i className="ti ti-loader-2 ti-spin"></i> Buscando histórico...</div>
-            ) : dossieData.length === 0 ? (
-              <div className="empty-state" style={{ minHeight: 200 }}><i className="ti ti-history"></i> Nenhum evento encontrado para este motorista.</div>
-            ) : (
-              <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {dossieData.map(item => (
-                    <div key={item.id} style={{ display: 'flex', gap: 12, borderLeft: `2px solid var(--${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'border-md'})`, paddingLeft: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                          <span className={`badge badge-${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'info'}`} style={{ marginRight: 8, fontSize: 9.5 }}>{item.tipo.toUpperCase()}</span>
-                          {new Date(item.created_at).toLocaleDateString('pt-BR')} às {item.hora}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                          {item.obs}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
-                          Operador: {item.operador}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* Discard Reason Modal */}
       {discardModal && createPortal(

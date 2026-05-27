@@ -28,7 +28,6 @@ import {
   TECNICO_CATS,
   TECNICO_EVENTOS,
   MIN_MOVING_SPEED_KMH,
-  DINON_CARRIERS_NORM,
   STATUS_FALSO_POSITIVO,
 } from './columns.js';
 
@@ -41,12 +40,6 @@ const INTERVENCAO_EVENTOS_NORM = INTERVENCAO_EVENTOS.map(normalize);
 function isDistracaoGenerica(e) {
   const combo = `${e._eventoNorm || ''} ${e._categoriaNorm || ''}`;
   return containsAll(combo, ['distracao', 'generica']);
-}
-
-function isFumoEvento(e) {
-  // Sascar pode emitir como "Fumando" (gerúndio) ou "Fumo" — ambos têm o radical "fum".
-  return /\bfum(o|ando|ante|ar)\b/.test(e._eventoNorm) ||
-         /\bfum(o|ando|ante|ar)\b/.test(e._categoriaNorm);
 }
 
 // Detecta se as headers da planilha batem com o formato Sascar.
@@ -196,6 +189,48 @@ export async function parse(file) {
           };
         });
 
+        const rawEventRows = [];
+        valid.forEach((r) => {
+          const placa = r[COLUMNS.placa];
+          if (!placa) return;
+
+          let speed = null;
+          if (speedColumn) {
+            speed = parseSpeed(r[speedColumn]);
+          }
+
+          const eventDate = parseEventDate(r[COLUMNS.hora]);
+          const ocorrido_em = eventDate ? eventDate.toISOString() : null;
+
+          const nomeEvento = r[COLUMNS.evento] || '';
+          const categoria = r[COLUMNS.categoria] || '';
+
+          const isIntervencao = INTERVENCAO_EVENTOS_NORM.includes(normalize(nomeEvento)) || isDistracaoGenerica({ _eventoNorm: normalize(nomeEvento), _categoriaNorm: normalize(categoria) });
+          const isTecnico = TECNICO_CATS_NORM.includes(normalize(categoria)) || TECNICO_EVENTOS_NORM.includes(normalize(nomeEvento));
+          const bucket = isIntervencao ? 'intervencao' : isTecnico ? 'tecnico' : 'reportar';
+
+          rawEventRows.push({
+            platform_id:          'sascar',
+            placa,
+            nome:                 (r[COLUMNS.motorista] && r[COLUMNS.motorista] !== '-') ? String(r[COLUMNS.motorista]).trim() : null,
+            cpf:                  null,
+            matricula:            null,
+            transportadora:       r[COLUMNS.transportadora] || '—',
+            frota:                r[COLUMNS.frota] ? String(r[COLUMNS.frota]).trim() : null,
+            nome_evento:          nomeEvento,
+            descricao:            null,
+            categoria_bucket:     bucket,
+            severidade:           r[COLUMNS.severidade] || 'Normal',
+            turno:                parseTurno(r[COLUMNS.hora]) || 'diurno',
+            localidade:           null,
+            velocidade_kmh:       speed,
+            duracao_seg:          null,
+            analise_ia_plataforma: null,
+            raw_event_type_id:    null,
+            ocorrido_em,
+          });
+        });
+
         const stats = {
           total:                  drivers.length,
           comIntervencao:         drivers.filter((d) => d.alertas > 0).length,
@@ -208,7 +243,7 @@ export async function parse(file) {
           autoDescartes:          [],
         };
 
-        resolve({ drivers, stats });
+        resolve({ drivers, stats, rawEventRows });
       } catch (err) {
         reject(err);
       }

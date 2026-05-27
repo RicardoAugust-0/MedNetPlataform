@@ -260,7 +260,7 @@ export default function Monitor() {
         try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch {}
       }
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats } = await platform.spreadsheet.parse(file);
+      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file);
       const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
       const postProcessed = platform.postProcess?.(histFiltered);
       const newDrivers    = postProcessed?.drivers    ?? histFiltered;
@@ -273,6 +273,18 @@ export default function Monitor() {
       const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
       const atualizadas = timestamped.length - novas;
       const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
+
+      // Persiste eventos brutos na tabela de histórico permanente
+      if (rawEventRows && rawEventRows.length > 0) {
+        const validEvents = rawEventRows.filter(r => r.ocorrido_em);
+        if (validEvents.length > 0) {
+          const { error: evInsertErr } = await supabase
+            .from('driver_events')
+            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: true });
+          if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
+        }
+      }
+
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);
@@ -316,7 +328,7 @@ export default function Monitor() {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Buscando eventos em ${platform.name}…`);
     try {
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats } = await platform.scraper.pull();
+      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.scraper.pull();
       const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
       const postProcessed = platform.postProcess?.(histFiltered);
       const newDrivers    = postProcessed?.drivers    ?? histFiltered;
@@ -329,6 +341,18 @@ export default function Monitor() {
       const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
       const atualizadas = timestamped.length - novas;
       const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
+
+      // Persiste eventos brutos na tabela de histórico permanente
+      if (rawEventRows && rawEventRows.length > 0) {
+        const validEvents = rawEventRows.filter(r => r.ocorrido_em);
+        if (validEvents.length > 0) {
+          const { error: evInsertErr } = await supabase
+            .from('driver_events')
+            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: true });
+          if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
+        }
+      }
+
       replaceDrivers(timestamped, platform.id);
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       setSheetLoadedAt(loadedAt);

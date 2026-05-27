@@ -115,7 +115,6 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
       <div className="d-actions">
         {type === 'intervencao' && (
           <>
-            <button className="btn btn-sm" onClick={() => handlers.openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
             <button className="btn btn-sm btn-primary" onClick={() => handlers.attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
             <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'intervencao')}><i className="ti ti-trash"></i></button>
@@ -124,7 +123,6 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
 
         {type === 'reportar' && (
           <>
-            <button className="btn btn-sm" onClick={() => handlers.openDossie(d.nome)}><i className="ti ti-history"></i> Histórico</button>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
             <button className="btn btn-sm btn-warning" onClick={() => handlers.reportar(d)}><i className="ti ti-building"></i> Reportar e Remover</button>
             <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'reportar')}><i className="ti ti-trash"></i></button>

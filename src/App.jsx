@@ -22,8 +22,9 @@ import Notes from "./modules/Notes.jsx";
 import Agenda from "./modules/Agenda.jsx";
 import Admin from "./modules/Admin.jsx";
 import Analytics from "./modules/Analytics.jsx";
-import CrossCheck from "./modules/CrossCheck.jsx";
 import Reports from "./modules/Reports.jsx";
+import DossiesPage from "./modules/DossiesPage.jsx";
+import CrossCheck from "./modules/CrossCheck.jsx";
 
 function AdminGuard({ children }) {
   const { profile } = useAuth();
@@ -142,6 +143,7 @@ function AppShell() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/monitor" element={<Navigate to="/monitor/intervencao" replace />} />
               <Route path="/monitor/:tab" element={<Monitor />} />
+              <Route path="/dossies" element={<DossiesPage />} />
               <Route path="/agenda" element={<Agenda />} />
               <Route path="/crosscheck" element={<CrossCheck />} />
               <Route path="/templates" element={<Templates />} />
