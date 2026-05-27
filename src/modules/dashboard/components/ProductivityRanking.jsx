@@ -55,7 +55,7 @@ export function ProductivityRanking({ equipe }) {
           const qLabel = quality === 'fast' ? 'Reinc. alta'
                        : quality === 'slow' ? 'Tempo alto'
                        : 'Equilíbrio';
-          const qIcon  = quality === 'fast' ? 'ti-alert-triangle'
+          const qIcon  = quality === 'fast' ? 'ti-refresh'
                        : quality === 'slow' ? 'ti-hourglass'
                        : 'ti-check';
           // Segments: fadigaPos, fadigaPP, compPos, compPP

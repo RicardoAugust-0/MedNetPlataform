@@ -96,17 +96,16 @@ export function useDashboardMetrics({
   );
 
   // ── Placas com intervenção prévia (excl. hoje) ────────────────────────────
-  // Combina Supabase atendimentos (30d) e planilha (90d com realizadoPor).
-  const placasPrevia30d = useMemo(() => {
+  // Combina Supabase atendimentos e planilha — janela de 7d para ambos.
+  const placasPrevia7d = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const cutoff30 = today.getTime() - 30 * 86400000;
-    const cutoff90 = today.getTime() - 90 * 86400000;
+    const cutoff7 = today.getTime() - 7 * 86400000;
     const set = new Set();
     for (const a of atHistory) {
       if (a.tipo !== 'intervencao' || !a.placa) continue;
       const t = new Date(a.created_at).getTime();
-      if (t < cutoff30) continue;
+      if (t < cutoff7) continue;
       if (new Date(a.created_at).toDateString() === todayStr) continue;
       set.add(a.placa);
     }
@@ -115,7 +114,7 @@ export function useDashboardMetrics({
       const d = parseSheetRowDate(r);
       if (!d) continue;
       const t = d.getTime();
-      if (t < cutoff90) continue;
+      if (t < cutoff7) continue;
       if (d.toDateString() === todayStr) continue;
       set.add(r.placa);
     }
@@ -140,12 +139,12 @@ export function useDashboardMetrics({
   const fechadosHoje = useMemo(
     () => atendimentosHoje.filter(a => {
       if (a.tipo !== 'intervencao' && a.tipo !== 'reportar') return false;
-      const isPP = a.placa && placasPrevia30d.has(a.placa);
+      const isPP = a.placa && placasPrevia7d.has(a.placa);
       if (isPP && !showResultado('pos-positivo')) return false;
       if (!isPP && !showResultado('positivo'))    return false;
       return true;
     }),
-    [atendimentosHoje, placasPrevia30d, showResultado]
+    [atendimentosHoje, placasPrevia7d, showResultado]
   );
 
   // RESULTADOS é a fonte única de verdade para Pós-positivo/Positivo/Em aberto.
@@ -160,19 +159,19 @@ export function useDashboardMetrics({
       return d && d.toDateString() === todayStr;
     });
     const sheetFechadosToday = sheetRowsToday.filter(r => r.realizadoPor);
-    const sheetPpToday = sheetFechadosToday.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+    const sheetPpToday = sheetFechadosToday.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
     const sheetPosToday = sheetFechadosToday.length - sheetPpToday;
 
-    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia30d.has(a.placa)).length + sheetPpToday;
+    const ppFull = fechadosFull.filter(a => a.placa && placasPrevia7d.has(a.placa)).length + sheetPpToday;
     const posFull = (fechadosFull.length - (ppFull - sheetPpToday)) + sheetPosToday;
     const emAbertoFull = drivers.filter(d => (d.alertas || 0) > 0 || (d.reportaveis || 0) > 0).length;
 
     return [
       { id: 'positivo',     label: 'Positivo',      color: '#2DA75A', count: posFull,      hint: 'Atendimento sem histórico recente' },
-      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (30d)' },
+      { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppFull,       hint: 'Reincidiu após intervenção (7d)' },
       { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAbertoFull, hint: 'Motoristas aguardando tratamento' },
     ];
-  }, [atHistory, sheetHistory.rows, todayStr, placasPrevia30d, drivers]);
+  }, [atHistory, sheetHistory.rows, todayStr, placasPrevia7d, drivers]);
 
   const TIPOS = useMemo(() => {
     const fadigaCount  = drivers.filter(d => (d.alertas || 0) > 0).length;
@@ -188,8 +187,8 @@ export function useDashboardMetrics({
 
   const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
   const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
-  const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
-  const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+  const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
+  const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
 
   const posPositivo  = platPP + sheetPP;
   const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
@@ -235,8 +234,8 @@ export function useDashboardMetrics({
     const closedInterventionsFiltered = atendimentosHoje.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
     const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => r.realizadoPor);
 
-    const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia30d.has(a.placa)).length;
-    const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia30d.has(r.placa)).length;
+    const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
+    const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
     
     const ppCount = platPP + sheetPP;
     const posCount = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - ppCount;
@@ -246,12 +245,12 @@ export function useDashboardMetrics({
       { id: 'pos-positivo', label: 'Pós-positivo',  color: '#2A8DD9', count: ppCount },
       { id: 'aberto',       label: 'Em aberto',     color: '#8A94A6', count: emAberto },
     ];
-  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia30d, emAberto]);
+  }, [atendimentosHoje, sheetRowsPeriodo, placasPrevia7d, emAberto]);
 
   // Reincidentes em aberto: drivers na fila cujas placas têm histórico recente.
   const reincidentesAtivos = useMemo(
-    () => driversAtivos.filter(d => d.placa && placasPrevia30d.has(d.placa)).length,
-    [driversAtivos, placasPrevia30d]
+    () => driversAtivos.filter(d => d.placa && placasPrevia7d.has(d.placa)).length,
+    [driversAtivos, placasPrevia7d]
   );
 
   // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
@@ -296,7 +295,7 @@ export function useDashboardMetrics({
       .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))
       .map(d => {
         const tipo       = d.alertas > 0 ? 'fadiga' : 'comportamento';
-        const reincidente = d.placa && placasPrevia30d.has(d.placa);
+        const reincidente = d.placa && placasPrevia7d.has(d.placa);
         const lastInterv = lastIntervByPlaca.get(d.placa);
         const ultimaIntervencao = lastInterv
           ? `${Math.floor((nowMs - new Date(lastInterv.created_at).getTime()) / 86400000)}d`
@@ -319,7 +318,7 @@ export function useDashboardMetrics({
         };
       })
       .sort((a, b) => b.abertoMin - a.abertoMin);
-  }, [driversIntervencao, lastIntervByPlaca, placasPrevia30d, now, resolveAlias]);
+  }, [driversIntervencao, lastIntervByPlaca, placasPrevia7d, now, resolveAlias]);
 
   const slaVencidos = criticos.filter(c => c.abertoMin > slaLimit).length;
 
@@ -393,7 +392,7 @@ export function useDashboardMetrics({
       e.abertos++;
       e.motoristas++;
       e.total += (d.alertas || 0) + (d.reportaveis || 0);
-      if (d.placa && placasPrevia30d.has(d.placa)) e.posPositivos++;
+      if (d.placa && placasPrevia7d.has(d.placa)) e.posPositivos++;
       map.set(name, e);
     });
     atendimentosHoje
@@ -402,11 +401,11 @@ export function useDashboardMetrics({
         const name = resolveAlias(a.transportadora);
         const e = map.get(name) || { name, total: 0, abertos: 0, posPositivos: 0, motoristas: 0 };
         e.total++;
-        if (a.placa && placasPrevia30d.has(a.placa)) e.posPositivos++;
+        if (a.placa && placasPrevia7d.has(a.placa)) e.posPositivos++;
         map.set(name, e);
       });
     return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [driversAtivos, atendimentosHoje, placasPrevia30d, resolveAlias]);
+  }, [driversAtivos, atendimentosHoje, placasPrevia7d, resolveAlias]);
 
   // Transportadoras pros chips do filtro — base UNFILTERED
   const transpForFilter = useMemo(() => {
@@ -515,7 +514,7 @@ export function useDashboardMetrics({
       if (!opMap[opName]) opMap[opName] = { nome: opName, interv: 0, pp: 0, reportes: 0 };
       if (a.tipo === 'intervencao') {
         opMap[opName].interv++;
-        if (a.placa && placasPrevia30d.has(a.placa)) opMap[opName].pp++;
+        if (a.placa && placasPrevia7d.has(a.placa)) opMap[opName].pp++;
       } else if (a.tipo === 'reportar') {
         opMap[opName].reportes++;
       }
@@ -535,7 +534,7 @@ export function useDashboardMetrics({
       const opName = getFullOperatorName(raw) || raw;
       if (!opMap[opName]) opMap[opName] = { nome: opName, interv: 0, pp: 0, reportes: 0 };
       opMap[opName].interv++;
-      if (r.placa && placasPrevia30d.has(r.placa)) opMap[opName].pp++;
+      if (r.placa && placasPrevia7d.has(r.placa)) opMap[opName].pp++;
     });
 
     const colors = ['#9E1A45', '#2A8DD9', '#2DA75A', '#E8A020', '#7A1235', '#C24A6A'];
@@ -580,7 +579,7 @@ export function useDashboardMetrics({
     periodoWindow,
     // bases filtradas
     atendimentosHoje, driversFiltered, driversAtivos, driversIntervencao,
-    placasPrevia30d, lastIntervByPlaca,
+    placasPrevia7d, lastIntervByPlaca,
     // KPIs principais
     fechadosHoje, posPositivo, positivo, fechados, emAberto,
     encerradosPlataforma, intervencoesRegistradas, sheetIntervencoesHoje,
