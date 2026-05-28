@@ -15,6 +15,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { chromium } from 'playwright';
+import fs from 'fs';
 
 const PORTAL_URL = 'https://go.maxtrack.com.br/#event/Event';
 
@@ -43,39 +45,82 @@ async function loadCredentials() {
  *
  * @returns {Promise<string>} conteúdo CSV (ponto-e-vírgula)
  */
-export async function downloadReport() {
+export async function downloadReport(tipo = 'abertos') {
+  console.log('[Maxtrack] Carregando credenciais do banco...');
   const { email, password } = await loadCredentials();
 
-  // TODO: implementar com Playwright
-  // Exemplo de estrutura esperada:
-  //
-  // const { chromium } = await import('playwright');
-  // const browser = await chromium.launch({ headless: true });
-  // const page    = await browser.newPage();
-  //
-  // // 1. Login
-  // await page.goto(PORTAL_URL);
-  // await page.fill('#TODO_email_selector', email);
-  // await page.fill('#TODO_password_selector', password);
-  // await page.click('#TODO_login_button');
-  // await page.waitForNavigation();
-  //
-  // // 2. Filtro de data (hoje)
-  // const hoje = new Date().toLocaleDateString('pt-BR'); // DD/MM/AAAA
-  // await page.fill('#TODO_data_inicio', hoje);
-  // await page.fill('#TODO_data_fim', hoje);
-  // await page.click('#TODO_filtrar_button');
-  //
-  // // 3. Download CSV
-  // const [download] = await Promise.all([
-  //   page.waitForEvent('download'),
-  //   page.click('#TODO_exportar_csv_button'),
-  // ]);
-  // const csvContent = await (await download.createReadStream()).text();
-  //
-  // await browser.close();
-  // return csvContent;
+  console.log('[Maxtrack] Iniciando navegador em modo headless...');
+  const browser = await chromium.launch({ 
+    headless: true, // true para rodar silenciosamente no terminal (e na VPS)
+  });
+  
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
-  void email; void password; // evitar lint error enquanto TODO
-  throw new Error('downloadReport() ainda não implementado. Configure o Playwright quando a VPS estiver ativa.');
+  try {
+    console.log(`[Maxtrack] Navegando para ${PORTAL_URL}...`);
+    await page.goto(PORTAL_URL);
+
+    // 1. Efetuar Login
+    console.log('[Maxtrack] Inserindo credenciais e efetuando login...');
+    await page.locator('input[type="text"]').click();
+    await page.locator('input[type="text"]').fill(email);
+    
+    await page.locator('input[type="password"]').click();
+    await page.locator('input[type="password"]').fill(password);
+    
+    await page.getByRole('button', { name: 'ENTRAR' }).click();
+
+    // Aguarda o painel carregar (esperando o botão de Exportar ficar visível)
+    console.log('[Maxtrack] Aguardando carregamento do painel principal...');
+    await page.waitForSelector('[title="Exportar"]', { timeout: 45000 });
+
+    // Seleciona os filtros corretos com base no parâmetro
+    if (tipo === 'todos') {
+      console.log('[Maxtrack] Filtrando por: Superior = Todos, Inferior = Todos...');
+      await page.locator('.badge-action').filter({ hasText: 'Todos' }).first().click();
+      await page.getByText('Todos').nth(1).click();
+    } else if (tipo === 'fechados') {
+      console.log('[Maxtrack] Filtrando por: Superior = Fechados, Inferior = Todos...');
+      await page.locator('.badge-action').filter({ hasText: 'Fechados' }).click();
+      await page.getByText('Todos').nth(1).click();
+    } else {
+      // Padrão 'abertos'
+      console.log('[Maxtrack] Filtrando por: Superior = Abertos, Inferior = Todos...');
+      await page.locator('.badge-action').filter({ hasText: 'Abertos' }).click();
+      await page.getByText('Todos').nth(1).click();
+    }
+
+    // 2. Abrir menu de Exportação
+    console.log('[Maxtrack] Abrindo menu de exportação...');
+    await page.getByTitle('Exportar').click();
+    await page.getByTitle('Exportar em formato CSV').click();
+
+    // 3. Aguardar disparar o popup e o download
+    console.log('[Maxtrack] Solicitando download do arquivo CSV...');
+    
+    // Aguarda o botão ficar disponível antes de clicar (útil se a Maxtrack demorar para processar o CSV)
+    console.log('[Maxtrack] Aguardando o botão "Baixar arquivo processado" ficar disponível...');
+    await page.waitForSelector('[title="Baixar arquivo processado"]', { state: 'visible', timeout: 60000 });
+
+    const [page1, download] = await Promise.all([
+      page.waitForEvent('popup', { timeout: 60000 }),
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.getByTitle('Baixar arquivo processado').first().click()
+    ]);
+
+    // Fechar o popup gerado para liberar memória
+    if (page1) {
+      await page1.close();
+    }
+
+    console.log('[Maxtrack] Download concluído. Lendo conteúdo do arquivo...');
+    const filePath = await download.path();
+    const csvContent = await fs.promises.readFile(filePath, 'utf8');
+
+    return csvContent;
+  } finally {
+    console.log('[Maxtrack] Fechando navegador...');
+    await browser.close();
+  }
 }
