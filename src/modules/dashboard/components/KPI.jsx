@@ -36,9 +36,9 @@ export function KPI({ icon, label, value, sub, trend, trendDir, hero, accent, pr
         {autoTrend && <span className={`dg-kpi-trend ${autoTrendDir}`} title={compareValue != null ? `${compareLabel}: ${compareValue}` : null}><i className={`ti ${trendIcon}`}></i>{autoTrend}{compareValue != null ? ` vs ${compareLabel}` : ''}</span>}
         <span>{sub}</span>
       </div>
-      {typeof progress === 'number' && (
-        <div className="dg-kpi-bar"><span style={{ width: `${progress}%`, background: accent || '#fff' }}></span></div>
-      )}
+      <div className="dg-kpi-bar" style={{ visibility: typeof progress === 'number' ? 'visible' : 'hidden' }}>
+        <span style={{ width: `${typeof progress === 'number' ? progress : 0}%`, background: accent || '#fff' }}></span>
+      </div>
     </div>
   );
 }

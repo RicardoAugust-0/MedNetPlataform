@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 
-export function useSheetHistory() {
+const SheetHistoryContext = createContext(null);
+
+export function SheetHistoryProvider({ children }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -47,5 +49,17 @@ export function useSheetHistory() {
     setError(null);
   }, []);
 
-  return { rows, loading, error, loaded, loadedAt, load, reset };
+  return createElement(
+    SheetHistoryContext.Provider,
+    { value: { rows, loading, error, loaded, loadedAt, load, reset } },
+    children
+  );
+}
+
+export function useSheetHistory() {
+  const context = useContext(SheetHistoryContext);
+  if (!context) {
+    throw new Error('useSheetHistory must be used within a SheetHistoryProvider');
+  }
+  return context;
 }

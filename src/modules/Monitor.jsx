@@ -89,7 +89,9 @@ export default function Monitor() {
 
   // Carrega dados do Sheets em background ao montar o Monitor
   useEffect(() => {
-    sheetHistory.load();
+    if (!sheetHistory.loaded) {
+      sheetHistory.load();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

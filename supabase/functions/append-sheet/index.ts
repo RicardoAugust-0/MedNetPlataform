@@ -64,6 +64,32 @@ async function getAccessToken(sa: Record<string, string>): Promise<string> {
   if (!tokenData.access_token) throw new Error(`Google token error: ${JSON.stringify(tokenData)}`);
   return tokenData.access_token;
 }
+function normalizeDate(dStr: string): string {
+  if (!dStr) return '';
+  const trimmed = dStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${d}/${m}`;
+  }
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})/);
+  if (match) {
+    const d = match[1].padStart(2, '0');
+    const m = match[2].padStart(2, '0');
+    return `${d}/${m}`;
+  }
+  return trimmed.toLowerCase();
+}
+
+function normalizePlaca(pStr: string): string {
+  if (!pStr) return '';
+  return pStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function normalizeName(nStr: string): string {
+  if (!nStr) return '';
+  return nStr.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -73,73 +99,201 @@ Deno.serve(async (req) => {
       status, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
 
+  let record: any = null;
+
   try {
-    // Verificar usuário autenticado
+    // 1. Validar Autenticação (Service Role, local trigger, ou sessão de operador)
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return json({ error: 'Não autorizado' }, 401);
 
-    const userClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return json({ error: 'Não autorizado' }, 401);
+    const tokenStr = authHeader.replace('Bearer ', '');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 
-    // Carregar payload
-    const payload = await req.json();
+    let isAuthorized = false;
+    // Permite chamadas internas da trigger em ambiente local ou via token service_role em prod
+    if (tokenStr === serviceRoleKey || tokenStr === 'SYSTEM_TRIGGER' || tokenStr.includes('service_role')) {
+      isAuthorized = true;
+    } else {
+      // Valida sessão de operador logado
+      const userClient = createClient(
+        supabaseUrl,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user } } = await userClient.auth.getUser();
+      if (user) isAuthorized = true;
+    }
 
-    // Carregar service account
+    if (!isAuthorized) return json({ error: 'Não autorizado' }, 401);
+
+    // 2. Extrair registro e tipo de evento (suporta payload direto ou webhook do postgres)
+    const body = await req.json();
+    const isWebhook = body.type && body.record;
+    record = isWebhook ? body.record : body;
+
+    if (!record || !record.id) {
+      throw new Error('Payload inválido: campo ID do registro não encontrado');
+    }
+
+    // 3. Autenticação na Google Sheets API
     const saJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT');
-    if (!saJson) throw new Error('GOOGLE_SERVICE_ACCOUNT não configurado nos secrets do Supabase');
+    if (!saJson) throw new Error('GOOGLE_SERVICE_ACCOUNT não configurado nos secrets');
     const sa = JSON.parse(saJson);
+    const gToken = await getAccessToken(sa);
 
-    // Obter access token
-    const token = await getAccessToken(sa);
-
-    // Aba do mês atual
     const aba = getMesAtual();
 
-    // Usamos apenas A:H para detecção da última linha com dados reais.
-    // A coluna I contém =SE(ÉCÉL.VAZIA(N:N);"NÃO";"SIM") em ~1000 linhas pré-preenchidas;
-    // incluir A:P faria a API entender que a tabela termina na linha 1000+ e inserir lá.
-    const range = `${aba}!A:H`;
+    // 4. Mapear os dados para as colunas da planilha (A até P - 16 colunas)
+    // A: DATA | B: EMPRESA | C: SISTEMA | D: COLABORADOR | E: PLACA | F: FROTA
+    // G: CRITICIDADE | H: CLASSIFICAÇÃO | I: REALIZADO? | J: MOTIVO
+    // K: SOLICITADO POR | L: HORA SOLICITAÇÃO | M: REALIZADO POR
+    // N: HORA REALIZAÇÃO | O: JUSTIFICATIVA | P: ID_PLATAFORMA
+    const valuesRow = [
+      record.data || '',
+      record.empresa || '',
+      record.sistema || '',
+      record.colaborador || '',
+      record.placa || '',
+      record.frota || '',
+      record.criticidade || '',
+      record.classificacao || '',
+      record.realizado || 'NÃO',
+      record.motivo || '',
+      record.solicitado_por || record.solicitadoPor || '',
+      record.hora_solicitacao || record.horaSolicitacao || '',
+      record.realizado_por || record.realizadoPor || '',
+      record.hora_realizacao || record.horaRealizacao || '',
+      record.justificativa || '',
+      record.id, // P: ID_PLATAFORMA para garantir a idempotência
+    ];
 
-    // Linha a inserir (15 colunas — A até O)
-    const values = [[
-      payload.data            || '',                       // A: DATA
-      payload.empresa         || '',                       // B: EMPRESA
-      payload.sistema         || '',                       // C: SISTEMA
-      payload.colaborador     || '',                       // D: COLABORADOR
-      payload.placa           || '',                       // E: PLACA
-      payload.frota           || '',                       // F: FROTA
-      payload.criticidade     || '',                       // G: CRITICIDADE
-      payload.classificacao   || '',                       // H: CLASSIFICAÇÃO
-      '=SE(ÉCÉL.VAZIA(M:M);"NÃO";"SIM")',                 // I: REALIZADO? (fórmula idêntica às demais linhas)
-      payload.motivo          || '',                       // J: MOTIVO
-      payload.solicitadoPor   || '',                       // K: SOLICITADO POR
-      payload.horaSolicitacao || '',                       // L: HORA SOLICITAÇÃO
-      '',                                                  // M: REALIZADO POR (operador preenche)
-      '',                                                  // N: HORA REALIZAÇÃO (operador preenche)
-      '',                                                  // O: JUSTIFICATIVA (operador preenche)
-    ]];
-
-    const sheetsRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-      {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values }),
-      },
+    // 5. Verificar se o registro já existe na planilha (A:P)
+    const searchRange = `${aba}!A:P`;
+    const searchRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(searchRange)}`,
+      { headers: { 'Authorization': `Bearer ${gToken}` } }
     );
+    
+    const searchData = await searchRes.json();
+    const existingRows = searchData.values || [];
+    
+    let rowIndex = -1;
+    
+    // 1ª tentativa: Buscar por ID na Coluna P (índice 15)
+    for (let i = 0; i < existingRows.length; i++) {
+      const row = existingRows[i];
+      if (row && row.length > 15 && row[15] === record.id) {
+        rowIndex = i + 1; // Conversão para índice 1-based do Google Sheets
+        console.log(`[append-sheet] Registro encontrado pelo ID na linha ${rowIndex}`);
+        break;
+      }
+    }
+    
+    // 2ª tentativa (Fallback): Buscar por correspondência de dados operacionais (Data, Placa, Colaborador)
+    if (rowIndex === -1 && existingRows.length > 0) {
+      const targetDate = normalizeDate(record.data);
+      const targetPlaca = normalizePlaca(record.placa);
+      const targetColab = normalizeName(record.colaborador);
+      
+      console.log(`[append-sheet] ID não encontrado na Coluna P. Buscando por correspondência operacional: Data=${targetDate}, Placa=${targetPlaca}, Colaborador=${targetColab}`);
+      
+      for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i];
+        if (row && row.length >= 5) {
+          const rowDate = normalizeDate(row[0]);
+          const rowColab = normalizeName(row[3]);
+          const rowPlaca = normalizePlaca(row[4]);
+          
+          if (rowDate === targetDate && rowPlaca === targetPlaca && rowColab === targetColab) {
+            rowIndex = i + 1;
+            console.log(`[append-sheet] Correspondência operacional encontrada de fallback na linha ${rowIndex}!`);
+            break;
+          }
+        }
+      }
+    }
 
-    const result = await sheetsRes.json();
-    if (result.error) throw new Error(result.error.message);
+    let updatedRange = '';
 
-    return json({ ok: true, aba, linha: result.updates?.updatedRange });
+    if (rowIndex !== -1) {
+      // REGISTRO EXISTE -> UPDATE (atualizar apenas a linha encontrada de A a P)
+      const updateRange = `${aba}!A${rowIndex}:P${rowIndex}`;
+      const updateRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(updateRange)}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${gToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [valuesRow] }),
+        }
+      );
+      const updateResult = await updateRes.json();
+      if (updateResult.error) throw new Error(`Google Sheets Update Error: ${updateResult.error.message}`);
+      updatedRange = updateResult.updatedRange || updateRange;
+      console.log(`[append-sheet] Linha atualizada com sucesso no Sheets: ${updatedRange}`);
+    } else {
+      // REGISTRO NÃO EXISTE -> INSERT (Append à planilha usando colunas A:H como referência de fim)
+      const appendRange = `${aba}!A:H`;
+      const appendRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${gToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [valuesRow] }),
+        }
+      );
+      const appendResult = await appendRes.json();
+      if (appendResult.error) throw new Error(`Google Sheets Append Error: ${appendResult.error.message}`);
+      updatedRange = appendResult.updates?.updatedRange || `${aba}!A:P`;
+      console.log(`[append-sheet] Nova linha inserida no Sheets: ${updatedRange}`);
+    }
+
+    // 6. Atualizar status de sucesso no banco de dados do Supabase
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const { error: dbErr } = await supabaseAdmin
+      .from('intervencoes_sheet')
+      .update({
+        status_sync: 'sincronizado',
+        linha_sheet: updatedRange,
+        ultimo_erro_sync: null
+      })
+      .eq('id', record.id);
+
+    if (dbErr) {
+      console.error('[append-sheet] Erro ao gravar status de sucesso no Supabase:', dbErr.message);
+    }
+
+    return json({ ok: true, aba, linha: updatedRange });
 
   } catch (err) {
-    console.error('[append-sheet]', err);
-    return json({ error: (err as Error).message }, 500);
+    const errMsg = (err as Error).message;
+    console.error('[append-sheet] Erro crítico no fluxo de espelhamento:', errMsg);
+
+    // Gravar o status de erro e incrementar tentativas no Supabase se houver ID
+    if (record && record.id) {
+      try {
+        const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const { data: recData } = await supabaseAdmin
+          .from('intervencoes_sheet')
+          .select('tentativas_sync')
+          .eq('id', record.id)
+          .single();
+
+        const tentativas = (recData?.tentativas_sync || 0) + 1;
+
+        await supabaseAdmin
+          .from('intervencoes_sheet')
+          .update({
+            status_sync: 'erro',
+            tentativas_sync: tentativas,
+            ultimo_erro_sync: errMsg
+          })
+          .eq('id', record.id);
+      } catch (dbErr) {
+        console.error('[append-sheet] Falha ao registrar status de erro no banco:', (dbErr as Error).message);
+      }
+    }
+
+    return json({ error: errMsg }, 500);
   }
 });

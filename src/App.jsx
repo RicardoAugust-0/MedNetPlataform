@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext.jsx";
 import LoginPage from "./auth/LoginPage.jsx";
@@ -10,19 +10,21 @@ import { useApp } from "./context.jsx";
 import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
-import Admin from "./modules/Admin.jsx";
-import Agenda from "./modules/Agenda.jsx";
-import Analytics from "./modules/Analytics.jsx";
-import CrossCheck from "./modules/CrossCheck.jsx";
-import Dashboard from "./modules/Dashboard.jsx";
-import DossiesPage from "./modules/DossiesPage.jsx";
-import Links from "./modules/Links.jsx";
-import Monitor from "./modules/Monitor.jsx";
-import Notes from "./modules/Notes.jsx";
-import Profile from "./modules/Profile.jsx";
-import Reports from "./modules/Reports.jsx";
-import Templates from "./modules/Templates.jsx";
-import Workspace from "./modules/Workspace.jsx";
+import { DataProvider } from "./components/DataProvider.jsx";
+const Admin = lazy(() => import("./modules/Admin.jsx"));
+const Agenda = lazy(() => import("./modules/Agenda.jsx"));
+const Analytics = lazy(() => import("./modules/Analytics.jsx"));
+const CrossCheck = lazy(() => import("./modules/CrossCheck.jsx"));
+const Dashboard = lazy(() => import("./modules/Dashboard.jsx"));
+const DossiesPage = lazy(() => import("./modules/DossiesPage.jsx"));
+const Links = lazy(() => import("./modules/Links.jsx"));
+const Monitor = lazy(() => import("./modules/Monitor.jsx"));
+const Notes = lazy(() => import("./modules/Notes.jsx"));
+const Profile = lazy(() => import("./modules/Profile.jsx"));
+const Reports = lazy(() => import("./modules/Reports.jsx"));
+const Templates = lazy(() => import("./modules/Templates.jsx"));
+const Workspace = lazy(() => import("./modules/Workspace.jsx"));
+const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
 import { supabase } from "./supabase.js";
 import { applyAccent } from "./utils.js";
 
@@ -146,83 +148,88 @@ function AppShell() {
 
   return (
     <RemindersProvider>
-      <div id="app">
-        <ReminderNotifier />
-        <SascarTokenHandler />
-        <Sidebar />
-        <div className="main-area">
-          <Topbar />
-          <div className="content-area">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route
-                path="/monitor"
-                element={<Navigate to="/monitor/intervencao" replace />}
-              />
-              <Route path="/monitor/:tab" element={<Monitor />} />
-              <Route path="/dossies" element={<DossiesPage />} />
-              <Route path="/agenda" element={<Agenda />} />
-              <Route path="/crosscheck" element={<CrossCheck />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/workspace" element={<Workspace />} />
-              <Route path="/notas" element={<Notes />} />
-              <Route path="/links" element={<Links />} />
-              <Route path="/perfil" element={<Profile />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminGuard>
-                    <Admin />
-                  </AdminGuard>
-                }
-              />
-              <Route
-                path="/analytics"
-                element={
-                  <AdminGuard>
-                    <Analytics />
-                  </AdminGuard>
-                }
-              />
-              <Route
-                path="/relatorios"
-                element={
-                  <AdminGuard>
-                    <Reports />
-                  </AdminGuard>
-                }
-              />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+      <DataProvider>
+        <div id="app">
+          <ReminderNotifier />
+          <SascarTokenHandler />
+          <Sidebar />
+          <div className="main-area">
+            <Topbar />
+            <div className="content-area">
+              <Suspense fallback={null}>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route
+                    path="/monitor"
+                    element={<Navigate to="/monitor/intervencao" replace />}
+                  />
+                  <Route path="/monitor/:tab" element={<Monitor />} />
+                  <Route path="/planilha" element={<EmbeddedSheet />} />
+                  <Route path="/dossies" element={<DossiesPage />} />
+                  <Route path="/agenda" element={<Agenda />} />
+                  <Route path="/crosscheck" element={<CrossCheck />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/workspace" element={<Workspace />} />
+                  <Route path="/notas" element={<Notes />} />
+                  <Route path="/links" element={<Links />} />
+                  <Route path="/perfil" element={<Profile />} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <AdminGuard>
+                        <Admin />
+                      </AdminGuard>
+                    }
+                  />
+                  <Route
+                    path="/analytics"
+                    element={
+                      <AdminGuard>
+                        <Analytics />
+                      </AdminGuard>
+                    }
+                  />
+                  <Route
+                    path="/relatorios"
+                    element={
+                      <AdminGuard>
+                        <Reports />
+                      </AdminGuard>
+                    }
+                  />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </Suspense>
+            </div>
           </div>
+          {profile?.role === "admin" && maintenance.enabled && (
+            <div
+              style={{
+                position: "fixed",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#F26931",
+                color: "#fff",
+                padding: "8px 16px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                boxShadow: "0 6px 20px rgba(242,105,49,0.4)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                zIndex: 9999,
+              }}
+            >
+              <i className="ti ti-tools"></i> Plataforma em manutenção (visível só
+              para admins)
+            </div>
+          )}
         </div>
-        {profile?.role === "admin" && maintenance.enabled && (
-          <div
-            style={{
-              position: "fixed",
-              bottom: 16,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#F26931",
-              color: "#fff",
-              padding: "8px 16px",
-              borderRadius: 999,
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              boxShadow: "0 6px 20px rgba(242,105,49,0.4)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              zIndex: 9999,
-            }}
-          >
-            <i className="ti ti-tools"></i> Plataforma em manutenção (visível só
-            para admins)
-          </div>
-        )}
-      </div>
+      </DataProvider>
     </RemindersProvider>
   );
 }

@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from './useToast.jsx';
 
-export function useNotes() {
+const NotesContext = createContext(null);
+
+export function NotesProvider({ children }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [notes, setNotes] = useState([]);
@@ -72,7 +74,19 @@ export function useNotes() {
     if (error) { load(); toast('Erro ao excluir nota', 'error'); }
   }, [load]);
 
-  return { notes, loading, add, update, remove };
+  return createElement(
+    NotesContext.Provider,
+    { value: { notes, loading, add, update, remove } },
+    children
+  );
+}
+
+export function useNotes() {
+  const context = useContext(NotesContext);
+  if (!context) {
+    throw new Error('useNotes must be used within a NotesProvider');
+  }
+  return context;
 }
 
 function fmtDate(iso) {

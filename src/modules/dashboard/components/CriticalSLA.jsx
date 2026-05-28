@@ -21,7 +21,7 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
   };
 
   return (
-    <div className="dg-card">
+    <div className="dg-card dg-card-critical">
       <div className="dg-card-head">
         <div className="ic" style={{ background: 'rgba(226, 75, 74, 0.14)', color: 'var(--danger-500)' }}><i className="ti ti-alert-triangle"></i></div>
         <h3>Críticos & SLA</h3>
@@ -33,7 +33,12 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
         </div>
       </div>
       <div className="dg-critical">
-        {paginated.map((c, idx) => {
+        {criticos.length === 0 ? (
+          <div style={{ display: 'grid', placeItems: 'center', height: 120, color: 'var(--text-muted)', fontSize: 13 }}>
+            Sem motoristas críticos no momento
+          </div>
+        ) : (
+          paginated.map((c, idx) => {
           const t = c.abertoMin;
           const cls = t > slaLimit ? 'danger' : t > slaLimit * 0.7 ? 'warn' : '';
           const mm = String(Math.floor(t)).padStart(2, '0');
@@ -99,7 +104,7 @@ export function CriticalSLA({ criticos, slaLimit = 30 }) {
               )}
             </React.Fragment>
           );
-        })}
+        }))}
       </div>
 
       {totalPages > 1 && (

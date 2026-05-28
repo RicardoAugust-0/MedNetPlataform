@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useApp } from "../context";
@@ -169,6 +169,13 @@ export default function Dashboard() {
   }, []);
   const todayStr = now.toDateString();
 
+  // ── Defer below-the-fold/heavy rendering to free main thread during LCP/FCP
+  const [deferRest, setDeferRest] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setDeferRest(false), 50);
+    return () => clearTimeout(t);
+  }, []);
+
   // ── Sheet: carga inicial — só executa se ainda não foi carregada (evita reload ao trocar de aba)
   useEffect(() => {
     if (!sheetHistory.loaded) {
@@ -209,6 +216,7 @@ export default function Dashboard() {
   });
 
   const hour = now.getHours();
+  const formattedDate = useMemo(() => fmtDate(now), [now]);
 
   // ── "Atualizado há Xmin" — pega o evento mais recente
   const updatedLabel = (() => {
@@ -242,6 +250,78 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [tweaksOpen]);
 
+  if (!sheetHistory.loaded && !sheetHistory.error) {
+    return (
+      <div className="dg-skeleton-page">
+        {/* Saudação */}
+        <div className="dg-greet">
+          <div>
+            <h1>Gestão à Vista</h1>
+            <div className="meta">
+              <span>
+                <i className="ti ti-calendar" style={{ fontSize: 12, marginRight: 4 }}></i>
+                {formattedDate}
+              </span>
+              <span className="sep">·</span>
+              <span className="live">Carregando dados...</span>
+            </div>
+          </div>
+          <div className="dg-greet-actions">
+            <div className="skeleton-btn skeleton-shimmer-bg" style={{ width: 90, height: 34, borderRadius: 8 }} />
+            <div className="skeleton-btn skeleton-shimmer-bg" style={{ width: 110, height: 34, borderRadius: 8, marginLeft: 8 }} />
+          </div>
+        </div>
+
+        {/* Filter Bar Skeleton */}
+        <div className="dg-filters-sk" />
+
+        {/* KPI Row Skeleton */}
+        <div className="dg-kpi-row-sk">
+          <div className="dg-kpi-sk is-hero-sk" />
+          <div className="dg-kpi-sk" />
+          <div className="dg-kpi-sk" />
+          <div className="dg-kpi-sk" />
+        </div>
+
+        {/* Section Header Skeleton */}
+        <div className="dg-section-sk" />
+
+        {/* Grid Skeleton */}
+        <div className="dg-grid-sk">
+          <div className="dg-col-sk">
+            <div className="dg-card-sk" style={{ height: 280 }} />
+            <div className="dg-card-sk" style={{ height: 220 }} />
+          </div>
+          <div className="dg-col-sk">
+            <div className="dg-card-sk" style={{ height: 340 }} />
+            <div className="dg-card-sk" style={{ height: 320 }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sheetHistory.error && !sheetHistory.loaded) {
+    return (
+      <div className="dg-error-page" style={{ padding: '80px 20px', textAlign: 'center', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 14, margin: '20px 0' }}>
+        <div style={{ fontSize: 48, color: 'var(--danger-500)', marginBottom: 16 }}>
+          <i className="ti ti-alert-triangle"></i>
+        </div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>Erro ao carregar dados</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24, maxWidth: 420, marginInline: 'auto', lineHeight: 1.5 }}>
+          {sheetHistory.error}
+        </p>
+        <button
+          className="dg-btn dg-btn-primary"
+          onClick={() => sheetHistory.load(buildMesesLookback(3))}
+          disabled={sheetHistory.loading}
+        >
+          {sheetHistory.loading ? 'Carregando...' : 'Tentar novamente'}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Saudação */}
@@ -254,7 +334,7 @@ export default function Dashboard() {
                 className="ti ti-calendar"
                 style={{ fontSize: 12, marginRight: 4 }}
               ></i>
-              {fmtDate()}
+              {formattedDate}
             </span>
             <span className="sep">·</span>
             <span className="live">{updatedLabel}</span>
@@ -699,16 +779,6 @@ export default function Dashboard() {
         periodos={PERIODOS}
       />
 
-      {/* Banner SLA vencido */}
-      {m.slaVencidos > 0 && (
-        <Banner
-          tone="danger"
-          icon="ti-clock-exclamation"
-          title={`${m.slaVencidos} alerta${m.slaVencidos > 1 ? "s" : ""} com SLA vencido — requer atenção imediata`}
-          sub={`Motoristas gravíssimos aguardando há mais de ${slaLimit} minutos.`}
-        />
-      )}
-
       {/* KPIs */}
       <div className="dg-kpi-row">
         <KPI
@@ -762,6 +832,16 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Banner SLA vencido */}
+      {m.slaVencidos > 0 && (
+        <Banner
+          tone="danger"
+          icon="ti-clock-exclamation"
+          title={`${m.slaVencidos} alerta${m.slaVencidos > 1 ? "s" : ""} com SLA vencido — requer atenção imediata`}
+          sub={`Motoristas gravíssimos aguardando há mais de ${slaLimit} minutos.`}
+        />
+      )}
+
       {/* Drill panels */}
       {activeKpi === "total" && (
         <VolumeDrill
@@ -799,32 +879,52 @@ export default function Dashboard() {
         <div className="dg-col">
           <CriticalSLA criticos={m.criticos} slaLimit={slaLimit} />
           {showHourly && !executiveMode && (
-            <HourlyActivity hourly={m.HOURLY} currentHour={hour} />
+            deferRest ? (
+              <div className="dg-card-sk" style={{ height: 220 }} />
+            ) : (
+              <HourlyActivity hourly={m.HOURLY} currentHour={hour} />
+            )
           )}
         </div>
 
         {/* Coluna lateral — classificação + alertas técnicos + transportadoras */}
         <div className="dg-col">
           {showClassif && (
-            <ClassificationBreakdown
-              tipos={m.TIPOS}
-              resultados={m.RESULTADOS}
-            />
+            deferRest ? (
+              <div className="dg-card-sk" style={{ height: 340 }} />
+            ) : (
+              <ClassificationBreakdown
+                tipos={m.TIPOS}
+                resultados={m.RESULTADOS}
+              />
+            )
           )}
           {showTech && !executiveMode && m.tecnicos.length > 0 && (
-            <TechAlerts tecnicos={m.tecnicos} />
+            deferRest ? (
+              <div className="dg-card-sk" style={{ height: 140 }} />
+            ) : (
+              <TechAlerts tecnicos={m.tecnicos} />
+            )
           )}
           {showTransp && !executiveMode && (
-            <TransportadoraRanking
-              transportadoras={m.transpStats.slice(0, 6)}
-            />
+            deferRest ? (
+              <div className="dg-card-sk" style={{ height: 320 }} />
+            ) : (
+              <TransportadoraRanking
+                transportadoras={m.transpStats.slice(0, 6)}
+              />
+            )
           )}
         </div>
       </div>
 
       {/* Seção: Produtividade */}
       <Section icon="ti-users" label="Produtividade da equipe" />
-      <ProductivityRanking equipe={m.equipe} />
+      {deferRest ? (
+        <div className="dg-card-sk" style={{ height: 240 }} />
+      ) : (
+        <ProductivityRanking equipe={m.equipe} />
+      )}
 
       {/* Spacer final */}
       <div style={{ height: 32 }}></div>

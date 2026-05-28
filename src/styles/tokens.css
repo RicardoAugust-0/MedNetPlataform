@@ -401,3 +401,14 @@
 [data-rhythm="cinema"] .dash-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 [data-rhythm="cinema"] .dash-col:last-child { grid-template-columns: 1fr 1fr; }
 [data-rhythm="cinema"] .dash-greet-title { font-size: 28px; }
+
+/* Override CDN Tabler Icons to set font-display: block */
+@font-face {
+  font-family: "tabler-icons";
+  font-style: normal;
+  font-weight: normal;
+  font-display: block;
+  src: url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/fonts/tabler-icons.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/fonts/tabler-icons.woff") format("woff"),
+       url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/fonts/tabler-icons.ttf") format("truetype");
+}

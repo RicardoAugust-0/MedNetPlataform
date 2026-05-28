@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
-export function useWsPages() {
+const WsPagesContext = createContext(null);
+
+export function WsPagesProvider({ children }) {
   const toast = useToast();
   const [wsPages, setWsPages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export function useWsPages() {
       return;
     }
     setWsPages(prev => prev.map(p => p.id === opt.id ? toLocal(data) : p));
-  }, []);
+  }, [wsPages]);
 
   const update = useCallback((id, patch) => {
     setWsPages(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
@@ -85,7 +87,19 @@ export function useWsPages() {
     if (error) { load(); toast('Erro ao excluir página', 'error'); }
   }, [load]);
 
-  return { wsPages, loading, add, update, remove, reorder };
+  return createElement(
+    WsPagesContext.Provider,
+    { value: { wsPages, loading, add, update, remove, reorder } },
+    children
+  );
+}
+
+export function useWsPages() {
+  const context = useContext(WsPagesContext);
+  if (!context) {
+    throw new Error('useWsPages must be used within a WsPagesProvider');
+  }
+  return context;
 }
 
 function toLocal(row) {

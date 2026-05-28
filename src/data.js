@@ -7,6 +7,7 @@ export const APP_CONFIG = {
 export const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Dashboard',       icon: 'ti-layout-dashboard', group: 'Operação',     path: '/dashboard' },
   { id: 'monitor',    label: 'Monitor de Frota', icon: 'ti-truck-delivery',  group: 'Operação',     path: '/monitor/intervencao' },
+  { id: 'planilha',   label: 'Planilha Embedded',icon: 'ti-table-alias',     group: 'Operação',     path: '/planilha' },
   { id: 'dossies',    label: 'Dossiês Clínicos', icon: 'ti-steering-wheel',  group: 'Operação',     path: '/dossies' },
   { id: 'agenda',     label: 'Agenda',           icon: 'ti-calendar-event',  group: 'Operação',     path: '/agenda' },
   { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Operação',     path: '/crosscheck' },
@@ -23,6 +24,7 @@ export const NAV_ITEMS = [
 export const PANEL_TITLES = {
   dashboard: { t: 'Dashboard · Gestão à Vista', s: 'Visão da diretoria' },
   monitor:   { t: 'Monitor de Frota',       s: 'Alertas logísticos & fila de intervenção' },
+  planilha:  { t: 'Planilha Embedded',      s: 'Edição inline de intervenções com sincronização em tempo real' },
   dossies:    { t: 'Dossiês Clínicos',      s: 'Histórico de fadiga, tratativas e prontuário médico dos motoristas' },
   agenda:    { t: 'Agenda & Lembretes',     s: 'Compromissos e ações do dia' },
   templates: { t: 'Templates de Mensagem',  s: 'Scripts prontos para atendimento' },

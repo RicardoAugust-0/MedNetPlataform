@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 
 const KEY = 'carrier_aliases';
 
-export function useCarrierAliases() {
+const CarrierAliasesContext = createContext(null);
+
+export function CarrierAliasesProvider({ children }) {
   const [aliases, setAliasesState] = useState({});
   const [loading, setLoading]       = useState(isSupabaseConfigured);
 
@@ -63,5 +65,17 @@ export function useCarrierAliases() {
     return clean || name;
   }, [aliases]);
 
-  return { aliases, loading, setAliases, resolveAlias, resolveMonitorName };
+  return createElement(
+    CarrierAliasesContext.Provider,
+    { value: { aliases, loading, setAliases, resolveAlias, resolveMonitorName } },
+    children
+  );
+}
+
+export function useCarrierAliases() {
+  const context = useContext(CarrierAliasesContext);
+  if (!context) {
+    throw new Error('useCarrierAliases must be used within a CarrierAliasesProvider');
+  }
+  return context;
 }

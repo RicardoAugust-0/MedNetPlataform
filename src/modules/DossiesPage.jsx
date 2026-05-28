@@ -29,6 +29,8 @@ function renderMarkdown(md) {
   return '<p>' + html + '</p>';
 }
 
+let cachedDriversList = null;
+
 export default function DossiesPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -36,13 +38,14 @@ export default function DossiesPage() {
   const { profile, session } = useAuth();
   const { theme } = useApp();
   const { resolveMonitorName } = useCarrierAliases();
+  const { history: atendimentosHistory } = useAtendimentos();
 
   const initialDriverName = searchParams.get('driver') || '';
 
   // Lista de motoristas e busca
   const [searchQuery, setSearchQuery] = useState('');
-  const [driversList, setDriversList] = useState([]);
-  const [loadingList, setLoadingList] = useState(true);
+  const [driversList, setDriversList] = useState(() => cachedDriversList || []);
+  const [loadingList, setLoadingList] = useState(() => !cachedDriversList);
 
   // Motorista selecionado
   const [selectedDriver, setSelectedDriver] = useState(null);
@@ -87,6 +90,8 @@ export default function DossiesPage() {
 
   // Busca lista de motoristas únicos cadastrados nas tabelas do Supabase (roda apenas na montagem)
   useEffect(() => {
+    if (cachedDriversList) return;
+
     async function loadDrivers() {
       if (!isSupabaseConfigured) {
         setLoadingList(false);
@@ -106,10 +111,10 @@ export default function DossiesPage() {
           .select('nome, placa, transportadora, frota, turno')
           .not('nome', 'is', null);
 
-        // 3. Puxa motoristas de atendimentos
-        const { data: atendData } = await supabase
-          .from('atendimentos')
-          .select('motorista, placa, transportadora');
+        // 3. Puxa motoristas de atendimentos do cache local (ou fallback se vazio)
+        const atendData = atendimentosHistory.length > 0
+          ? atendimentosHistory
+          : (await supabase.from('atendimentos').select('motorista, placa, transportadora')).data || [];
 
         // Consolida e remove duplicados
         const map = new Map();
@@ -186,7 +191,14 @@ export default function DossiesPage() {
       }
     }
     loadDrivers();
-  }, []); // Dependência vazia, roda apenas uma vez no mount!
+  }, [atendimentosHistory]); // Dependência atualizada
+
+  // Mantém o cache atualizado
+  useEffect(() => {
+    if (driversList.length > 0) {
+      cachedDriversList = driversList;
+    }
+  }, [driversList]);
 
   // Seleciona o motorista com base no initialDriverName ou na lista carregada (decupado de loadDrivers)
   useEffect(() => {

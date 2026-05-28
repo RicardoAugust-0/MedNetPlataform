@@ -14,7 +14,7 @@ export function ClassificationBreakdown({ tipos, resultados }) {
   const taxaReinc = tratados > 0 ? (posPositivo / tratados) * 100 : 0;
 
   return (
-    <div className="dg-card">
+    <div className="dg-card dg-card-classification">
       <div className="dg-card-head">
         <div className="ic" style={{ background: 'rgba(158, 26, 69, 0.14)', color: 'var(--accent-500)' }}><i className="ti ti-chart-pie"></i></div>
         <h3>Tipo & Resultado</h3>

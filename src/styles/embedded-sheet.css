@@ -1,0 +1,370 @@
+/* =============================================================
+   MedNet — Planilha Embutida (Embedded Sheet) Styling
+   Baseado em Vanilla CSS e CSS Custom Properties (Tokens)
+   ============================================================= */
+
+.sheet-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--vibe-radius-card, var(--radius-lg));
+  box-shadow: var(--vibe-shadow, var(--shadow-md));
+  padding: 24px;
+  box-sizing: border-box;
+  font-family: var(--font-sans), sans-serif;
+}
+
+.sheet-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-title-area h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-title-area p {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+}
+
+.sheet-stats-area {
+  display: flex;
+  gap: 10px;
+}
+
+.sheet-stat-box {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--vibe-radius-btn, var(--radius-md));
+  padding: 6px 12px;
+  text-align: center;
+  min-width: 85px;
+}
+
+.sheet-stat-box span {
+  display: block;
+}
+
+.sheet-stat-box .stat-lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.sheet-stat-box .stat-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sheet-search-wrapper {
+  position: relative;
+}
+
+.sheet-search-wrapper i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.sheet-search-input {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--vibe-radius-btn, var(--radius-md));
+  padding: 8px 12px 8px 34px;
+  font-size: 13px;
+  width: 260px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sheet-search-input:focus {
+  border-color: var(--mednet-orange);
+  box-shadow: 0 0 0 2px var(--mednet-orange-glow);
+}
+
+.sheet-grid-wrapper {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border-md);
+  border-radius: var(--vibe-radius-btn, var(--radius-md));
+  background: var(--surface-1);
+  position: relative;
+}
+
+.sheet-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  user-select: none;
+}
+
+.sheet-table th {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--border-strong);
+  border-right: 1px solid var(--border-md);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.sheet-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  color: var(--text-primary);
+  box-sizing: border-box;
+  outline: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative; /* FUNDAMENTAL para alinhar o lápis absolute */
+  transition: background-color 0.08s ease;
+}
+
+/* Listras alternadas (Zebra striping) para legibilidade */
+.sheet-table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.sheet-table tr:hover td {
+  background: var(--surface-2) !important;
+}
+
+.sheet-table td:focus {
+  background: var(--surface-3) !important;
+  box-shadow: inset 0 0 0 2px var(--mednet-orange) !important;
+}
+
+/* Colunas de tamanho específico e fixo para organizar o visual */
+.col-num {
+  width: 45px !important;
+  min-width: 45px !important;
+  max-width: 45px !important;
+  text-align: center !important;
+  background: var(--surface-2) !important;
+  font-weight: 700;
+  color: var(--text-muted) !important;
+  border-right: 2px solid var(--border-strong) !important;
+}
+
+.col-status {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  border-right: 1px solid var(--border-strong) !important;
+}
+
+.col-data { width: 110px !important; min-width: 110px !important; }
+.col-empresa { width: 160px !important; min-width: 160px !important; }
+.col-sistema { width: 110px !important; min-width: 110px !important; }
+.col-colaborador { width: 200px !important; min-width: 200px !important; }
+.col-placa { width: 100px !important; min-width: 100px !important; font-family: var(--font-mono); }
+.col-frota { width: 90px !important; min-width: 90px !important; }
+.col-criticidade { width: 120px !important; min-width: 120px !important; }
+.col-classificacao { width: 140px !important; min-width: 140px !important; }
+.col-realizado { width: 110px !important; min-width: 110px !important; }
+.col-motivo { width: 220px !important; min-width: 220px !important; }
+.col-solicitado_por { width: 150px !important; min-width: 150px !important; }
+.col-hora_solicitacao { width: 100px !important; min-width: 100px !important; }
+.col-realizado_por { width: 150px !important; min-width: 150px !important; }
+.col-hora_realizacao { width: 110px !important; min-width: 110px !important; }
+.col-justificativa { width: 240px !important; min-width: 240px !important; }
+
+/* Controles de edição inline aprimorados */
+.sheet-cell-edit-input, 
+.sheet-cell-edit-select {
+  width: 100%;
+  height: 100%;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border: 2px solid var(--mednet-orange);
+  border-radius: 4px;
+  outline: none;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  box-shadow: 0 0 10px var(--mednet-orange-glow);
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+.sheet-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 14px;
+}
+
+.sheet-realtime-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sheet-ping-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--success-500);
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 6px var(--success-500);
+  animation: sheet-ping-anim 1.8s infinite ease-in-out;
+}
+
+@keyframes sheet-ping-anim {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.45; }
+}
+
+.sheet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.sheet-badge-success {
+  background: var(--success-bg);
+  color: var(--success-600);
+  border-color: rgba(45, 167, 90, 0.2);
+}
+
+.sheet-badge-pending {
+  background: var(--warning-bg);
+  color: var(--warning-600);
+  border-color: rgba(232, 160, 32, 0.2);
+  animation: sheet-pending-pulse 1.8s infinite ease-in-out;
+}
+
+.sheet-badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger-600);
+  border-color: rgba(226, 75, 74, 0.2);
+}
+
+@keyframes sheet-pending-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.55; }
+}
+
+/* Lápis indicador de célula editável, invisível por padrão, surge no hover individual */
+.sheet-cell-edit-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  font-size: 9.5px;
+  pointer-events: none;
+}
+
+.sheet-table td:hover .sheet-cell-edit-icon {
+  opacity: 0.75;
+}
+
+.criticidade-gravissimo {
+  color: var(--danger-500);
+  font-weight: 700;
+}
+.criticidade-grave {
+  color: var(--warning-500);
+  font-weight: 600;
+}
+
+.sheet-retry-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.sheet-retry-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.sheet-loading-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+
+.sheet-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--mednet-orange);
+  border-radius: 50%;
+  animation: sheet-spin-anim 0.8s infinite linear;
+}
+
+@keyframes sheet-spin-anim {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.sheet-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+  color: var(--text-muted);
+}

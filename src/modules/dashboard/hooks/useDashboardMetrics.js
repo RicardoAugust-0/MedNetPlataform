@@ -29,6 +29,14 @@ export function useDashboardMetrics({
     return { start, end: new Date(now) };
   }, [now]);
 
+  // Stable dates for yesterday calculations, updating only when today changes
+  const { yesterdayStr, cutoffY } = useMemo(() => {
+    const todayBase = new Date(todayStr);
+    const yesterdayStr = new Date(todayBase.getTime() - 86400000).toDateString();
+    const cutoffY = new Date(todayBase.getTime() - 31 * 86400000);
+    return { yesterdayStr, cutoffY };
+  }, [todayStr]);
+
   // Verifica se o realizadoPor de uma linha da planilha pertence ao operador filtrado.
   // A planilha salva apenas o primeiro nome; filters.operador é o nome completo do perfil.
   const sheetOperadorMatchFn = useMemo(() => {
@@ -178,39 +186,72 @@ export function useDashboardMetrics({
     ];
   }, [drivers]);
 
-  // sheetInterventionsFiltered respeita operador E resultado (PP vs positivo)
-  const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => {
-    if (!r.realizadoPor || !sheetOperadorMatchFn(r.realizadoPor)) return false;
-    const isPP = r.placa && placasPrevia7d.has(r.placa);
-    if (isPP && !showResultado('pos-positivo')) return false;
-    if (!isPP && !showResultado('positivo'))    return false;
-    return true;
-  });
-  const sheetIntervencoesHoje  = sheetInterventionsFiltered.length;
-  const sheetSolicitadasHoje   = sheetRowsPeriodo.filter(r => r.solicitadoPor).length;
-  const intervencoesRegistradas = fechadosHoje.length + sheetIntervencoesHoje;
+  // Consolidated memoization of base metrics to prevent calculations on clock ticks
+  const baseMetrics = useMemo(() => {
+    const sheetInterventionsFiltered = sheetRowsPeriodo.filter(r => {
+      if (!r.realizadoPor || !sheetOperadorMatchFn(r.realizadoPor)) return false;
+      const isPP = r.placa && placasPrevia7d.has(r.placa);
+      if (isPP && !showResultado('pos-positivo')) return false;
+      if (!isPP && !showResultado('positivo'))    return false;
+      return true;
+    });
+    const sheetIntervencoesHoje  = sheetInterventionsFiltered.length;
+    const sheetSolicitadasHoje   = sheetRowsPeriodo.filter(r => r.solicitadoPor).length;
+    const intervencoesRegistradas = fechadosHoje.length + sheetIntervencoesHoje;
 
-  // fechadosHoje já aplica tipo + operador + resultado na plataforma
-  const closedInterventionsFiltered = fechadosHoje;
-  const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
-  const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
+    const closedInterventionsFiltered = fechadosHoje;
+    const platPP = closedInterventionsFiltered.filter(a => a.placa && placasPrevia7d.has(a.placa)).length;
+    const sheetPP = sheetInterventionsFiltered.filter(r => r.placa && placasPrevia7d.has(r.placa)).length;
 
-  const posPositivo  = platPP + sheetPP;
-  const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
-  const fechados     = closedInterventionsFiltered.length + sheetInterventionsFiltered.length;
-  const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
-  const encerradosPlataforma = atHistory.filter(a =>
-    new Date(a.created_at).toDateString() === todayStr &&
-    (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
-    (filters.operador === 'todos' || a.operador === filters.operador)
-  ).length;
-  const totalAlertas = fechados + emAberto;
-  const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
-  // % baseado apenas na plataforma, para KPI "Fechados hoje" (sem cruzar com planilha)
-  const pctConcluidoPlataforma = (encerradosPlataforma + emAberto) > 0
-    ? Math.round((encerradosPlataforma / (encerradosPlataforma + emAberto)) * 100)
-    : 0;
-  const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
+    const posPositivo  = platPP + sheetPP;
+    const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
+    const fechados     = closedInterventionsFiltered.length + sheetInterventionsFiltered.length;
+    const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
+    const encerradosPlataforma = atHistory.filter(a => {
+      const dateObj = new Date(a.created_at);
+      return dateObj.toDateString() === todayStr &&
+        (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
+        (filters.operador === 'todos' || a.operador === filters.operador);
+    }).length;
+    const totalAlertas = fechados + emAberto;
+    const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
+    const pctConcluidoPlataforma = (encerradosPlataforma + emAberto) > 0
+      ? Math.round((encerradosPlataforma / (encerradosPlataforma + emAberto)) * 100)
+      : 0;
+    const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
+
+    return {
+      sheetInterventionsFiltered,
+      sheetIntervencoesHoje,
+      sheetSolicitadasHoje,
+      intervencoesRegistradas,
+      posPositivo,
+      positivo,
+      fechados,
+      emAberto,
+      encerradosPlataforma,
+      totalAlertas,
+      pctConcluido,
+      pctConcluidoPlataforma,
+      taxaReinc
+    };
+  }, [sheetRowsPeriodo, sheetOperadorMatchFn, placasPrevia7d, showResultado, fechadosHoje, driversAtivos, atHistory, todayStr, filters.operador]);
+
+  const {
+    sheetInterventionsFiltered,
+    sheetIntervencoesHoje,
+    sheetSolicitadasHoje,
+    intervencoesRegistradas,
+    posPositivo,
+    positivo,
+    fechados,
+    emAberto,
+    encerradosPlataforma,
+    totalAlertas,
+    pctConcluido,
+    pctConcluidoPlataforma,
+    taxaReinc
+  } = baseMetrics;
 
   // Filtered versions for drill-down details
   const volumeTipos = useMemo(() => {
@@ -259,11 +300,12 @@ export function useDashboardMetrics({
   );
 
   // ── Comparação com ontem (escopada aos mesmos filtros pra delta fazer sentido)
+  // Optimization: uses yesterdayStr and cutoffY dependencies instead of "now", preventing recalculation every 30 seconds.
   const ONTEM = useMemo(() => {
     if (!compareYesterday) return null;
-    const yStr = new Date(now.getTime() - 86400000).toDateString();
     const yAtsAll = atHistory.filter(a => {
-      if (new Date(a.created_at).toDateString() !== yStr) return false;
+      const dateObj = new Date(a.created_at);
+      if (dateObj.toDateString() !== yesterdayStr) return false;
       if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
       if (!empresaFilterFn(a.transportadora)) return false;
       if (filters.tipo.length > 0) {
@@ -274,14 +316,13 @@ export function useDashboardMetrics({
     });
     const yInterv   = yAtsAll.filter(a => a.tipo === 'intervencao');
     const yFechados = yAtsAll.filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar');
-    const cutoffY = new Date(now.getTime() - 31 * 86400000);
     const placasPreviaY = new Set(
       atHistory
-        .filter(a =>
-          a.tipo === 'intervencao' &&
-          new Date(a.created_at) > cutoffY &&
-          new Date(a.created_at).toDateString() !== yStr
-        )
+        .filter(a => {
+          if (a.tipo !== 'intervencao') return false;
+          const dateObj = new Date(a.created_at);
+          return dateObj > cutoffY && dateObj.toDateString() !== yesterdayStr;
+        })
         .map(a => a.placa)
         .filter(Boolean)
     );
@@ -290,7 +331,7 @@ export function useDashboardMetrics({
     const yPlacasFechado = new Set(yFechados.map(a => a.placa).filter(Boolean));
     const emAbertoY      = [...yPlacasEvts].filter(p => !yPlacasFechado.has(p)).length;
     return { total: yFechados.length + emAbertoY, fechados: yFechados.length, posPositivo: ppY, emAberto: emAbertoY };
-  }, [atHistory, compareYesterday, now, filters.operador, filters.tipo, empresaFilterFn, showTipo]);
+  }, [atHistory, compareYesterday, yesterdayStr, cutoffY, filters.operador, filters.tipo, empresaFilterFn, showTipo]);
 
   // ── Motoristas críticos com SLA (limiares por plataforma: Sascar ≥5, Maxtrack ≥8)
   const criticos = useMemo(() => {
@@ -441,14 +482,17 @@ export function useDashboardMetrics({
 
   // ── Atividade por hora (24h)
   const HOURLY = useMemo(() => {
+    const closedHours = atendimentosHoje
+      .filter(a => a.tipo === 'intervencao' || a.tipo === 'reportar')
+      .map(a => new Date(a.created_at).getHours());
+      
+    const openHours = driversAtivos
+      .filter(d => d.ultimoEvento)
+      .map(d => new Date(d.ultimoEvento).getHours());
+
     return Array.from({ length: 24 }, (_, h) => {
-      const closed = atendimentosHoje.filter(
-        a => (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
-             new Date(a.created_at).getHours() === h
-      ).length;
-      const open = driversAtivos.filter(
-        d => d.ultimoEvento && new Date(d.ultimoEvento).getHours() === h
-      ).length;
+      const closed = closedHours.filter(hr => hr === h).length;
+      const open = openHours.filter(hr => hr === h).length;
       return { h: `${String(h).padStart(2, '0')}h`, closed, open };
     });
   }, [atendimentosHoje, driversAtivos]);
@@ -475,10 +519,9 @@ export function useDashboardMetrics({
   }, [drivers, empresaFilterFn]);
 
   // ── Produtividade da equipe ─────────────────────────────────────────────────
-  // Calculado diretamente (sem useMemo) para garantir que a planilha carregada
-  // de forma assíncrona seja sempre refletida — o useMemo ficava stale quando
-  // sheetRowsPeriodo atualizava após o mount e a tabela atendimentos está vazia.
-  const equipe = (() => {
+  // Optimization: memoized and optimized with local caching to avoid O(N * M) lookup complexity.
+  const equipe = useMemo(() => {
+    const operatorNameCache = new Map();
     const getFullOperatorName = (shortOrFullName) => {
       if (!shortOrFullName) return '';
       const norm = shortOrFullName.trim().toLowerCase();
@@ -490,25 +533,37 @@ export function useDashboardMetrics({
       if (/^\d{1,4}[-/]\d{1,2}([-/]\d{1,4})?$/.test(norm)) return '';
       if (/^\d+$/.test(norm)) return '';
 
+      if (operatorNameCache.has(norm)) {
+        return operatorNameCache.get(norm);
+      }
+
+      let resolvedName = shortOrFullName;
       const exact = profiles.find(p => p.nome && p.nome.trim().toLowerCase() === norm);
-      if (exact) return exact.nome;
+      if (exact) {
+        resolvedName = exact.nome;
+      } else {
+        const firstNameMatch = profiles.find(p => {
+          if (!p.nome) return false;
+          const parts = p.nome.trim().toLowerCase().split(' ');
+          return parts[0] === norm || parts.includes(norm);
+        });
+        if (firstNameMatch) {
+          resolvedName = firstNameMatch.nome;
+        } else {
+          const inputParts = norm.split(' ');
+          const profileMatchByInputFirst = profiles.find(p => {
+            if (!p.nome) return false;
+            const pFirst = p.nome.trim().toLowerCase().split(' ')[0];
+            return pFirst === inputParts[0];
+          });
+          if (profileMatchByInputFirst) {
+            resolvedName = profileMatchByInputFirst.nome;
+          }
+        }
+      }
 
-      const firstNameMatch = profiles.find(p => {
-        if (!p.nome) return false;
-        const parts = p.nome.trim().toLowerCase().split(' ');
-        return parts[0] === norm || parts.includes(norm);
-      });
-      if (firstNameMatch) return firstNameMatch.nome;
-
-      const inputParts = norm.split(' ');
-      const profileMatchByInputFirst = profiles.find(p => {
-        if (!p.nome) return false;
-        const pFirst = p.nome.trim().toLowerCase().split(' ')[0];
-        return pFirst === inputParts[0];
-      });
-      if (profileMatchByInputFirst) return profileMatchByInputFirst.nome;
-
-      return shortOrFullName;
+      operatorNameCache.set(norm, resolvedName);
+      return resolvedName;
     };
 
     const opMap = {};
@@ -557,7 +612,7 @@ export function useDashboardMetrics({
         const tb = b.tratados.fadigaPos + b.tratados.fadigaPP + b.tratados.compPos;
         return tb - ta;
       });
-  })();
+  }, [atendimentosHoje, sheetRowsPeriodo, profiles, placasPrevia7d]);
 
   // Contagem de drivers ativos por plataforma — base absoluta
   const platformCounts = useMemo(() => {

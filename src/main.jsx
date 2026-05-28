@@ -7,7 +7,9 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { AppProvider } from "./context";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import { ToastProvider } from "./hooks/useToast";
+import { SheetHistoryProvider } from "./hooks/useSheetHistory";
 import "./styles/crosscheck.css";
+import "./styles/embedded-sheet.css";
 import "./styles/layout.css";
 import "./styles/modules.css";
 import "./styles/tokens.css";
@@ -18,9 +20,11 @@ createRoot(document.getElementById("root")).render(
       <ConfirmProvider>
         <ToastProvider>
           <AuthProvider>
-            <AppProvider>
-              <App />
-            </AppProvider>
+            <SheetHistoryProvider>
+              <AppProvider>
+                <App />
+              </AppProvider>
+            </SheetHistoryProvider>
           </AuthProvider>
         </ToastProvider>
       </ConfirmProvider>

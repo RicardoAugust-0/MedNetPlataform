@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
@@ -14,7 +14,9 @@ export const AVAILABLE_ICONS = [
   'ti-device-laptop', 'ti-database', 'ti-layout-dashboard', 'ti-message-circle'
 ];
 
-export function useLinks() {
+const LinksContext = createContext(null);
+
+export function LinksProvider({ children }) {
   const toast = useToast();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +103,19 @@ export function useLinks() {
     if (error) { load(); toast('Erro ao excluir link', 'error'); }
   }, [load, toast]);
 
-  return { links, loading, add, update, remove, reorder };
+  return createElement(
+    LinksContext.Provider,
+    { value: { links, loading, add, update, remove, reorder } },
+    children
+  );
+}
+
+export function useLinks() {
+  const context = useContext(LinksContext);
+  if (!context) {
+    throw new Error('useLinks must be used within a LinksProvider');
+  }
+  return context;
 }
 
 function toLocal(row) {

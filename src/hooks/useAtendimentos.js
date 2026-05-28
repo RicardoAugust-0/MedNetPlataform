@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from './useToast.jsx';
 
 const PAGE_SIZE = 1000;
 
-export function useAtendimentos() {
+const AtendimentosContext = createContext(null);
+
+export function AtendimentosProvider({ children }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [history, setHistory] = useState([]);
@@ -173,7 +175,19 @@ export function useAtendimentos() {
     return { count: count || 0, error: null };
   }, []);
 
-  return { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter, loadAllByFilter, deleteByFilter };
+  return createElement(
+    AtendimentosContext.Provider,
+    { value: { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter, loadAllByFilter, deleteByFilter } },
+    children
+  );
+}
+
+export function useAtendimentos() {
+  const context = useContext(AtendimentosContext);
+  if (!context) {
+    throw new Error('useAtendimentos must be used within an AtendimentosProvider');
+  }
+  return context;
 }
 
 function toLocal(row) {

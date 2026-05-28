@@ -3,7 +3,7 @@ export function HourlyActivity({ hourly, currentHour = 16 }) {
   const totalClosed = hourly.reduce((s, h) => s + h.closed, 0);
   const totalOpen = hourly.reduce((s, h) => s + h.open, 0);
   return (
-    <div className="dg-card">
+    <div className="dg-card dg-card-hourly">
       <div className="dg-card-head">
         <div className="ic" style={{ background: 'rgba(232, 160, 32, 0.14)', color: 'var(--warning-500)' }}><i className="ti ti-chart-bar"></i></div>
         <h3>Atividade por hora</h3>

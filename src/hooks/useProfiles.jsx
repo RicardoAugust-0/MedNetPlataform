@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { supabase } from "../supabase.js";
 
-export function useProfiles() {
+const ProfilesContext = createContext(null);
+
+export function ProfilesProvider({ children }) {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,5 +43,17 @@ export function useProfiles() {
     return persistPatch(id, { nome, cargo }, prev ? { nome: prev.nome, cargo: prev.cargo } : null);
   }, [profiles, applyPatch, persistPatch]);
 
-  return { profiles, loading, updateRole, updateInfo };
+  return (
+    <ProfilesContext.Provider value={{ profiles, loading, updateRole, updateInfo }}>
+      {children}
+    </ProfilesContext.Provider>
+  );
+}
+
+export function useProfiles() {
+  const context = useContext(ProfilesContext);
+  if (!context) {
+    throw new Error('useProfiles must be used within a ProfilesProvider');
+  }
+  return context;
 }

@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
-export function useTemplates() {
+const TemplatesContext = createContext(null);
+
+export function TemplatesProvider({ children }) {
   const toast = useToast();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export function useTemplates() {
       return;
     }
     setTemplates(prev => prev.map(t => t.id === opt.id ? toLocal(data) : t));
-  }, []);
+  }, [templates]);
 
   const update = useCallback((id, patch) => {
     setTemplates(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
@@ -82,7 +84,19 @@ export function useTemplates() {
     if (error) { load(); toast('Erro ao excluir template', 'error'); }
   }, [load]);
 
-  return { templates, loading, add, update, remove, reorder };
+  return createElement(
+    TemplatesContext.Provider,
+    { value: { templates, loading, add, update, remove, reorder } },
+    children
+  );
+}
+
+export function useTemplates() {
+  const context = useContext(TemplatesContext);
+  if (!context) {
+    throw new Error('useTemplates must be used within a TemplatesProvider');
+  }
+  return context;
 }
 
 function toLocal(row) {
