@@ -338,6 +338,7 @@ export default function Admin() {
                   disabled={p.id === me?.id}
                 >
                   <option value="operador">Operador</option>
+                  <option value="lider">Líder</option>
                   <option value="admin">Admin</option>
                 </select>
 

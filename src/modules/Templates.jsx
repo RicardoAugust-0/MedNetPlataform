@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
 import { getCustomVars, setCustomVars } from './monitor/utils';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const TABS = ['todos','contato','questionario','alerta','encerramento','variaveis'];
 const TAB_LABELS = { todos:'Todos', contato:'Contato', questionario:'Questionário', alerta:'Alerta', encerramento:'Encerramento', variaveis:'Variáveis' };
@@ -23,6 +24,8 @@ const BUILTIN_VARS = [
 
 export default function Templates() {
   const { templates, loading, add, update, remove, reorder } = useTemplates();
+  const { profile } = useAuth();
+  const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
   const confirm = useConfirm();
   const [filter, setFilter] = useState('todos');
   const [search, setSearch] = useState('');
@@ -96,7 +99,7 @@ export default function Templates() {
           <i className="ti ti-search"></i>
           <input placeholder="Buscar templates..." value={search} onChange={e => setSearch(e.target.value)} disabled={filter === 'variaveis'} />
         </div>
-        {filter !== 'variaveis' && (
+        {canEdit && filter !== 'variaveis' && (
           <button className="btn btn-primary" onClick={() => setModal('new')}><i className="ti ti-plus"></i> Novo template</button>
         )}
       </div>
@@ -111,7 +114,7 @@ export default function Templates() {
       </div>
 
       {filter === 'variaveis' ? (
-        <VariaveisPanel />
+        <VariaveisPanel canEdit={canEdit} />
       ) : (
         <div className="templates-grid">
           {list.length === 0
@@ -120,18 +123,20 @@ export default function Templates() {
               <div
                 className={`template-card ${t._pending ? 'opacity-50' : ''}`}
                 key={t.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, t)}
+                draggable={canEdit}
+                onDragStart={(e) => canEdit && handleDragStart(e, t)}
                 onDragEnd={handleDragEnd}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, t)}
+                onDrop={(e) => canEdit && handleDrop(e, t)}
               >
                 <div className="template-card-header">
                   <span className={`tag tag-${t.tag}`}>{t.tagLabel}</span>
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    <button className="btn-icon" onClick={() => setModal(t)}><i className="ti ti-pencil"></i></button>
-                    <button className="btn-icon" onClick={() => handleRemove(t.id)}><i className="ti ti-trash"></i></button>
-                  </div>
+                  {canEdit && (
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      <button className="btn-icon" onClick={() => setModal(t)}><i className="ti ti-pencil"></i></button>
+                      <button className="btn-icon" onClick={() => handleRemove(t.id)}><i className="ti ti-trash"></i></button>
+                    </div>
+                  )}
                 </div>
                 <div className="template-title">{t.title}</div>
                 <div className="template-preview">{t.text}</div>
@@ -158,7 +163,7 @@ export default function Templates() {
   );
 }
 
-function VariaveisPanel() {
+function VariaveisPanel({ canEdit }) {
   const [vars, setVarsState] = useState(() => getCustomVars());
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState('');
@@ -213,7 +218,7 @@ function VariaveisPanel() {
             {customEntries.map(([key, val]) => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <code style={{ fontSize: 12, background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 4, minWidth: 120, whiteSpace: 'nowrap' }}>[{key}]</code>
-                {editingKey === key ? (
+                {editingKey === key && canEdit ? (
                   <input
                     className="form-control"
                     style={{ flex: 1, fontSize: 13 }}
@@ -225,48 +230,62 @@ function VariaveisPanel() {
                   />
                 ) : (
                   <span
-                    style={{ flex: 1, fontSize: 13, padding: '4px 8px', borderRadius: 4, cursor: 'pointer', background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                    title="Clique para editar"
-                    onClick={() => setEditingKey(key)}
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      cursor: canEdit ? 'pointer' : 'default',
+                      background: 'var(--surface-1)',
+                      border: '1px solid var(--border)'
+                    }}
+                    title={canEdit ? "Clique para editar" : ""}
+                    onClick={() => canEdit && setEditingKey(key)}
                   >
                     {val || <em style={{ color: 'var(--text-muted)' }}>vazio</em>}
                   </span>
                 )}
-                <button className="btn-icon" title="Editar" onClick={() => setEditingKey(key)}><i className="ti ti-pencil"></i></button>
-                <button className="btn-icon" title="Remover" onClick={() => removeVar(key)}><i className="ti ti-trash"></i></button>
+                {canEdit && (
+                  <>
+                    <button className="btn-icon" title="Editar" onClick={() => setEditingKey(key)}><i className="ti ti-pencil"></i></button>
+                    <button className="btn-icon" title="Remover" onClick={() => removeVar(key)}><i className="ti ti-trash"></i></button>
+                  </>
+                )}
               </div>
             ))}
           </div>
         )}
 
         {/* Add new */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ flex: '0 0 180px', margin: 0 }}>
-            <label className="form-label" style={{ fontSize: 11 }}>Nome (sem colchetes)</label>
-            <input
-              className="form-control"
-              style={{ fontSize: 13, textTransform: 'uppercase' }}
-              placeholder="EX: OPERADOR_SETOR"
-              value={newKey}
-              onChange={e => setNewKey(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addVar(); }}
-            />
+        {canEdit && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ flex: '0 0 180px', margin: 0 }}>
+              <label className="form-label" style={{ fontSize: 11 }}>Nome (sem colchetes)</label>
+              <input
+                className="form-control"
+                style={{ fontSize: 13, textTransform: 'uppercase' }}
+                placeholder="EX: OPERADOR_SETOR"
+                value={newKey}
+                onChange={e => setNewKey(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addVar(); }}
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1, minWidth: 140, margin: 0 }}>
+              <label className="form-label" style={{ fontSize: 11 }}>Valor</label>
+              <input
+                className="form-control"
+                style={{ fontSize: 13 }}
+                placeholder="Ex: Fadiga Zero"
+                value={newVal}
+                onChange={e => setNewVal(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addVar(); }}
+              />
+            </div>
+            <button className="btn btn-primary" style={{ marginBottom: 0 }} onClick={addVar}>
+              <i className="ti ti-plus"></i> Adicionar
+            </button>
           </div>
-          <div className="form-group" style={{ flex: 1, minWidth: 140, margin: 0 }}>
-            <label className="form-label" style={{ fontSize: 11 }}>Valor</label>
-            <input
-              className="form-control"
-              style={{ fontSize: 13 }}
-              placeholder="Ex: Fadiga Zero"
-              value={newVal}
-              onChange={e => setNewVal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addVar(); }}
-            />
-          </div>
-          <button className="btn btn-primary" style={{ marginBottom: 0 }} onClick={addVar}>
-            <i className="ti ti-plus"></i> Adicionar
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );

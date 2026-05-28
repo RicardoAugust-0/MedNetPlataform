@@ -4,11 +4,14 @@ import { useWsPages } from '../hooks/useWsPages';
 import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
 import PageEditor from './WorkspaceEditor.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
 export default function Workspace() {
   const { wsPages, loading, add, update, remove, reorder } = useWsPages();
+  const { profile } = useAuth();
+  const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
   const confirm = useConfirm();
   const [current, setCurrent] = useState(null);
   const [search, setSearch] = useState('');
@@ -87,11 +90,11 @@ export default function Workspace() {
     return (
       <div
         className="ws-page-card"
-        draggable
-        onDragStart={(e) => handleDragStart(e, p)}
+        draggable={canEdit}
+        onDragStart={(e) => canEdit && handleDragStart(e, p)}
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver}
-        onDrop={(e) => handleDrop(e, p)}
+        onDrop={(e) => canEdit && handleDrop(e, p)}
         onClick={() => setCurrent(p.id)}
       >
         <div className="ws-card-icon" style={{ background: ic.bg, color: ic.ic }}><i className={`ti ${ic.i}`}></i></div>
@@ -129,9 +132,11 @@ export default function Workspace() {
               </>
           }
         </div>
-        <div className="ws-sidebar-footer">
-          <button className="ws-btn-new" onClick={openModal}><i className="ti ti-plus"></i> Nova página</button>
-        </div>
+        {canEdit && (
+          <div className="ws-sidebar-footer">
+            <button className="ws-btn-new" onClick={openModal}><i className="ti ti-plus"></i> Nova página</button>
+          </div>
+        )}
       </div>
 
       <div className="ws-editor">
@@ -143,7 +148,9 @@ export default function Workspace() {
                 <div className="ws-home-title">Procedimentos & conhecimento operacional</div>
                 <div className="ws-home-sub">{wsPages.length} páginas em {WS_CATEGORIES.length} categorias</div>
               </div>
-              <button className="btn btn-primary" onClick={openModal}><i className="ti ti-plus"></i> Nova página</button>
+              {canEdit && (
+                <button className="btn btn-primary" onClick={openModal}><i className="ti ti-plus"></i> Nova página</button>
+              )}
             </div>
 
             <div className="ws-home-stats">

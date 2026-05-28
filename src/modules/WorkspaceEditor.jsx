@@ -154,6 +154,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const cat = WS_CATEGORIES.find(c => c.id === (page.category || 'protocolos'));
 
   const { profile } = useAuth();
+  const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
   const toast = useToast();
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -180,7 +181,11 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
       Placeholder.configure({ placeholder: 'Comece a escrever...' }),
     ],
     content: page.content || '',
-    onUpdate: ({ editor }) => onUpdateRef.current?.(editor.getHTML()),
+    editable: canEdit,
+    onUpdate: ({ editor }) => {
+      if (!canEdit) return;
+      onUpdateRef.current?.(editor.getHTML());
+    },
     editorProps: {
       handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items || []);
@@ -220,6 +225,12 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
   useEffect(() => {
+    if (editor) {
+      editor.setEditable(canEdit);
+    }
+  }, [editor, canEdit]);
+
+  useEffect(() => {
     if (!iconPickerOpen) return;
     const close = () => setIconPickerOpen(false);
     document.addEventListener('mousedown', close);
@@ -243,14 +254,14 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
       <div className="ws-editor-topbar">
         <div style={{ position: 'relative' }}>
           <div
-            className="ws-card-icon ws-icon-clickable"
-            style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic, cursor: 'pointer' }}
-            onClick={() => setIconPickerOpen(v => !v)}
-            title="Trocar ícone"
+            className={`ws-card-icon ${canEdit ? 'ws-icon-clickable' : ''}`}
+            style={{ width: 28, height: 28, fontSize: 14, background: ic.bg, color: ic.ic, cursor: canEdit ? 'pointer' : 'default' }}
+            onClick={() => canEdit && setIconPickerOpen(v => !v)}
+            title={canEdit ? "Trocar ícone" : ""}
           >
             <i className={`ti ${ic.i}`}></i>
           </div>
-          {iconPickerOpen && (() => {
+          {iconPickerOpen && canEdit && (() => {
             const currentIcon = page.icon ?? 0;
             return (
               <div className="ws-icon-popover" onMouseDown={e => e.stopPropagation()}>
@@ -282,20 +293,24 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
           </div>
         )}
         <div style={{ flex: 1 }}></div>
-        <button className="btn btn-sm" title={page.favorite ? 'Desfavoritar' : 'Favoritar'} onClick={() => onUpdate(page.id, { favorite: !page.favorite })}>
+        <button className="btn btn-sm" title={page.favorite ? 'Desfavoritar' : 'Favoritar'} onClick={() => onUpdate(page.id, { favorite: !page.favorite })} disabled={!canEdit}>
           <i className={`ti ${page.favorite ? 'ti-star-filled' : 'ti-star'}`} style={page.favorite ? { color: 'var(--warning-500)' } : {}}></i>
         </button>
-        <select className="form-control" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })}>
+        <select className="form-control" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })} disabled={!canEdit}>
           {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
-        <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
+        {canEdit && (
+          <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
+        )}
       </div>
       <div className="ws-editor-area">
-        <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} />
+        <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} disabled={!canEdit} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
         <hr className="ws-divider" />
-        <Toolbar editor={editor} onImageClick={() => fileInputRef.current?.click()} uploading={uploading} />
+        {canEdit && (
+          <Toolbar editor={editor} onImageClick={() => fileInputRef.current?.click()} uploading={uploading} />
+        )}
         <EditorContent editor={editor} className="ws-content" />
       </div>
     </>

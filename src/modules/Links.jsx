@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLinks, PALETTE, AVAILABLE_ICONS } from '../hooks/useLinks';
 import { useConfirm } from "../hooks/useConfirm.jsx";
+import { useAuth } from '../auth/AuthContext.jsx';
 
 export default function Links() {
   const { links, loading, add, update, remove, reorder } = useLinks();
+  const { profile } = useAuth();
+  const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
@@ -56,7 +59,9 @@ export default function Links() {
           <i className="ti ti-search"></i>
           <input placeholder="Buscar links..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button className="btn btn-primary" onClick={() => setModal(true)}><i className="ti ti-plus"></i> Novo link</button>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={() => setModal(true)}><i className="ti ti-plus"></i> Novo link</button>
+        )}
       </div>
 
       {groups.map(g => {
@@ -73,11 +78,11 @@ export default function Links() {
                 <div 
                   key={l.id} 
                   className={`link-card-wrap ${l._pending ? 'opacity-50' : ''}`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, l)}
+                  draggable={canEdit}
+                  onDragStart={(e) => canEdit && handleDragStart(e, l)}
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, l)}
+                  onDrop={(e) => canEdit && handleDrop(e, l)}
                 >
                   <a className="link-card" href={l.url} target="_blank" rel="noreferrer">
                     <div className="link-icon" style={{ background: l.bg, color: l.ic }}><i className={`ti ${l.icon}`}></i></div>
@@ -85,14 +90,16 @@ export default function Links() {
                       <div className="link-name">{l.name}</div>
                       <div className="link-desc">{l.desc}</div>
                     </div>
-                    <div className="link-actions">
-                      <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingLink(l); }}>
-                        <i className="ti ti-pencil"></i>
-                      </button>
-                      <button className="btn-icon btn-icon-danger" onClick={e => { e.preventDefault(); e.stopPropagation(); handleRemove(l.id); }}>
-                        <i className="ti ti-trash"></i>
-                      </button>
-                    </div>
+                    {canEdit && (
+                      <div className="link-actions">
+                        <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingLink(l); }}>
+                          <i className="ti ti-pencil"></i>
+                        </button>
+                        <button className="btn-icon btn-icon-danger" onClick={e => { e.preventDefault(); e.stopPropagation(); handleRemove(l.id); }}>
+                          <i className="ti ti-trash"></i>
+                        </button>
+                      </div>
+                    )}
                   </a>
                 </div>
               ))}
