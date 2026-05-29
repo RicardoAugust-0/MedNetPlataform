@@ -30,6 +30,20 @@ let lastImportTime = 0;
 const norm = (v) => (v ?? '').toString().trim().toLowerCase();
 const makeKey = (placa, data, colaborador) => `${norm(placa)}|${norm(data)}|${norm(colaborador)}`;
 
+// Slug ASCII da criticidade para classes CSS (GRAVÍSSIMO → gravissimo).
+const critSlug = (c) => norm(c).normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Formatos de data de HOJE aceitos na planilha/banco: DD/MM, DD/MM/AAAA, DD/MM/AA
+// e ISO AAAA-MM-DD (linhas criadas manualmente em versões antigas).
+function getTodayVariants() {
+  const t = new Date();
+  const d = String(t.getDate()).padStart(2, '0');
+  const m = String(t.getMonth() + 1).padStart(2, '0');
+  const y = t.getFullYear();
+  return [`${d}/${m}`, `${d}/${m}/${y}`, `${d}/${m}/${String(y).slice(-2)}`, `${y}-${m}-${d}`];
+}
+const isToday = (dateStr) => !!dateStr && getTodayVariants().includes(dateStr.trim());
+
 export default function EmbeddedSheet() {
   const { profile } = useAuth();
   const toast = useToast();
@@ -45,7 +59,7 @@ export default function EmbeddedSheet() {
   
   const cellRefs = useRef({}); // Para gerenciar o foco das células
 
-  // Carregar dados locais da tabela (últimas 150 intervenções)
+  // Carregar apenas as intervenções de HOJE (o operador trabalha o dia corrente).
   const loadData = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
@@ -53,10 +67,10 @@ export default function EmbeddedSheet() {
       const { data, error } = await supabase
         .from('intervencoes_sheet')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(150);
+        .in('data', getTodayVariants())
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      
+
       setRows(data || []);
     } catch (err) {
       toast('Erro ao carregar dados da planilha embutida', 'error');
@@ -97,21 +111,8 @@ export default function EmbeddedSheet() {
       }
 
       // ── Filtragem de Data: Apenas registros de HOJE ──
-      const today = new Date();
-      const day = String(today.getDate()).padStart(2, '0');
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      
-      const todayShort = `${day}/${month}`;                    // ex: "28/05"
-      const todayLong = `${day}/${month}/${today.getFullYear()}`; // ex: "28/05/2026"
-      const todayYearShort = `${day}/${month}/${String(today.getFullYear()).slice(-2)}`; // ex: "28/05/26"
-
-      const isDateToday = (dateStr) => {
-        if (!dateStr) return false;
-        const trimmed = dateStr.trim();
-        return trimmed === todayShort || trimmed === todayLong || trimmed === todayYearShort;
-      };
-
-      const todayRows = sheetData.rows.filter(r => isDateToday(r.data));
+      const todayVariants = getTodayVariants();
+      const todayRows = sheetData.rows.filter(r => isToday(r.data));
 
       if (todayRows.length === 0) {
         if (!isSilent) toast('Nenhuma intervenção registrada hoje na planilha externa.', 'info');
@@ -126,15 +127,19 @@ export default function EmbeddedSheet() {
       const { data: dbExisting, error: dbErr } = await supabase
         .from('intervencoes_sheet')
         .select('id, placa, data, colaborador, status_sync')
-        .in('data', [todayShort, todayLong, todayYearShort]);
+        .in('data', todayVariants);
 
       if (dbErr) throw dbErr;
 
       const dbToday = dbExisting || [];
       const sheetKeys = new Set(todayRows.map(r => makeKey(r.placa, r.data, r.colaborador)));
 
-      // 1. Identificar e remover registros que foram deletados da planilha original do Sheets
-      const rowsToDelete = dbToday.filter(r =>
+      // 1. Identificar e remover registros que foram deletados da planilha original.
+      // Guarda anti-leitura-parcial: se a planilha retornar bem menos linhas do que já
+      // temos sincronizadas (resposta incompleta/transitória), NÃO deletamos nada.
+      const syncedInDb = dbToday.filter(r => r.status_sync === 'sincronizado').length;
+      const leituraParcial = syncedInDb > 0 && todayRows.length < syncedInDb * 0.5;
+      const rowsToDelete = leituraParcial ? [] : dbToday.filter(r =>
         r.status_sync === 'sincronizado' &&
         !sheetKeys.has(makeKey(r.placa, r.data, r.colaborador))
       );
@@ -209,11 +214,15 @@ export default function EmbeddedSheet() {
     }
   }, [toast, loadData]);
 
-  // Carregar dados e disparar importação silenciosa das linhas de hoje no mount
+  // Carrega os dados e dispara a importação silenciosa das linhas de hoje uma única
+  // vez ao montar. O ref garante execução única mesmo se as callbacks forem recriadas.
+  const didInitRef = useRef(false);
   useEffect(() => {
-    loadData().then(() => {
-      handleImportFromSheets(true);
-    });
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    // Busca inicial no mount (padrão aceitável); a execução única é garantida acima.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData().then(() => handleImportFromSheets(true));
   }, [loadData, handleImportFromSheets]);
 
   // Escutar atualizações via Supabase Realtime
@@ -228,6 +237,7 @@ export default function EmbeddedSheet() {
         { event: '*', schema: 'public', table: 'intervencoes_sheet' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
+            if (!isToday(payload.new?.data)) return; // o grid mostra apenas hoje
             setRows((prev) => {
               if (prev.some((r) => r.id === payload.new.id)) return prev;
               return [payload.new, ...prev];
@@ -251,9 +261,11 @@ export default function EmbeddedSheet() {
   // Adicionar uma nova linha vazia
   const handleAddNewRow = async () => {
     if (!profile) return;
-    const today = new Date().toISOString().split('T')[0];
+    // Mesmo formato curto (DD/MM) das linhas do Sheets, para casar com a
+    // deduplicação e o filtro de hoje do grid.
+    const [todayShort] = getTodayVariants();
     const newRecord = {
-      data: today,
+      data: todayShort,
       empresa: 'Nova Transportadora',
       sistema: 'SASCAR',
       colaborador: 'Novo Colaborador',
@@ -307,6 +319,24 @@ export default function EmbeddedSheet() {
       if (error) throw error;
     } catch (err) {
       toast('Erro ao solicitar sincronização', 'error');
+      console.error(err);
+    }
+  };
+
+  // Alternar SIM/NÃO da coluna "Realizado?" em um clique — ação mais frequente do
+  // operador. Reduz o atrito frente à planilha (lá exige abrir a célula e digitar).
+  const toggleRealizado = async (row) => {
+    const next = norm(row.realizado) === 'sim' ? 'NÃO' : 'SIM';
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, realizado: next, status_sync: 'pendente' } : r)));
+    try {
+      const { error } = await supabase
+        .from('intervencoes_sheet')
+        .update({ realizado: next, status_sync: 'pendente' })
+        .eq('id', row.id);
+      if (error) throw error;
+    } catch (err) {
+      toast('Erro ao atualizar "Realizado?"', 'error');
+      loadData();
       console.error(err);
     }
   };
@@ -420,6 +450,9 @@ export default function EmbeddedSheet() {
     return { total, sincronizados, pendentes, erros };
   }, [rows]);
 
+  // Rótulo "Hoje" exibido no cabeçalho (ex.: "29 de maio")
+  const todayLabel = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+
   return (
     <div className="sheet-container">
       
@@ -428,8 +461,9 @@ export default function EmbeddedSheet() {
         <div className="sheet-title-area">
           <h2>
             <i className="ti ti-table-alias" style={{ color: 'var(--mednet-orange)' }}></i> Planilha Embutida
+            <span className="sheet-today-chip"><i className="ti ti-calendar-event"></i> Hoje · {todayLabel}</span>
           </h2>
-          <p> Edição de dados em tempo real espelhada diretamente no Google Sheets. </p>
+          <p> Trabalhe as intervenções de hoje por aqui — tudo é salvo e espelhado no Google Sheets automaticamente. </p>
         </div>
 
         {/* Estatísticas de Sincronização */}
@@ -496,7 +530,9 @@ export default function EmbeddedSheet() {
           </div>
         ) : filteredRows.length === 0 ? (
           <div className="sheet-empty-state">
-            <span>Nenhum registro encontrado hoje. Use "Sincronizar Hoje" ou adicione uma nova linha.</span>
+            <i className="ti ti-clipboard-list"></i>
+            <h3>Nenhuma intervenção hoje ainda</h3>
+            <p>Clique em <b>Sincronizar Hoje</b> para puxar do Google Sheets, ou <b>Inserir Linha</b> para registrar direto pela plataforma.</p>
           </div>
         ) : (
           <table className="sheet-table">
@@ -513,7 +549,7 @@ export default function EmbeddedSheet() {
             </thead>
             <tbody>
               {filteredRows.map((row, rowIndex) => (
-                <tr key={row.id}>
+                <tr key={row.id} className={`crit-${critSlug(row.criticidade)}`}>
                   {/* Número da Linha */}
                   <td className="col-num">
                     {rowIndex + 1}
@@ -561,7 +597,7 @@ export default function EmbeddedSheet() {
                         key={col.key}
                         ref={(el) => (cellRefs.current[`${rowIndex}-${colIndex}`] = el)}
                         tabIndex={0}
-                        onDoubleClick={() => startCellEdit(rowIndex, col.key, val)}
+                        onDoubleClick={col.key === 'realizado' ? undefined : () => startCellEdit(rowIndex, col.key, val)}
                         onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex, col.key, row)}
                         style={{ padding: isEditing ? '0' : undefined }}
                         className={`col-${col.key}`}
@@ -591,6 +627,17 @@ export default function EmbeddedSheet() {
                               autoFocus
                             />
                           )
+                        ) : col.key === 'realizado' ? (
+                          // Toggle SIM/NÃO em um clique
+                          <button
+                            type="button"
+                            className={`sheet-realizado-pill ${norm(val) === 'sim' ? 'is-sim' : 'is-nao'}`}
+                            onClick={(e) => { e.stopPropagation(); toggleRealizado(row); }}
+                            title="Clique para alternar SIM/NÃO"
+                          >
+                            <i className={`ti ${norm(val) === 'sim' ? 'ti-circle-check' : 'ti-circle'}`}></i>
+                            {norm(val) === 'sim' ? 'SIM' : 'NÃO'}
+                          </button>
                         ) : (
                           // Renderização normal de texto com destaque de criticidade
                           <span className={col.key === 'criticidade' ? (val === 'GRAVÍSSIMO' ? 'criticidade-gravissimo' : val === 'GRAVE' ? 'criticidade-grave' : '') : ''}>
@@ -599,7 +646,7 @@ export default function EmbeddedSheet() {
                         )}
 
                         {/* Indicador discreto de edição (Lápis) no hover */}
-                        {!isEditing && col.editable && (
+                        {!isEditing && col.editable && col.key !== 'realizado' && (
                           <i className="ti ti-pencil sheet-cell-edit-icon"></i>
                         )}
                       </td>

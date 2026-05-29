@@ -363,8 +363,64 @@
 
 .sheet-empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 250px;
+  gap: 8px;
+  text-align: center;
+  padding: 0 24px;
   color: var(--text-muted);
 }
+.sheet-empty-state i { font-size: 40px; opacity: 0.45; }
+.sheet-empty-state h3 { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary); font-weight: 700; }
+.sheet-empty-state p { margin: 0; font-size: 12.5px; max-width: 400px; line-height: 1.5; }
+
+/* Chip "Hoje · <data>" no cabeçalho */
+.sheet-today-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--mednet-orange);
+  background: var(--mednet-orange-glow, rgba(255, 138, 0, 0.12));
+  border: 1px solid var(--mednet-orange);
+  border-radius: 99px;
+  vertical-align: middle;
+}
+
+/* Pílula de "Realizado?" — alterna SIM/NÃO em um clique */
+.sheet-realizado-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: inherit;
+  transition: transform 0.1s ease, filter 0.12s ease;
+}
+.sheet-realizado-pill:hover { filter: brightness(1.08); }
+.sheet-realizado-pill:active { transform: scale(0.94); }
+.sheet-realizado-pill.is-sim {
+  background: var(--success-bg);
+  color: var(--success-600);
+  border-color: rgba(45, 167, 90, 0.35);
+}
+.sheet-realizado-pill.is-nao {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+
+/* Acento de criticidade na primeira célula da linha (leitura rápida) */
+.sheet-table tr.crit-gravissimo .col-num { box-shadow: inset 3px 0 0 var(--danger-500); }
+.sheet-table tr.crit-grave .col-num { box-shadow: inset 3px 0 0 var(--warning-500); }
