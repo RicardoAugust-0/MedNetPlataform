@@ -90,7 +90,7 @@ export function parseDateValue(raw) {
   const str = String(raw).trim();
   if (!str) return null;
   const match = str.match(
-    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+    /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
   );
   if (match) {
     const [, d, m, y, hh = "0", mm = "0", ss = "0"] = match;

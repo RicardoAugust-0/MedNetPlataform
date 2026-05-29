@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from "../context.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { NAV_ITEMS, APP_CONFIG } from "../data.js";
+import { NAV_ITEMS } from "../data.js";
 import { iniciais } from '../utils.js';
 import { usePWA } from '../hooks/usePWA.js';
 

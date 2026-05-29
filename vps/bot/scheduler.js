@@ -61,7 +61,7 @@ async function runAbertosCycle() {
   }
 }
 
-async function runFechadosCycle(intervalMinutes) {
+async function runFechadosCycle() {
   if (isRunningFechados) return;
   isRunningFechados = true;
   
@@ -113,7 +113,7 @@ export async function start() {
 
     // Dispara o ciclo de fechados, contanto que não corram em paralelo exato
     if (sinceLastFechados >= intervalFechadosMs && !isRunningFechados && !isRunningAbertos) {
-      await runFechadosCycle(config.interval_minutes || 10);
+      await runFechadosCycle();
     }
   };
 

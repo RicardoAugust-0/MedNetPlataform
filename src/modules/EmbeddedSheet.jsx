@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../hooks/useToast.jsx';

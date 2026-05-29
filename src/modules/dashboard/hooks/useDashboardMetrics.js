@@ -335,7 +335,6 @@ export function useDashboardMetrics({
 
   // ── Motoristas críticos com SLA (limiares por plataforma: Sascar ≥5, Maxtrack ≥8)
   const criticos = useMemo(() => {
-    const tiposFadiga = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
     const nowMs = now.getTime();
     return driversIntervencao
       .filter(d => (d.alertas || 0) >= criticThreshold(d._platformId))

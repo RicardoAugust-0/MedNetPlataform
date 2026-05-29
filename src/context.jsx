@@ -6,7 +6,7 @@ function load(k, fb) {
   try { const v = localStorage.getItem('mn_' + k); return v ? JSON.parse(v) : fb; } catch { return fb; }
 }
 function save(k, v) {
-  try { localStorage.setItem('mn_' + k, JSON.stringify(v)); } catch {}
+  try { localStorage.setItem('mn_' + k, JSON.stringify(v)); } catch { /* storage não crítico */ }
 }
 
 const Ctx = createContext(null);

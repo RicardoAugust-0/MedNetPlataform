@@ -1,10 +1,8 @@
 // deno-lint-ignore-file
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
-import { useApp } from '../context.jsx';
-import { useAuth } from '../auth/AuthContext.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 
@@ -33,10 +31,7 @@ let cachedDriversList = null;
 
 export default function DossiesPage() {
   const toast = useToast();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { profile, session } = useAuth();
-  const { theme } = useApp();
   const { resolveMonitorName } = useCarrierAliases();
   const { history: atendimentosHistory } = useAtendimentos();
 

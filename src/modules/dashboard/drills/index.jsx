@@ -92,11 +92,7 @@ export function FechadosDrill({ positivo, posPositivo, fechados, taxaReinc, pctC
   );
 }
 
-const FADIGA_KEYWORDS = ['Bocejo', 'Olho fechado', 'Sonolência', 'Fadiga'];
-const isFadigaDriver = (d) =>
-  d.tipos?.some(t => FADIGA_KEYWORDS.some(f => t.toLowerCase().includes(f.toLowerCase())));
-
-export function EmAbertoDrill({ criticos, slaVencidos, emAberto, TIPOS, driversAtivos, transpStats }) {
+export function EmAbertoDrill({ criticos, slaVencidos, emAberto, TIPOS, transpStats }) {
   return (
     <div className="dg-card" style={{ marginBottom: 16, borderTop: '3px solid var(--warning-500)' }}>
       <div className="dg-drill" style={{ background: 'transparent', borderTop: 'none', padding: '14px 18px' }}>

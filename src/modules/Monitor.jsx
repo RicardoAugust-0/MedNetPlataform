@@ -251,7 +251,7 @@ export default function Monitor() {
       const hash = await hashFile(file);
       if (hash) {
         let recent = [];
-        try { recent = JSON.parse(localStorage.getItem('mn_sheet_hashes') || '[]'); } catch {}
+        try { recent = JSON.parse(localStorage.getItem('mn_sheet_hashes') || '[]'); } catch { /* storage não crítico */ }
         const dup = recent.find(r => r.hash === hash);
         if (dup) {
           const when = new Date(dup.at).toLocaleString('pt-BR');
@@ -267,7 +267,7 @@ export default function Monitor() {
           }
         }
         const updated = [{ hash, name: file.name, at: new Date().toISOString() }, ...recent.filter(r => r.hash !== hash)].slice(0, 10);
-        try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch {}
+        try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch { /* storage não crítico */ }
       }
       const filterHistory = await loadAtendimentosForFilter(90);
       const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file);
@@ -544,7 +544,7 @@ export default function Monitor() {
     const preset = { id: crypto.randomUUID(), name, filters: { ...filters } };
     const next = [preset, ...presets].slice(0, 5);
     setPresets(next);
-    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch {}
+    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch { /* storage não crítico */ }
   };
 
   const loadPreset = (preset) => setFilters({ ...preset.filters });
@@ -552,7 +552,7 @@ export default function Monitor() {
   const deletePreset = (id) => {
     const next = presets.filter(p => p.id !== id);
     setPresets(next);
-    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch {}
+    try { localStorage.setItem('mn_filter_presets', JSON.stringify(next)); } catch { /* storage não crítico */ }
   };
 
   const exportActiveTab = () => {

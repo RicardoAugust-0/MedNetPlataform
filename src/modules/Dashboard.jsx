@@ -123,7 +123,7 @@ export default function Dashboard() {
             const p = data.value;
             if (p.date === new Date().toDateString()) {
               setPlatRaw(p);
-              try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch {}
+              try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch { /* storage não crítico */ }
             }
           }
         });
@@ -137,15 +137,15 @@ export default function Dashboard() {
           ({ new: row, eventType }) => {
             if (eventType === 'DELETE') {
               setPlatRaw(null);
-              try { localStorage.removeItem('mn_plat_raw_total'); } catch {}
+              try { localStorage.removeItem('mn_plat_raw_total'); } catch { /* storage não crítico */ }
             } else if (row?.value) {
               const p = row.value;
               if (p.date === new Date().toDateString()) {
                 setPlatRaw(p);
-                try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch {}
+                try { localStorage.setItem('mn_plat_raw_total', JSON.stringify(p)); } catch { /* storage não crítico */ }
               } else {
                 setPlatRaw(null);
-                try { localStorage.removeItem('mn_plat_raw_total'); } catch {}
+                try { localStorage.removeItem('mn_plat_raw_total'); } catch { /* storage não crítico */ }
               }
             }
           }
@@ -856,7 +856,6 @@ export default function Dashboard() {
           slaVencidos={m.slaVencidos}
           emAberto={m.emAberto}
           TIPOS={m.emAbertoTipos}
-          driversAtivos={m.driversAtivos}
           transpStats={m.transpStats}
         />
       )}

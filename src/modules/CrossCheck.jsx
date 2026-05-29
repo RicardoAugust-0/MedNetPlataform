@@ -179,7 +179,7 @@ export default function CrossCheck() {
       setLeftCarrier(cache.leftCarrier   || '');
       setCacheTimestamp(cache.savedAt);
       setFromCache(true);
-    } catch {}
+    } catch { /* cache/storage não crítico */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -197,7 +197,7 @@ export default function CrossCheck() {
         rightCarrier, leftCarrier,
         savedAt: new Date().toISOString(),
       }));
-    } catch {}
+    } catch { /* cache/storage não crítico */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matches]);
 
@@ -459,7 +459,7 @@ export default function CrossCheck() {
     setFilterBy('todos'); setSortBy('ocorrencias'); setOnlyDivergences(false);
     setSearchQuery(''); setActiveTab('todos');
     setFromCache(false); setCacheTimestamp(null);
-    try { localStorage.removeItem(CACHE_KEY); } catch {}
+    try { localStorage.removeItem(CACHE_KEY); } catch { /* cache/storage não crítico */ }
   }
 
   function swapSides() {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ProfilesProvider } from '../hooks/useProfiles';
 import { CarrierAliasesProvider } from '../hooks/useCarrierAliases';
 import { AtendimentosProvider } from '../hooks/useAtendimentos';

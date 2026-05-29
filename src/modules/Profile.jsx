@@ -246,13 +246,15 @@ export default function Profile() {
   // Sincroniza quando o perfil termina de carregar.
   useEffect(() => {
     if (!profile) return;
-    /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (profile.nome     && !nome)     setNome(profile.nome);
     if (profile.cargo    && !cargo)    setCargo(profile.cargo);
     if (profile.telefone && !telefone) setTelefone(profile.telefone);
     if (profile.bio      && !bio)      setBio(profile.bio);
-    /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  }, [profile]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // Depende apenas de `profile`: preenche os campos vazios uma única vez ao
+    // carregar, sem sobrescrever o que o usuário estiver editando.
+  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [novaSenha,    setNovaSenha]    = useState('');
   const [confirmSenha, setConfirmSenha] = useState('');

@@ -30,7 +30,7 @@ export const getCustomVars = () => {
 };
 
 export const setCustomVars = (vars) => {
-  try { localStorage.setItem('mn_template_vars', JSON.stringify(vars)); } catch {}
+  try { localStorage.setItem('mn_template_vars', JSON.stringify(vars)); } catch { /* storage não crítico */ }
 };
 
 export const applyTemplate = (rawText, d) => {
