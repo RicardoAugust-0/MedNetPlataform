@@ -1,6 +1,8 @@
 # Auditoria Técnica — Correções Aplicadas (2026-05-29)
 
-Documento de handoff da sessão de auditoria. Registra **o que foi corrigido**, **a ação manual obrigatória pendente** e **o que falta** para as próximas sessões.
+Documento de handoff. Cobre dois esforços do dia: **(1)** a auditoria geral de código/segurança e **(2)** a correção e melhoria da **Planilha Embutida (Embedded Sheet)**. Registra o que foi corrigido, a ação manual obrigatória pendente e o que falta para as próximas sessões.
+
+> **Atualização (mesma data):** após a auditoria, foram corrigidos vários bugs de sincronização da Planilha Embutida e feito deploy das edge functions. Ver a seção [Planilha Embutida](#-planilha-embutida--correções-de-sincronização-e-ux).
 
 ---
 
@@ -62,11 +64,52 @@ Documento de handoff da sessão de auditoria. Registra **o que foi corrigido**, 
 
 ---
 
+## 🔧 Planilha Embutida — correções de sincronização e UX
+
+Esforço separado da auditoria (mesmo dia). Os bugs giravam em torno da sincronização bidirecional com o Google Sheets via `read-sheet`/`append-sheet`.
+
+### Bugs corrigidos
+
+**1. "Sincronizar Hoje" reimportava infinitamente (duplicatas)** — `EmbeddedSheet.jsx`
+A busca de registros existentes (`select` sem filtro e sem `order`) batia no **teto padrão de 1000 linhas do PostgREST**. Com a tabela em 2400+ linhas, as linhas de hoje (as mais recentes) não eram retornadas → a deduplicação não via nada → cada clique reinseria as ~29 intervenções. Sintomas relatados: "27 sincronizadas" repetindo, e "112 eventos vs 29 reais".
+- **Fix:** a busca passou a ser escopada por data no servidor (`.in('data', [variantes de hoje])`), independente do tamanho da tabela; chave de dedup normalizada campo a campo (`makeKey`).
+- **Limpeza de dados:** duplicatas removidas mantendo a versão mais recente por chave (`2409 → 2030` linhas; re-limpa durante os testes).
+
+**2. Handler de realtime de DELETE invertido** — `EmbeddedSheet.jsx`
+`prev.filter(r => r.id === payload.old.id)` mantinha **apenas** a linha apagada (esvaziava a grid). Corrigido para `!==`.
+
+**3. Editar uma linha criava uma nova no Google Sheets** — `append-sheet`/`read-sheet`/`EmbeddedSheet`
+As linhas importadas não tinham o `id` da plataforma na coluna P do Sheets, então a `append-sheet` dependia do match por `data+placa+colaborador`. Ao **corrigir o nome do colaborador** (ou com a data em branco no início do dia), o match falhava e uma **nova linha era inserida**.
+- **Fix em camadas (mais robusto):**
+  1. `read-sheet` agora lê `A:P` e retorna `idPlataforma` (coluna P) e `_row` (número da linha).
+  2. `EmbeddedSheet` reaproveita `idPlataforma` como `id` do registro quando existe, e grava `linha_sheet` com a **linha exata** da aba.
+  3. `append-sheet` ganhou match **posicional verificado** (usa `linha_sheet`, confere placa **ou** colaborador) e um **fallback tolerante**: exige **placa + (data OU colaborador)**, escolhendo o candidato mais específico. Tolera UM campo-chave editado sem casar com outro dia. Em qualquer match, carimba o `id` na coluna P → edições seguintes casam por ID.
+
+### Melhorias de UX (para o operador preferir a plataforma à planilha)
+- **Grid apenas de hoje** (`loadData` filtra por data; antes trazia as últimas 150 de qualquer dia).
+- **"Realizado?" em 1 clique**: pílula que alterna SIM/NÃO direto (ação diária do operador).
+- **Botão de excluir linha** (ícone de lixeira, com confirmação via `useConfirm`) — remove a intervenção da plataforma.
+- Chip **"Hoje · &lt;data&gt;"** no cabeçalho, **realce de criticidade por linha**, e estado vazio com chamada para ação.
+- Robustez: filtro de hoje no realtime INSERT, **guarda anti-leitura-parcial** no DELETE da reconciliação, e init único no mount via `ref`.
+
+### Deploys realizados (produção)
+- **`append-sheet` → v13** (deployada via MCP; `verify_jwt: false` mantido — a trigger chama sem JWT de usuário).
+- **`read-sheet` → v8** (deployada via MCP).
+- **Frontend** → `git push` no `master` (deploy Vercel).
+
+### ⚠️ Pendências específicas da Planilha Embutida
+- [ ] **Linhas duplicadas já criadas no Google Sheets** pelas edições que falharam antes do fix (ex.: duas versões do mesmo motorista) — precisam de limpeza manual na planilha.
+- [ ] **Deletar também no Google Sheets** quando o operador exclui na plataforma (hoje o botão só remove do banco; a `append-sheet` não tem operação de delete). **O usuário implementará depois.**
+- [ ] **RLS de exclusão**: hoje só `is_admin()` pode deletar `intervencoes_sheet`. Se operadores precisarem excluir suas linhas, adicionar policy.
+- [ ] **Backfill de `linha_sheet` posicional** para as ~30 linhas antigas de hoje (têm o placeholder `"MAIO 2026!A:P"`). Não é crítico: elas se auto-curam na primeira edição (fallback casa por placa+data → atualiza → carimba o ID).
+
+---
+
 ## ⚠️ AÇÃO MANUAL OBRIGATÓRIA (antes de deployar)
 
-A correção de auth da `append-sheet` só fecha a brecha **depois** de provisionar o secret nos **dois** lugares. Enquanto não fizer, o comportamento é idêntico ao atual (sem quebrar nada), mas a brecha do `SYSTEM_TRIGGER` continua aberta.
+A função `append-sheet` **já está deployada (v13)** com a lógica do `TRIGGER_SECRET`, mas o secret **ainda não foi provisionado** e a migration do Vault **ainda não foi aplicada** — então o modo de compatibilidade (`SYSTEM_TRIGGER`) segue ativo e a brecha continua aberta. Para fechá-la, provisione o secret nos **dois** lugares (sem isso o comportamento é idêntico ao atual, sem quebrar nada):
 
-1. **Gerar um valor aleatório longo** (ex.: `openssl rand -hex 32`).
+1. **Gerar um valor aleatório longo** (no Windows: `[Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))` ou use um gerenciador de senhas).
 2. **Vault (banco)** — SQL Editor do Supabase:
    ```sql
    select vault.create_secret('<VALOR_ALEATORIO>', 'trigger_secret');
@@ -75,8 +118,8 @@ A correção de auth da `append-sheet` só fecha a brecha **depois** de provisio
    ```
    TRIGGER_SECRET=<MESMO_VALOR_ALEATORIO>
    ```
-4. **Deployar juntos**: aplicar a migration `20260529120000_secure_append_sheet_trigger.sql` **e** fazer redeploy da função `append-sheet`.
-5. **Validar**: editar uma linha na planilha embutida e confirmar que sincroniza (status `sincronizado`). Conferir os logs da função — não deve mais aparecer o warning `Token legado SYSTEM_TRIGGER aceito`.
+4. **Aplicar a migration** `20260529120000_secure_append_sheet_trigger.sql` (faz a trigger enviar o secret do Vault). A função já está no ar; não precisa redeploy.
+5. **Validar**: editar uma linha na planilha embutida e confirmar que sincroniza (status `sincronizado`). Conferir os logs — não deve mais aparecer `Token legado SYSTEM_TRIGGER aceito`.
 
 ---
 
