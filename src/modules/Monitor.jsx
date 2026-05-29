@@ -18,7 +18,7 @@ import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
+import { supabase, isSupabaseConfigured } from '../supabase.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -39,21 +39,28 @@ function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes)
   };
 }
 
-/* ── Google Sheets via Supabase Edge Function ── */
-async function postToSheets(payload, accessToken) {
+/* ── Google Sheets via Supabase Table Insert (which triggers Edge Function) ── */
+async function postToSheets(payload) {
   try {
-    const { data, error } = await supabase.functions.invoke('append-sheet', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: payload,
-    });
-    if (error) {
-      const errMsg = await getFunctionErrorMessage(error);
-      throw new Error(errMsg);
-    }
-    if (!data?.ok) console.warn('[Sheets]', data?.error);
+    const { error } = await supabase
+      .from('intervencoes_sheet')
+      .insert({
+        data:             payload.data,
+        empresa:          payload.empresa,
+        sistema:          payload.sistema,
+        colaborador:      payload.colaborador,
+        placa:            payload.placa,
+        frota:            payload.frota,
+        criticidade:      payload.criticidade,
+        classificacao:    payload.classificacao,
+        realizado:        'NÃO',
+        motivo:           payload.motivo || 'FADIGA',
+        solicitado_por:   payload.solicitadoPor,
+        hora_solicitacao: payload.horaSolicitacao,
+        status_sync:      'pendente',
+        tentativas_sync:  0,
+      });
+    if (error) throw error;
   } catch (e) {
     console.warn('[Sheets] falha ao registrar na planilha:', e.message);
   }
@@ -77,7 +84,7 @@ export default function Monitor() {
   const [searchParams] = useSearchParams();
 
   const { drivers, replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, filters, setFilters, platformId, setPlatformId } = useApp();
-  const { profile, session } = useAuth();
+  const { profile } = useAuth();
   const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
@@ -449,7 +456,7 @@ export default function Monitor() {
       motivo:          'FADIGA',
       solicitadoPor:   (profile?.nome || '').split(' ')[0],
       horaSolicitacao: hora,
-    }, session?.access_token);
+    });
   };
 
   const reportar = async (d) => {
