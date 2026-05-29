@@ -232,20 +232,31 @@ Deno.serve(async (req) => {
       updatedRange = updateResult.updatedRange || updateRange;
       console.log(`[append-sheet] Linha atualizada com sucesso no Sheets: ${updatedRange}`);
     } else {
-      // REGISTRO NÃO EXISTE -> INSERT (Append à planilha usando colunas A:H como referência de fim)
-      const appendRange = `${aba}!A:H`;
-      const appendRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      // REGISTRO NÃO EXISTE -> INSERT (Determina a primeira linha livre nas colunas A-H e faz PUT)
+      let lastActiveRowIndex = 0;
+      for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i];
+        const hasData = row && row.slice(0, 8).some((cell: any) => cell && String(cell).trim() !== '');
+        if (hasData) {
+          lastActiveRowIndex = i + 1; // Índice 1-based
+        }
+      }
+      
+      const nextRowIndex = lastActiveRowIndex > 0 ? lastActiveRowIndex + 1 : 2;
+      const insertRange = `${aba}!A${nextRowIndex}:P${nextRowIndex}`;
+      
+      const insertRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(insertRange)}?valueInputOption=USER_ENTERED`,
         {
-          method: 'POST',
+          method: 'PUT',
           headers: { 'Authorization': `Bearer ${gToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ values: [valuesRow] }),
         }
       );
-      const appendResult = await appendRes.json();
-      if (appendResult.error) throw new Error(`Google Sheets Append Error: ${appendResult.error.message}`);
-      updatedRange = appendResult.updates?.updatedRange || `${aba}!A:P`;
-      console.log(`[append-sheet] Nova linha inserida no Sheets: ${updatedRange}`);
+      const insertResult = await insertRes.json();
+      if (insertResult.error) throw new Error(`Google Sheets Insert Error: ${insertResult.error.message}`);
+      updatedRange = insertResult.updatedRange || insertRange;
+      console.log(`[append-sheet] Nova linha inserida no Sheets (PUT): ${updatedRange}`);
     }
 
     // 6. Atualizar status de sucesso no banco de dados do Supabase
