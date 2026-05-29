@@ -201,6 +201,27 @@ Deno.serve(async (req) => {
       }
     }
     
+    // 1.5ª tentativa: posição exata informada em linha_sheet (ex.: "MAIO 2026!A12:P12"),
+    // verificando placa + colaborador para não atualizar a linha errada caso a planilha
+    // tenha sido deslocada. Resolve o caso das linhas importadas (sem id na Coluna P).
+    if (rowIndex === -1 && record.linha_sheet) {
+      const posMatch = String(record.linha_sheet).match(/!A(\d+):P\d+\s*$/i);
+      if (posMatch) {
+        const n = parseInt(posMatch[1], 10);
+        const row = existingRows[n - 1];
+        if (row && row.length >= 5) {
+          const placaOk = normalizePlaca(row[4]) === normalizePlaca(record.placa);
+          const colabRow = normalizeName(row[3]);
+          const colabRec = normalizeName(record.colaborador);
+          const colabOk  = colabRow === colabRec || !colabRow || !colabRec;
+          if (placaOk && colabOk) {
+            rowIndex = n;
+            console.log(`[append-sheet] Linha localizada por posição (linha_sheet) e verificada: ${rowIndex}`);
+          }
+        }
+      }
+    }
+
     // 2ª tentativa (Fallback): Buscar por correspondência de dados operacionais (Data, Placa, Colaborador)
     if (rowIndex === -1 && existingRows.length > 0) {
       const targetDate = normalizeDate(record.data);

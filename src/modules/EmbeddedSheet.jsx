@@ -44,6 +44,9 @@ function getTodayVariants() {
 }
 const isToday = (dateStr) => !!dateStr && getTodayVariants().includes(dateStr.trim());
 
+// Valida um uuid (id da plataforma vindo da coluna P da planilha).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function EmbeddedSheet() {
   const { profile } = useAuth();
   const toast = useToast();
@@ -162,25 +165,34 @@ export default function EmbeddedSheet() {
       const dbExistingKeys = new Set(dbToday.map(r => makeKey(r.placa, r.data, r.colaborador)));
 
       const mappedRows = todayRows
-        .map(r => ({
-          data: r.data || '',
-          empresa: r.empresa || '',
-          sistema: r.sistema || '',
-          colaborador: r.colaborador || '',
-          placa: r.placa || '',
-          frota: r.frota || '',
-          criticidade: (r.criticidade || 'NORMAL').toUpperCase().trim(),
-          classificacao: r.classificacao || '',
-          realizado: (r.realizado || 'NÃO').toUpperCase().trim(),
-          motivo: r.motivo || '',
-          solicitado_por: r.solicitadoPor || '',
-          hora_solicitacao: r.horaSolicitacao || '',
-          realizado_por: r.realizadoPor || '',
-          hora_realizacao: r.horaRealizacao || '',
-          justificativa: r.justificativa || '',
-          status_sync: 'sincronizado', // Importante: marca como sincronizado para pular o trigger pg_net
-          linha_sheet: `${r._mes || 'Importado'}!A:P`
-        }))
+        .map(r => {
+          const row = {
+            data: r.data || '',
+            empresa: r.empresa || '',
+            sistema: r.sistema || '',
+            colaborador: r.colaborador || '',
+            placa: r.placa || '',
+            frota: r.frota || '',
+            criticidade: (r.criticidade || 'NORMAL').toUpperCase().trim(),
+            classificacao: r.classificacao || '',
+            realizado: (r.realizado || 'NÃO').toUpperCase().trim(),
+            motivo: r.motivo || '',
+            solicitado_por: r.solicitadoPor || '',
+            hora_solicitacao: r.horaSolicitacao || '',
+            realizado_por: r.realizadoPor || '',
+            hora_realizacao: r.horaRealizacao || '',
+            justificativa: r.justificativa || '',
+            status_sync: 'sincronizado', // marca como sincronizado para pular o trigger pg_net
+            // Vínculo posicional com a linha exata da aba: permite à append-sheet
+            // localizar a linha na hora da edição sem depender só do match difuso.
+            linha_sheet: r._row ? `${r._mes}!A${r._row}:P${r._row}` : `${r._mes || 'Importado'}!A:P`,
+          };
+          // Se a planilha já traz o id da plataforma na coluna P, reaproveita-o como
+          // id do registro — assim banco e planilha ficam ligados pelo mesmo id.
+          const pid = (r.idPlataforma || '').trim();
+          if (UUID_RE.test(pid)) row.id = pid;
+          return row;
+        })
         .filter(r => !dbExistingKeys.has(makeKey(r.placa, r.data, r.colaborador)));
 
       let insertedCount = 0;

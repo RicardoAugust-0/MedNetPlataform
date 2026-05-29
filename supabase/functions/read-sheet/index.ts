@@ -182,7 +182,8 @@ Deno.serve(async (req) => {
     const allRows: SheetRow[] = [];
 
     for (const mes of meses) {
-      const range = `${mes}!A:O`;
+      // A:P — inclui a coluna P (ID_PLATAFORMA) para vincular cada linha ao seu id no banco.
+      const range = `${mes}!A:P`;
       const res = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`,
         { headers: { Authorization: `Bearer ${token}` } },
@@ -230,6 +231,8 @@ Deno.serve(async (req) => {
           realizadoPor: cell(r, 12),
           horaRealizacao: cell(r, 13),
           justificativa: cell(r, 14),
+          idPlataforma: cell(r, 15), // Coluna P: id já gravado pela plataforma (se houver)
+          _row: String(i + 1),       // Número 1-based da linha na aba (para vínculo posicional)
           _mes: mes,
         });
       }
