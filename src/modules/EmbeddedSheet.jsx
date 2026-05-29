@@ -25,6 +25,11 @@ const COLUMNS = [
 // Variable cache for silent import throttling to prevent redundant edge function calls on tab switching
 let lastImportTime = 0;
 
+// Chave de deduplicação por registro (placa + data + colaborador), normalizada
+// campo a campo para resistir a diferenças de caixa/espaços entre Sheets e banco.
+const norm = (v) => (v ?? '').toString().trim().toLowerCase();
+const makeKey = (placa, data, colaborador) => `${norm(placa)}|${norm(data)}|${norm(colaborador)}`;
+
 export default function EmbeddedSheet() {
   const { profile } = useAuth();
   const toast = useToast();
@@ -114,22 +119,24 @@ export default function EmbeddedSheet() {
         return;
       }
 
-      // Buscar registros locais existentes para evitar duplicados e identificar deletados
+      // Buscar registros locais de HOJE para evitar duplicados e identificar deletados.
+      // Escopar por data no servidor é essencial: sem filtro, o SELECT esbarra no
+      // limite padrão de 1000 linhas do PostgREST e, com a tabela grande, não
+      // retorna as linhas de hoje — o que quebrava a deduplicação (reinseria tudo).
       const { data: dbExisting, error: dbErr } = await supabase
         .from('intervencoes_sheet')
-        .select('id, placa, data, colaborador, status_sync');
-      
+        .select('id, placa, data, colaborador, status_sync')
+        .in('data', [todayShort, todayLong, todayYearShort]);
+
       if (dbErr) throw dbErr;
 
-      const dbToday = (dbExisting || []).filter(r => isDateToday(r.data));
-      const sheetKeys = new Set(
-        todayRows.map(r => `${r.placa}_${r.data}_${r.colaborador}`.toLowerCase().trim())
-      );
+      const dbToday = dbExisting || [];
+      const sheetKeys = new Set(todayRows.map(r => makeKey(r.placa, r.data, r.colaborador)));
 
       // 1. Identificar e remover registros que foram deletados da planilha original do Sheets
-      const rowsToDelete = dbToday.filter(r => 
-        r.status_sync === 'sincronizado' && 
-        !sheetKeys.has(`${r.placa}_${r.data}_${r.colaborador}`.toLowerCase().trim())
+      const rowsToDelete = dbToday.filter(r =>
+        r.status_sync === 'sincronizado' &&
+        !sheetKeys.has(makeKey(r.placa, r.data, r.colaborador))
       );
 
       let deletedCount = 0;
@@ -147,9 +154,7 @@ export default function EmbeddedSheet() {
       }
 
       // 2. Mapear e filtrar novas linhas do dia de hoje para importação
-      const dbExistingKeys = new Set(
-        dbToday.map(r => `${r.placa}_${r.data}_${r.colaborador}`.toLowerCase().trim())
-      );
+      const dbExistingKeys = new Set(dbToday.map(r => makeKey(r.placa, r.data, r.colaborador)));
 
       const mappedRows = todayRows
         .map(r => ({
@@ -171,7 +176,7 @@ export default function EmbeddedSheet() {
           status_sync: 'sincronizado', // Importante: marca como sincronizado para pular o trigger pg_net
           linha_sheet: `${r._mes || 'Importado'}!A:P`
         }))
-        .filter(r => !dbExistingKeys.has(`${r.placa}_${r.data}_${r.colaborador}`.toLowerCase().trim()));
+        .filter(r => !dbExistingKeys.has(makeKey(r.placa, r.data, r.colaborador)));
 
       let insertedCount = 0;
       if (mappedRows.length > 0) {
@@ -232,7 +237,7 @@ export default function EmbeddedSheet() {
               prev.map((r) => (r.id === payload.new.id ? payload.new : r))
             );
           } else if (payload.eventType === 'DELETE') {
-            setRows((prev) => prev.filter((r) => r.id === payload.old.id));
+            setRows((prev) => prev.filter((r) => r.id !== payload.old.id));
           }
         }
       )
