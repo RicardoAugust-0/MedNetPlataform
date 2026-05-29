@@ -110,9 +110,20 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 
+    const triggerSecret = Deno.env.get('TRIGGER_SECRET');
+
     let isAuthorized = false;
-    // Permite chamadas internas da trigger em ambiente local ou via token service_role em prod
-    if (tokenStr === serviceRoleKey || tokenStr === 'SYSTEM_TRIGGER' || tokenStr.includes('service_role')) {
+    if (tokenStr === serviceRoleKey) {
+      // Chamada com a service_role key (scripts internos / jobs)
+      isAuthorized = true;
+    } else if (triggerSecret && tokenStr === triggerSecret) {
+      // Caminho seguro: trigger do banco autenticada com o secret compartilhado
+      isAuthorized = true;
+    } else if (!triggerSecret && tokenStr === 'SYSTEM_TRIGGER') {
+      // COMPATIBILIDADE: aceita o literal legado APENAS enquanto TRIGGER_SECRET
+      // não estiver configurado. Configure o secret (env da função + Vault) para
+      // fechar a brecha — ver migration *_secure_append_sheet_trigger.sql.
+      console.warn('[append-sheet] Token legado SYSTEM_TRIGGER aceito. Configure TRIGGER_SECRET para encerrar o modo de compatibilidade.');
       isAuthorized = true;
     } else {
       // Valida sessão de operador logado
