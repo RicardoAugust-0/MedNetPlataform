@@ -337,6 +337,38 @@
   background: var(--surface-2);
 }
 
+/* Célula de status: badge + ações (retry/excluir) */
+.sheet-status-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Botão de excluir linha — discreto, fica vermelho no hover da linha */
+.sheet-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.sheet-table tr:hover .sheet-delete-btn {
+  opacity: 0.7;
+}
+
+.sheet-delete-btn:hover {
+  opacity: 1;
+  color: var(--danger-500);
+  background: var(--danger-bg);
+}
+
 .sheet-loading-wrapper {
   display: flex;
   flex-direction: column;

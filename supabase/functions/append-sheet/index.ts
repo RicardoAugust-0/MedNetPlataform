@@ -214,7 +214,9 @@ Deno.serve(async (req) => {
           const colabRow = normalizeName(row[3]);
           const colabRec = normalizeName(record.colaborador);
           const colabOk  = colabRow === colabRec || !colabRow || !colabRec;
-          if (placaOk && colabOk) {
+          // A posição é autoritativa (foi gravada para ESTE registro). Basta placa OU
+          // colaborador conferir — assim editar um desses campos não quebra o vínculo.
+          if (placaOk || colabOk) {
             rowIndex = n;
             console.log(`[append-sheet] Linha localizada por posição (linha_sheet) e verificada: ${rowIndex}`);
           }
@@ -222,27 +224,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2ª tentativa (Fallback): Buscar por correspondência de dados operacionais (Data, Placa, Colaborador)
+    // 2ª tentativa (Fallback): correspondência operacional tolerante a UM campo editado.
+    // Placa é o identificador estável e obrigatório; exige-se placa + pelo menos um
+    // corroborante (data OU colaborador). Isso resolve os casos comuns: operador
+    // corrige o nome do colaborador, ou a coluna de data fica em branco/divergente no
+    // início do dia. Entre vários candidatos, escolhe o mais específico (maior score).
     if (rowIndex === -1 && existingRows.length > 0) {
       const targetDate = normalizeDate(record.data);
       const targetPlaca = normalizePlaca(record.placa);
       const targetColab = normalizeName(record.colaborador);
-      
-      console.log(`[append-sheet] ID não encontrado na Coluna P. Buscando por correspondência operacional: Data=${targetDate}, Placa=${targetPlaca}, Colaborador=${targetColab}`);
-      
+
+      console.log(`[append-sheet] ID/posição não encontrados. Match operacional: Data=${targetDate}, Placa=${targetPlaca}, Colaborador=${targetColab}`);
+
+      const candidates: { idx: number; score: number }[] = [];
       for (let i = 0; i < existingRows.length; i++) {
         const row = existingRows[i];
-        if (row && row.length >= 5) {
-          const rowDate = normalizeDate(row[0]);
-          const rowColab = normalizeName(row[3]);
-          const rowPlaca = normalizePlaca(row[4]);
-          
-          if (rowDate === targetDate && rowPlaca === targetPlaca && rowColab === targetColab) {
-            rowIndex = i + 1;
-            console.log(`[append-sheet] Correspondência operacional encontrada de fallback na linha ${rowIndex}!`);
-            break;
-          }
-        }
+        if (!row || row.length < 5) continue;
+        if (normalizePlaca(row[4]) !== targetPlaca) continue; // placa obrigatória
+        const dateOk  = normalizeDate(row[0]) === targetDate;
+        const colabOk = normalizeName(row[3]) === targetColab;
+        if (!dateOk && !colabOk) continue; // exige ao menos um corroborante
+        candidates.push({ idx: i + 1, score: (dateOk ? 1 : 0) + (colabOk ? 1 : 0) });
+      }
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.score - a.score);
+        rowIndex = candidates[0].idx;
+        console.log(`[append-sheet] Correspondência operacional (score ${candidates[0].score}) na linha ${rowIndex}`);
       }
     }
 

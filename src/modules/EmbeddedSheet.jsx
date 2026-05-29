@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../hooks/useToast.jsx';
+import { useConfirm } from '../hooks/useConfirm.jsx';
 
 // Colunas visíveis na planilha embutida
 const COLUMNS = [
@@ -50,6 +51,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export default function EmbeddedSheet() {
   const { profile } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -353,6 +355,30 @@ export default function EmbeddedSheet() {
     }
   };
 
+  // Excluir uma linha da plataforma (com confirmação)
+  const handleDeleteRow = async (row) => {
+    const quem = row.colaborador?.trim() || row.placa?.trim() || 'esta intervenção';
+    const ok = await confirm({
+      title: 'Excluir intervenção',
+      message: `Remover "${quem}" da plataforma? A linha sai do espelho; a linha correspondente no Google Sheets não é apagada automaticamente.`,
+      confirmText: 'Excluir',
+      danger: true,
+    });
+    if (!ok) return;
+
+    const snapshot = rows;
+    setRows((prev) => prev.filter((r) => r.id !== row.id)); // otimista
+    try {
+      const { error } = await supabase.from('intervencoes_sheet').delete().eq('id', row.id);
+      if (error) throw error;
+      toast('Intervenção removida da plataforma.', 'success');
+    } catch (err) {
+      setRows(snapshot); // reverte
+      toast('Não foi possível excluir (verifique se você tem permissão).', 'error');
+      console.error(err);
+    }
+  };
+
   // Salvar a alteração de uma célula
   const saveCellEdit = async (rowIndex, colKey, originalRow) => {
     if (!activeCell) return;
@@ -569,34 +595,43 @@ export default function EmbeddedSheet() {
 
                   {/* Coluna de Status da Sincronização */}
                   <td className="col-status">
-                    {row.status_sync === 'sincronizado' && (
-                      <span className="sheet-badge sheet-badge-success">
-                        <i className="ti ti-circle-check"></i> Sincronizado
-                      </span>
-                    )}
-                    {row.status_sync === 'pendente' && (
-                      <span className="sheet-badge sheet-badge-pending">
-                        <i className="ti ti-loader"></i> Enviando...
-                      </span>
-                    )}
-                    {row.status_sync === 'erro' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          title={row.ultimo_erro_sync}
-                          className="sheet-badge sheet-badge-danger"
-                          style={{ cursor: 'help' }}
-                        >
-                          <i className="ti ti-circle-x"></i> Falhou
+                    <div className="sheet-status-cell">
+                      {row.status_sync === 'sincronizado' && (
+                        <span className="sheet-badge sheet-badge-success">
+                          <i className="ti ti-circle-check"></i> Sincronizado
                         </span>
-                        <button
-                          onClick={() => handleRetrySync(row)}
-                          className="sheet-retry-btn"
-                          title="Tentar sincronizar novamente"
-                        >
-                          <i className="ti ti-refresh"></i>
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      {row.status_sync === 'pendente' && (
+                        <span className="sheet-badge sheet-badge-pending">
+                          <i className="ti ti-loader"></i> Enviando...
+                        </span>
+                      )}
+                      {row.status_sync === 'erro' && (
+                        <>
+                          <span
+                            title={row.ultimo_erro_sync}
+                            className="sheet-badge sheet-badge-danger"
+                            style={{ cursor: 'help' }}
+                          >
+                            <i className="ti ti-circle-x"></i> Falhou
+                          </span>
+                          <button
+                            onClick={() => handleRetrySync(row)}
+                            className="sheet-retry-btn"
+                            title="Tentar sincronizar novamente"
+                          >
+                            <i className="ti ti-refresh"></i>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDeleteRow(row)}
+                        className="sheet-delete-btn"
+                        title="Excluir esta linha"
+                      >
+                        <i className="ti ti-trash"></i>
+                      </button>
+                    </div>
                   </td>
 
                   {/* Renderização Dinâmica das Células Editáveis */}
