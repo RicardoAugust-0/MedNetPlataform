@@ -105,6 +105,22 @@ export async function parse(file, { history = [] } = {}) {
   // Linhas brutas aprovadas no filtro — usadas pelo writer VPS para driver_events.
   const rawEventRows = [];
 
+  const finalizedIntervencaoCount = {};
+  for (const row of rows.slice(1)) {
+    const placa = String(row[iPlaca] || '').trim();
+    if (!placa) continue;
+
+    const statusRaw = iStatus >= 0 ? String(row[iStatus] || '').trim() : '';
+    const isFinalizado = FINALIZADO_STATUS.has(statusRaw);
+    if (!isFinalizado) continue;
+
+    const nomeEvento = iEvento >= 0 ? String(row[iEvento] || '').trim() : '';
+    const nomeNorm = normalize(nomeEvento);
+    if (INTERVENCAO_NORM.includes(nomeNorm)) {
+      finalizedIntervencaoCount[placa] = (finalizedIntervencaoCount[placa] || 0) + 1;
+    }
+  }
+
   for (const row of rows.slice(1)) {
     const placa = String(row[iPlaca] || '').trim();
     if (!placa) continue;
@@ -138,7 +154,7 @@ export async function parse(file, { history = [] } = {}) {
       const transportadoraVal = iTransp >= 0 ? String(row[iTransp] || '').trim() || '—' : '—';
       const frotaVal = iFrota >= 0 ? String(row[iFrota] || '').trim() : '';
 
-      rawEventRows.push({
+      const rawEv = {
         platform_id:          'maxtrack',
         placa,
         nome:                 motoristaNome,
@@ -157,8 +173,62 @@ export async function parse(file, { history = [] } = {}) {
         analise_ia_plataforma: analise || null,
         raw_event_type_id:    idEvento || null,
         ocorrido_em:          eventDate ? eventDate.toISOString() : null,
+      };
+
+      const hasIntervention = (history || []).some(h => h.placa === placa && h.tipo === 'intervencao');
+      const threshold = hasIntervention ? 8 : 5;
+      const finalizedCount = finalizedIntervencaoCount[placa] || 0;
+      const shouldProcess = finalizedCount > threshold;
+
+      if (!shouldProcess) {
+        rawEventRows.push(rawEv);
+        continue;
+      }
+
+      if (speed !== null && speed < MIN_MOVING_SPEED_KMH) {
+        filtradosPorVelocidade++;
+        rawEventRows.push(rawEv);
+        continue;
+      }
+
+      const clear = clearMap[placa];
+      const clearDate = bucket === 'intervencao' ? clear?.lastIntervencao
+                      : bucket === 'reportar'    ? clear?.lastReportar
+                      : null;
+      if (clearDate && eventDate && !isAfterClear(eventDate, clearDate)) {
+        filtradosPorHistorico++;
+        rawEventRows.push(rawEv);
+        continue;
+      }
+
+      if (!byPlaca[placa]) {
+        byPlaca[placa] = {
+          placa,
+          nome:           null,
+          cpf:            null,
+          matricula:      null,
+          transportadora: transportadoraVal,
+          frota:          frotaVal,
+          eventos:        [],
+          turnos:         [],
+        };
+      }
+
+      const entry = byPlaca[placa];
+      if (!entry.nome      && motoristaNome) entry.nome      = motoristaNome;
+      if (!entry.cpf       && cpfVal)        entry.cpf       = cpfVal;
+      if (!entry.matricula && matriculaVal)  entry.matricula = matriculaVal;
+
+      entry.eventos.push({
+        _nome:       nomeEvento,
+        _nomeNorm:   nomeNorm,
+        _severidade: mapSeveridade(sevRaw),
+        _eventDate:  eventDate,
       });
 
+      entry.turnos.push(eventDate ? parseTurno(eventDate) : 'diurno');
+
+      rawEventRows.push(rawEv);
       continue;
     }
 
@@ -167,8 +237,17 @@ export async function parse(file, { history = [] } = {}) {
       continue;
     }
 
-    const clearAt = clearMap[placa];
-    if (clearAt && eventDate && !isAfterClear(eventDate, clearAt)) {
+    const nomeEvento = iEvento  >= 0 ? String(row[iEvento]  || '').trim() : '';
+    const nomeNorm   = normalize(nomeEvento);
+    const bucket     = INTERVENCAO_NORM.includes(nomeNorm) ? 'intervencao'
+                     : TECNICO_NORM.includes(nomeNorm)     ? 'tecnico'
+                     : 'reportar';
+
+    const clear = clearMap[placa];
+    const clearDate = bucket === 'intervencao' ? clear?.lastIntervencao
+                    : bucket === 'reportar'    ? clear?.lastReportar
+                    : null;
+    if (clearDate && eventDate && !isAfterClear(eventDate, clearDate)) {
       filtradosPorHistorico++;
       continue;
     }
@@ -191,18 +270,12 @@ export async function parse(file, { history = [] } = {}) {
     if (!entry.cpf       && iCpf    >= 0 && row[iCpf])    entry.cpf       = String(row[iCpf]).trim();
     if (!entry.matricula && iMatric >= 0 && row[iMatric]) entry.matricula = String(row[iMatric]).trim();
 
-    const nomeEvento = iEvento  >= 0 ? String(row[iEvento]  || '').trim() : '';
     const sevRaw     = iSev     >= 0 ? String(row[iSev]     || '').trim() : '';
     const descricao  = iDescricao >= 0 ? String(row[iDescricao] || '').trim() : '';
     const localidade = iLocal   >= 0 ? String(row[iLocal]   || '').trim() : '';
     const analise    = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
     const idEvento   = iIdEvento >= 0 ? String(row[iIdEvento] || '').trim() : '';
     const duracao    = iDuracao >= 0 ? parseDuracao(row[iDuracao]) : null;
-
-    const nomeNorm   = normalize(nomeEvento);
-    const bucket     = INTERVENCAO_NORM.includes(nomeNorm) ? 'intervencao'
-                     : TECNICO_NORM.includes(nomeNorm)     ? 'tecnico'
-                     : 'reportar';
 
     entry.eventos.push({
       _nome:       nomeEvento,

@@ -270,7 +270,7 @@ export default function Monitor() {
         try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch { /* storage não crítico */ }
       }
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file);
+      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file, { history: filterHistory });
       const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
       const postProcessed = platform.postProcess?.(histFiltered);
       const newDrivers    = postProcessed?.drivers    ?? histFiltered;

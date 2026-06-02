@@ -143,4 +143,74 @@ describe('Maxtrack parser · status filtering', () => {
     expect(rawEventRows).toHaveLength(1);
     expect(rawEventRows[0].velocidade_kmh).toBe(5);
   });
+
+  describe('limite acumulado para alertas finalizados', () => {
+    it('ignora alertas finalizados se forem <= 5 e nao houver intervencao no historico', async () => {
+      const file = buildCsvFile([
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+      ]);
+
+      const { drivers, stats } = await parse(file);
+      expect(drivers).toHaveLength(0);
+      expect(stats.totalFechados).toBe(5);
+    });
+
+    it('exibe alertas finalizados se forem > 5 e nao houver intervencao no historico', async () => {
+      const file = buildCsvFile([
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+      ]);
+
+      const { drivers, stats } = await parse(file);
+      expect(drivers).toHaveLength(1);
+      expect(drivers[0].alertas).toBe(6);
+      expect(stats.totalFechados).toBe(6);
+    });
+
+    it('ignora alertas finalizados se forem <= 8 e houver intervencao anterior no historico', async () => {
+      const file = buildCsvFile([
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+      ]);
+
+      const history = [{ placa: 'XYZ9H99', tipo: 'intervencao', created_at: '2026-05-20T10:00:00Z' }];
+      const { drivers, stats } = await parse(file, { history });
+      expect(drivers).toHaveLength(0);
+      expect(stats.totalFechados).toBe(8);
+    });
+
+    it('exibe alertas finalizados se forem > 8 e houver intervencao anterior no historico', async () => {
+      const file = buildCsvFile([
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+        mockRow({ placa: 'XYZ9H99', status: 'Finalizado' }),
+      ]);
+
+      const history = [{ placa: 'XYZ9H99', tipo: 'intervencao', created_at: '2026-05-20T10:00:00Z' }];
+      const { drivers, stats } = await parse(file, { history });
+      expect(drivers).toHaveLength(1);
+      expect(drivers[0].alertas).toBe(9);
+      expect(stats.totalFechados).toBe(9);
+    });
+  });
 });
