@@ -121,3 +121,9 @@ values
     now() - interval '4 hours'
   )
 on conflict (id) do nothing;
+
+
+-- 5. Configura a URL real de Healthcheck da API FastAPI na VPS
+insert into public.app_settings (key, value)
+values ('vps_config', '{"health_url": "https://botsplaywright.duckdns.org/health"}'::jsonb)
+on conflict (key) do update set value = EXCLUDED.value;

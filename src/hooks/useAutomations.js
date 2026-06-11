@@ -10,6 +10,7 @@ export function AutomationsProvider({ children }) {
   const [logs, setLogs] = useState({}); // key: automation_id, value: array of log objects
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
+  const [healthUrl, setHealthUrl] = useState('https://168.231.94.0/health');
   const timers = useRef({});
 
   // Helper to map DB row to frontend automation model
@@ -48,9 +49,10 @@ export function AutomationsProvider({ children }) {
     }
 
     try {
-      const [autosRes, logsRes] = await Promise.all([
+      const [autosRes, logsRes, settingsRes] = await Promise.all([
         supabase.from('automations').select('*').order('position', { ascending: true }),
         supabase.from('automation_logs').select('*').order('created_at', { ascending: false }),
+        supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle()
       ]);
 
       if (autosRes.error) throw autosRes.error;
@@ -69,6 +71,25 @@ export function AutomationsProvider({ children }) {
 
       setAutomations(autosList);
       setLogs(logsMap);
+
+      // Set healthcheck URL from Supabase config or dynamic fallback
+      if (settingsRes.data?.value?.health_url) {
+        setHealthUrl(settingsRes.data.value.health_url);
+      } else if (autosList.length > 0 && autosList[0].endpoint) {
+        try {
+          const url = new URL(autosList[0].endpoint);
+          const host = url.origin;
+          if (autosList[0].endpoint.includes('/webhook/')) {
+            setHealthUrl(`${host}/webhook/health`);
+          } else if (autosList[0].endpoint.includes('/webhook-test/')) {
+            setHealthUrl(`${host}/webhook-test/health`);
+          } else {
+            setHealthUrl(`${host}/health`);
+          }
+        } catch {
+          // Keep default
+        }
+      }
     } catch (err) {
       console.error('[useAutomations] Error loading data:', err);
       toast('Erro ao carregar dados das automações', 'error');
@@ -79,27 +100,12 @@ export function AutomationsProvider({ children }) {
 
   // VPS health checking
   const checkVpsHealth = useCallback(async () => {
-    // Find the first endpoint to extract host, default to mock VPS IP if none
-    const firstAuto = automations.find(a => a.endpoint);
-    let host = '168.231.94.0';
-    if (firstAuto) {
-      try {
-        const url = new URL(firstAuto.endpoint);
-        host = url.origin;
-      } catch {
-        // Fallback if not a valid URL
-        host = 'https://168.231.94.0';
-      }
-    } else {
-      host = 'https://168.231.94.0';
-    }
-
     setVpsHealth(prev => ({ ...prev, checking: true }));
     const startTime = Date.now();
 
     try {
       // Attempt to fetch VPS health endpoint. If it does not exist/fails, it throws.
-      const res = await fetch(`${host}/health`, { 
+      const res = await fetch(healthUrl, { 
         method: 'GET',
         signal: AbortSignal.timeout(4000) // 4s timeout
       });
