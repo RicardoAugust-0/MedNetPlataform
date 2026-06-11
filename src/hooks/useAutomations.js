@@ -116,13 +116,20 @@ export function AutomationsProvider({ children }) {
       // Expecting structure: { uptimeDays: number, cpu: number, ram: number }
       const latencyMs = Date.now() - startTime;
 
+      let hostname = 'VPS';
+      try {
+        hostname = new URL(healthUrl).hostname;
+      } catch {
+        // Keep fallback
+      }
+
       setVpsHealth({
         online: true,
         checking: false,
         error: null,
         data: {
-          label: host.replace(/^https?:\/\//, ''),
-          host: host.replace(/^https?:\/\//, ''),
+          label: hostname,
+          host: hostname,
           region: data.region || 'São Paulo (BR)',
           uptimeDays: data.uptimeDays ?? 0,
           latencyMs,
@@ -140,7 +147,7 @@ export function AutomationsProvider({ children }) {
         data: null
       });
     }
-  }, [automations]);
+  }, [healthUrl]);
 
   useEffect(() => {
     loadData();
