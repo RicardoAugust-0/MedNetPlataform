@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAutomations } from '../hooks/useAutomations';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useConfirm } from '../hooks/useConfirm';
+import { useToast } from '../hooks/useToast.jsx';
 import '../styles/automacoes.css';
 
 const ICON_OPTIONS = [
@@ -99,6 +100,7 @@ function VpsStrip({ vpsHealth, vncUrl, onOpenVnc }) {
 
 function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
   const { profile } = useAuth();
+  const toast = useToast();
   const [running, setRunning] = useState(false);
   const active = hook.active;
 
@@ -125,6 +127,7 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
 
   const copyEndpoint = () => {
     navigator.clipboard?.writeText(hook.endpoint);
+    toast('Endpoint do webhook copiado!', 'success');
   };
 
   return (
@@ -465,12 +468,16 @@ function VncModal({ vncUrl, onStopBot, onClose }) {
 
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run, stopRunningTasks } = useAutomations();
+  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
   const confirm = useConfirm();
   const [showVnc, setShowVnc] = useState(false);
 
   const handleToggle = async (id, patch) => {
-    await update(id, patch);
+    const message = patch.active ? 'Automação ativada' : 'Automação desativada';
+    const success = await update(id, patch, { toastMessage: message });
+    if (success && !patch.active) {
+      await stopAutomationTasks(id);
+    }
   };
 
   const handleSave = async (id, data) => {

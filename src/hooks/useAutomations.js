@@ -246,18 +246,17 @@ export function AutomationsProvider({ children }) {
     return toLocalAutomation(inserted);
   }, [automations, toast]);
 
-  const update = useCallback(async (id, data) => {
-    const dbRow = {
-      name: data.name,
-      icon: data.icon,
-      description: data.desc,
-      active: data.active,
-      endpoint: data.endpoint,
-      trigger: data.trigger,
-      schedule: data.schedule || null,
-      event_type: data.eventType || null,
-      token: data.token || null,
-    };
+  const update = useCallback(async (id, data, options = {}) => {
+    const dbRow = {};
+    if (data.name !== undefined) dbRow.name = data.name;
+    if (data.icon !== undefined) dbRow.icon = data.icon;
+    if (data.desc !== undefined) dbRow.description = data.desc;
+    if (data.active !== undefined) dbRow.active = data.active;
+    if (data.endpoint !== undefined) dbRow.endpoint = data.endpoint;
+    if (data.trigger !== undefined) dbRow.trigger = data.trigger;
+    if (data.schedule !== undefined) dbRow.schedule = data.schedule || null;
+    if (data.eventType !== undefined) dbRow.event_type = data.eventType || null;
+    if (data.token !== undefined) dbRow.token = data.token || null;
 
     const { data: updated, error } = await supabase
       .from('automations')
@@ -272,7 +271,11 @@ export function AutomationsProvider({ children }) {
       return false;
     }
 
-    toast('Automação atualizada', 'success');
+    if (options.toastMessage) {
+      toast(options.toastMessage, 'success');
+    } else if (!options.quiet) {
+      toast('Automação atualizada', 'success');
+    }
     return true;
   }, [toast]);
 
@@ -400,9 +403,65 @@ export function AutomationsProvider({ children }) {
     }
   }, [healthUrl, toast]);
 
+  const stopAutomationTasks = useCallback(async (id) => {
+    try {
+      const auto = automations.find(a => a.id === id);
+      if (!auto) return false;
+
+      // Extract bot name from the endpoint URL
+      let botName = null;
+      try {
+        const url = new URL(auto.endpoint);
+        const pathParts = url.pathname.split('/');
+        botName = pathParts[pathParts.length - 1]; // e.g. bot_HorizonScraping
+      } catch (err) {
+        console.error('[useAutomations] Failed to parse botName from endpoint:', err);
+      }
+
+      if (!botName) return false;
+
+      const apiBase = healthUrl.replace(/\/health$/, '');
+      const res = await fetch(`${apiBase}/tasks`);
+      if (!res.ok) throw new Error('Falha ao obter lista de tarefas da VPS');
+      const tasksList = await res.json();
+      
+      const runningTasks = tasksList.filter(t => 
+        (t.status === 'running' || t.status === 'pending') && 
+        t.bot_name === botName
+      );
+      
+      if (runningTasks.length > 0) {
+        await Promise.all(runningTasks.map(async (t) => {
+          await fetch(`${apiBase}/tasks/${t.id}/stop`, { method: 'POST' });
+        }));
+        toast(`Processo da automação "${auto.name}" encerrado na VPS.`, 'success');
+      }
+
+      // Also update any 'running' logs in Supabase for this automation to 'failure'
+      const { error: logError } = await supabase
+        .from('automation_logs')
+        .update({ 
+          status: 'failure',
+          detail: 'Execução encerrada ao desativar a automação'
+        })
+        .eq('automation_id', id)
+        .eq('status', 'running');
+
+      if (logError) {
+        console.error('[useAutomations] Error updating logs on stop:', logError);
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[useAutomations] Error stopping automation tasks:', err);
+      toast('Erro ao encerrar processo na VPS.', 'error');
+      return false;
+    }
+  }, [automations, healthUrl, toast]);
+
   return createElement(
     AutomationsContext.Provider,
-    { value: { automations, logs, loading, vpsHealth, vncUrl, checkVpsHealth, add, update, remove, run, stopRunningTasks } },
+    { value: { automations, logs, loading, vpsHealth, vncUrl, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
     children
   );
 }
