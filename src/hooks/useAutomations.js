@@ -11,6 +11,7 @@ export function AutomationsProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
   const [healthUrl, setHealthUrl] = useState('https://168.231.94.0/health');
+  const [vncUrl, setVncUrl] = useState('');
   const timers = useRef({});
 
   // Helper to map DB row to frontend automation model
@@ -86,9 +87,12 @@ export function AutomationsProvider({ children }) {
       setAutomations(autosList);
       setLogs(logsMap);
 
-      // Set healthcheck URL from Supabase config or dynamic fallback
+      // Set healthcheck URL and VNC URL from Supabase config or dynamic fallback
       if (settingsRes.data?.value?.health_url) {
         setHealthUrl(settingsRes.data.value.health_url);
+      }
+      if (settingsRes.data?.value?.vnc_url) {
+        setVncUrl(settingsRes.data.value.vnc_url);
       } else if (autosList.length > 0 && autosList[0].endpoint) {
         try {
           const url = new URL(autosList[0].endpoint);
@@ -355,7 +359,7 @@ export function AutomationsProvider({ children }) {
 
   return createElement(
     AutomationsContext.Provider,
-    { value: { automations, logs, loading, vpsHealth, checkVpsHealth, add, update, remove, run } },
+    { value: { automations, logs, loading, vpsHealth, vncUrl, checkVpsHealth, add, update, remove, run } },
     children
   );
 }

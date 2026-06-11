@@ -25,7 +25,7 @@ function triggerLabelFor(a) {
   return 'Manual';
 }
 
-function VpsStrip({ vpsHealth }) {
+function VpsStrip({ vpsHealth, vncUrl, onOpenVnc }) {
   if (vpsHealth.checking && !vpsHealth.data) {
     return (
       <div className="vps-strip">
@@ -84,6 +84,15 @@ function VpsStrip({ vpsHealth }) {
           <div className="vps-bar"><span style={{ width: ram + '%' }}></span></div>
         </div>
       </div>
+      {vncUrl && (
+        <>
+          <div className="vps-divider"></div>
+          <button className="btn btn-secondary btn-sm" onClick={onOpenVnc} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-device-desktop"></i>
+            <span>Ver Tela (VNC)</span>
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -363,7 +372,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   );
 }
 
-function HooksTab({ automations, logs, vpsHealth, onRun, onToggle, onSave, onDelete }) {
+function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRun, onToggle, onSave, onDelete }) {
   const [drawer, setDrawer] = useState(null);
   const [modal, setModal] = useState(null);
 
@@ -374,7 +383,7 @@ function HooksTab({ automations, logs, vpsHealth, onRun, onToggle, onSave, onDel
 
   return (
     <div>
-      <VpsStrip vpsHealth={vpsHealth} />
+      <VpsStrip vpsHealth={vpsHealth} vncUrl={vncUrl} onOpenVnc={onOpenVnc} />
       <div className="hooks-toolbar">
         <span className="ht-label"><b>{automations.filter(a => a.active).length}</b> de {automations.length} automações ativas</span>
         <button className="btn btn-primary" onClick={() => setModal('new')}><i className="ti ti-plus"></i> Nova automação</button>
@@ -418,10 +427,42 @@ function DisparosTab() {
   );
 }
 
+function VncModal({ vncUrl, onClose }) {
+  const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale`;
+
+  return createPortal(
+    <div className="modal-overlay open" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '960px', maxWidth: '95vw' }}>
+        <div className="modal-header">
+          <div className="modal-title"><i className="ti ti-device-desktop"></i> Transmissão de Tela da VPS (noVNC)</div>
+          <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
+        </div>
+        <div className="modal-body" style={{ padding: 0, background: '#111', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <iframe 
+            src={iframeUrl} 
+            title="VNC Stream"
+            style={{ width: '100%', height: '580px', border: 'none', background: '#000' }} 
+            allow="fullscreen"
+          />
+        </div>
+        <div className="modal-footer">
+          <div className="field-hint" style={{ marginTop: 0 }}>
+            <i className="ti ti-info-circle"></i> Use esta tela para digitar, clicar e resolver o Captcha caso o robô Horizon trave.
+          </div>
+          <div className="spacer"></div>
+          <button className="btn btn-primary" onClick={onClose}><i className="ti ti-check"></i> Concluir</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, loading, vpsHealth, add, update, remove, run } = useAutomations();
+  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run } = useAutomations();
   const confirm = useConfirm();
+  const [showVnc, setShowVnc] = useState(false);
 
   const handleToggle = async (id, patch) => {
     await update(id, patch);
@@ -473,6 +514,8 @@ export default function Automacoes() {
           automations={automations} 
           logs={logs} 
           vpsHealth={vpsHealth} 
+          vncUrl={vncUrl}
+          onOpenVnc={() => setShowVnc(true)}
           onRun={run} 
           onToggle={handleToggle} 
           onSave={handleSave} 
@@ -481,6 +524,7 @@ export default function Automacoes() {
       ) : (
         <DisparosTab />
       )}
+      {showVnc && vncUrl && <VncModal vncUrl={vncUrl} onClose={() => setShowVnc(false)} />}
     </div>
   );
 }
