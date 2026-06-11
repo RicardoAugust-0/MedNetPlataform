@@ -92,6 +92,7 @@
 .lr-icon { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 15px; flex-shrink: 0; }
 .lr-icon.ok  { background: var(--success-bg); color: var(--success-600); }
 .lr-icon.err { background: var(--danger-bg);  color: var(--danger-600); }
+.lr-icon.running-icon { background: var(--accent-50); color: var(--accent-600); }
 .lr-body { flex: 1; min-width: 0; }
 .lr-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
 .lr-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }

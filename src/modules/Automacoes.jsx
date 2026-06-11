@@ -156,12 +156,12 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
 
       {lastRun ? (
         <div className="hook-lastrun">
-          <div className={`lr-icon ${lastRun.status === 'success' ? 'ok' : 'err'}`}>
-            <i className={`ti ${lastRun.status === 'success' ? 'ti-check' : 'ti-alert-triangle'}`}></i>
+          <div className={`lr-icon ${lastRun.status === 'success' ? 'ok' : (lastRun.status === 'running' ? 'running-icon' : 'err')}`}>
+            <i className={`ti ${lastRun.status === 'success' ? 'ti-check' : (lastRun.status === 'running' ? 'ti-loader-2' : 'ti-alert-triangle')}`} style={lastRun.status === 'running' ? { animation: 'spin 1s linear infinite' } : null}></i>
           </div>
           <div className="lr-body">
-            <div className="lr-title">{lastRun.status === 'success' ? 'Última execução concluída' : 'Falha na última execução'}</div>
-            <div className="lr-sub">{lastRun.detail} · {lastRun.dur}</div>
+            <div className="lr-title">{lastRun.status === 'success' ? 'Última execução concluída' : (lastRun.status === 'running' ? 'Automação em andamento...' : 'Falha na última execução')}</div>
+            <div className="lr-sub">{lastRun.detail} {lastRun.dur ? `· ${lastRun.dur}` : ''}</div>
           </div>
           <div className="lr-time">{lastRun.when.split(' ')[1] || lastRun.when}</div>
         </div>
@@ -427,7 +427,7 @@ function DisparosTab() {
   );
 }
 
-function VncModal({ vncUrl, onClose }) {
+function VncModal({ vncUrl, onStopBot, onClose }) {
   const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale`;
 
   return createPortal(
@@ -450,6 +450,11 @@ function VncModal({ vncUrl, onClose }) {
             <i className="ti ti-info-circle"></i> Use esta tela para digitar, clicar e resolver o Captcha caso o robô Horizon trave.
           </div>
           <div className="spacer"></div>
+          {onStopBot && (
+            <button className="btn btn-danger" onClick={onStopBot} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 8, background: 'var(--danger-500)', borderColor: 'var(--danger-500)', color: '#fff' }}>
+              <i className="ti ti-player-stop"></i> Parar Robô
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}><i className="ti ti-check"></i> Concluir</button>
         </div>
       </div>
@@ -460,7 +465,7 @@ function VncModal({ vncUrl, onClose }) {
 
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run } = useAutomations();
+  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run, stopRunningTasks } = useAutomations();
   const confirm = useConfirm();
   const [showVnc, setShowVnc] = useState(false);
 
@@ -524,7 +529,23 @@ export default function Automacoes() {
       ) : (
         <DisparosTab />
       )}
-      {showVnc && vncUrl && <VncModal vncUrl={vncUrl} onClose={() => setShowVnc(false)} />}
+      {showVnc && vncUrl && (
+        <VncModal 
+          vncUrl={vncUrl} 
+          onStopBot={async () => {
+            const confirmed = await confirm({
+              title: 'Encerrar Robô',
+              message: 'Deseja realmente forçar o encerramento do robô na VPS? O navegador será fechado e os recursos da máquina serão liberados.',
+              danger: true
+            });
+            if (confirmed) {
+              await stopRunningTasks();
+              setShowVnc(false);
+            }
+          }}
+          onClose={() => setShowVnc(false)} 
+        />
+      )}
     </div>
   );
 }
