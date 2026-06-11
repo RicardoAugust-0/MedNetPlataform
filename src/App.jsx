@@ -23,6 +23,7 @@ const Notes = lazy(() => import("./modules/Notes.jsx"));
 const Profile = lazy(() => import("./modules/Profile.jsx"));
 const Reports = lazy(() => import("./modules/Reports.jsx"));
 const Templates = lazy(() => import("./modules/Templates.jsx"));
+const Automacoes = lazy(() => import("./modules/Automacoes.jsx"));
 const Workspace = lazy(() => import("./modules/Workspace.jsx"));
 const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
 import { supabase } from "./supabase.js";
@@ -170,6 +171,7 @@ function AppShell() {
                   <Route path="/agenda" element={<Agenda />} />
                   <Route path="/crosscheck" element={<CrossCheck />} />
                   <Route path="/templates" element={<Templates />} />
+                  <Route path="/automacoes" element={<Automacoes />} />
                   <Route path="/workspace" element={<Workspace />} />
                   <Route path="/notas" element={<Notes />} />
                   <Route path="/links" element={<Links />} />

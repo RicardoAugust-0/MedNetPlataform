@@ -5,6 +5,7 @@ import { LinksProvider } from '../hooks/useLinks';
 import { NotesProvider } from '../hooks/useNotes';
 import { TemplatesProvider } from '../hooks/useTemplates';
 import { WsPagesProvider } from '../hooks/useWsPages';
+import { AutomationsProvider } from '../hooks/useAutomations';
 
 export function DataProvider({ children }) {
   return (
@@ -15,7 +16,9 @@ export function DataProvider({ children }) {
             <NotesProvider>
               <TemplatesProvider>
                 <WsPagesProvider>
-                  {children}
+                  <AutomationsProvider>
+                    {children}
+                  </AutomationsProvider>
                 </WsPagesProvider>
               </TemplatesProvider>
             </NotesProvider>
