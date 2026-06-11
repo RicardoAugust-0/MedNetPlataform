@@ -43,12 +43,28 @@ export function AutomationsProvider({ children }) {
         }
       }
     }
+
+    // Trata "tarefas zumbis" que ficaram presas como 'running' por mais de 20 minutos no banco
+    let status = row.status;
+    let detail = row.detail;
+    let dur = row.duration;
+    if (status === 'running') {
+      const createdAt = new Date(row.created_at).getTime();
+      const now = Date.now();
+      const diffMinutes = (now - createdAt) / (1000 * 60);
+      if (diffMinutes > 20) {
+        status = 'failure';
+        detail = 'Execução interrompida por inatividade (Timeout)';
+        dur = 'Excedido';
+      }
+    }
+
     return {
       id: row.id,
       automationId: row.automation_id,
-      status: row.status,
-      dur: row.duration,
-      detail: row.detail,
+      status,
+      dur,
+      detail,
       when: new Date(row.created_at).toLocaleDateString('pt-BR') + ' ' + new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: row.created_at,
