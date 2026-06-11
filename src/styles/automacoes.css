@@ -3,7 +3,7 @@
    Uses only design-system tokens. Flat surfaces, vinho/orange.
    ============================================================ */
 
-.auto-page { max-width: 1180px; }
+.auto-page { max-width: 100%; width: 100%; margin: 0 auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Sub-tabs reuse .tabs/.tab from kit ── */
@@ -39,7 +39,7 @@
 .vps-bar > span { display: block; height: 100%; border-radius: 99px; background: var(--accent-500); }
 
 /* ── Hooks layout ── */
-.hooks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+.hooks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
 .hooks-list { display: flex; flex-direction: column; gap: 12px; }
 
 .hook-card {
@@ -272,4 +272,42 @@ textarea.form-control { resize: vertical; min-height: 64px; line-height: 1.5; fo
 
 @media (max-width: 880px) {
   .disp-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .vps-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 12px 14px;
+  }
+  .vps-divider {
+    display: none;
+  }
+  .vps-metrics {
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .vps-id {
+    width: 100%;
+  }
+  .vps-strip .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .hook-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .hook-endpoint {
+    width: 100%;
+  }
+  .hook-actions .btn {
+    width: 100%;
+  }
+  .drawer {
+    width: 100%;
+  }
 }
