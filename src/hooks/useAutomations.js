@@ -17,7 +17,7 @@ export function AutomationsProvider({ children }) {
     id: row.id,
     name: row.name,
     icon: row.icon,
-    desc: row.desc,
+    desc: row.description,
     active: row.active,
     endpoint: row.endpoint,
     trigger: row.trigger,
@@ -173,7 +173,7 @@ export function AutomationsProvider({ children }) {
     const dbRow = {
       name: data.name,
       icon: data.icon,
-      desc: data.desc,
+      description: data.desc,
       active: data.active,
       endpoint: data.endpoint,
       trigger: data.trigger,
@@ -203,7 +203,7 @@ export function AutomationsProvider({ children }) {
     const dbRow = {
       name: data.name,
       icon: data.icon,
-      desc: data.desc,
+      description: data.desc,
       active: data.active,
       endpoint: data.endpoint,
       trigger: data.trigger,
