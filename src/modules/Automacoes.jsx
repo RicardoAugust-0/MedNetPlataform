@@ -230,10 +230,10 @@ function HookDrawer({ hook, logs = [], onClose }) {
                 <div key={runLog.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10, marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className={`ld ${runLog.status === 'success' ? 'ok' : 'err'}`} style={{ width: 8, height: 8 }}></span>
-                      {runLog.status === 'success' ? 'Sucesso' : 'Falha'} · {runLog.detail}
+                      <span className={`ld ${runLog.status === 'success' ? 'ok' : (runLog.status === 'running' ? 'info' : 'err')}`} style={{ width: 8, height: 8 }}></span>
+                      {runLog.status === 'success' ? 'Sucesso' : (runLog.status === 'running' ? 'Em andamento' : 'Falha')} · {runLog.detail}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{runLog.when} ({runLog.dur})</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{runLog.when} {runLog.dur ? `(${runLog.dur})` : ''}</span>
                   </div>
                   {runLog.logs.map((l, i) => (
                     <div className="log-line" key={i} style={{ paddingLeft: 14 }}>
