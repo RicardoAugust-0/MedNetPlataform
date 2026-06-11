@@ -284,7 +284,9 @@ export function AutomationsProvider({ children }) {
         body: JSON.stringify({
           trigger: 'manual',
           operator: operatorName,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          automation_id: auto.id,
+          automation_name: auto.name
         }),
         signal: AbortSignal.timeout(10000) // 10s timeout
       });
