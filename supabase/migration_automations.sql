@@ -8,7 +8,7 @@ create table if not exists public.automations (
   created_at  timestamptz not null default now(),
   name        text not null,
   icon        text not null default 'ti-robot',
-  desc        text,
+  description text,
   active      boolean not null default true,
   endpoint    text not null,
   trigger     text not null check (trigger in ('manual', 'agendado', 'evento')),
@@ -57,7 +57,7 @@ end;
 $$;
 
 -- 4. Semente de dados iniciais (Seed)
-insert into public.automations (id, name, icon, desc, active, endpoint, trigger, schedule, event_type, token, position)
+insert into public.automations (id, name, icon, description, active, endpoint, trigger, schedule, event_type, token, position)
 values
   (
     'b0a94e82-e3e7-4c74-bfd4-3a56df93df23', 
