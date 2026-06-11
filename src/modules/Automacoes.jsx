@@ -214,14 +214,14 @@ function HookDrawer({ hook, logs = [], onClose }) {
   return (
     <>
       <div className="drawer-overlay" onClick={onClose}></div>
-      <div className="drawer" role="dialog">
+      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
         <div className="drawer-head">
           <div className="hook-icon" style={{ width: 36, height: 36, fontSize: 18 }}><i className={`ti ${hook.icon}`}></i></div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="hook-name" style={{ fontSize: 13.5 }}>{hook.name}</div>
+            <h3 id="drawer-title" className="hook-name" style={{ fontSize: 13.5, margin: 0 }}>{hook.name}</h3>
             <div className="lr-sub">{triggerLabelFor(hook)}</div>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><i className="ti ti-x"></i></button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Fechar drawer de logs"><i className="ti ti-x"></i></button>
         </div>
         <div className="drawer-body">
           <div className="t-label" style={{ marginBottom: 10 }}>Histórico de execuções</div>
@@ -253,7 +253,7 @@ function HookDrawer({ hook, logs = [], onClose }) {
         <div className="drawer-foot">
           <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}><i className="ti ti-x"></i> Fechar</button>
         </div>
-      </div>
+      </aside>
     </>
   );
 }
@@ -512,15 +512,41 @@ export default function Automacoes() {
 
   return (
     <div className="auto-page">
-      <div className="tabs">
-        <div className={`tab ${tab === 'hooks' ? 'active' : ''}`} onClick={() => setTab('hooks')} role="button" style={{ cursor: 'pointer' }}>
+      <nav className="tabs" aria-label="Abas de Automações">
+        <div 
+          className={`tab ${tab === 'hooks' ? 'active' : ''}`} 
+          onClick={() => setTab('hooks')} 
+          role="button" 
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setTab('hooks');
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+          aria-selected={tab === 'hooks'}
+        >
           <i className="ti ti-webhook"></i> Hooks <span className="tab-count">{automations.length}</span>
         </div>
-        <div className={`tab ${tab === 'disparos' ? 'active' : ''}`} onClick={() => setTab('disparos')} role="button" style={{ cursor: 'pointer' }}>
+        <div 
+          className={`tab ${tab === 'disparos' ? 'active' : ''}`} 
+          onClick={() => setTab('disparos')} 
+          role="button" 
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setTab('disparos');
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+          aria-selected={tab === 'disparos'}
+        >
           <i className="ti ti-brand-whatsapp"></i> Disparos
           <span style={{ marginLeft: 6, fontSize: 9, padding: '2px 6px', background: 'var(--surface-3)', borderRadius: 10, color: 'var(--text-muted)' }}>Breve</span>
         </div>
-      </div>
+      </nav>
       {tab === 'hooks' ? (
         <HooksTab 
           automations={automations} 

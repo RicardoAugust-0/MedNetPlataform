@@ -57,7 +57,7 @@ export default function Links() {
       <div className="search-row">
         <div className="search-wrap">
           <i className="ti ti-search"></i>
-          <input placeholder="Buscar links..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input aria-label="Buscar links" placeholder="Buscar links..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         {canEdit && (
           <button className="btn btn-primary" onClick={() => setModal(true)}><i className="ti ti-plus"></i> Novo link</button>
@@ -84,7 +84,7 @@ export default function Links() {
                   onDragOver={handleDragOver}
                   onDrop={(e) => canEdit && handleDrop(e, l)}
                 >
-                  <a className="link-card" href={l.url} target="_blank" rel="noreferrer">
+                  <a className="link-card" href={l.url} target="_blank" rel="noreferrer" aria-label={`Link para ${l.name} - ${l.desc || ''}`}>
                     <div className="link-icon" style={{ background: l.bg, color: l.ic }}><i className={`ti ${l.icon}`}></i></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="link-name">{l.name}</div>
@@ -92,10 +92,10 @@ export default function Links() {
                     </div>
                     {canEdit && (
                       <div className="link-actions">
-                        <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingLink(l); }}>
+                        <button className="btn-icon" onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingLink(l); }} aria-label={`Editar link ${l.name}`}>
                           <i className="ti ti-pencil"></i>
                         </button>
-                        <button className="btn-icon btn-icon-danger" onClick={e => { e.preventDefault(); e.stopPropagation(); handleRemove(l.id); }}>
+                        <button className="btn-icon btn-icon-danger" onClick={e => { e.preventDefault(); e.stopPropagation(); handleRemove(l.id); }} aria-label={`Excluir link ${l.name}`}>
                           <i className="ti ti-trash"></i>
                         </button>
                       </div>
@@ -145,12 +145,12 @@ function LinkModal({ initialData, onSave, onClose }) {
         <div className="modal-body">
           <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr' }}>
             <div className="form-group">
-              <label className="form-label">Nome</label>
-              <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Sistema Fadiga" />
+              <label className="form-label" htmlFor="link-name">Nome</label>
+              <input id="link-name" className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Sistema Fadiga" />
             </div>
             <div className="form-group">
-              <label className="form-label">Categoria</label>
-              <select className="form-control" value={section} onChange={e => setSection(e.target.value)}>
+              <label className="form-label" htmlFor="link-section">Categoria</label>
+              <select id="link-section" className="form-control" value={section} onChange={e => setSection(e.target.value)}>
                 <option value="interno">Interno</option>
                 <option value="externo">Externo</option>
               </select>
@@ -158,26 +158,36 @@ function LinkModal({ initialData, onSave, onClose }) {
           </div>
           
           <div className="form-group">
-            <label className="form-label">Descrição</label>
-            <input className="form-control" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Breve descrição" />
+            <label className="form-label" htmlFor="link-desc">Descrição</label>
+            <input id="link-desc" className="form-control" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Breve descrição" />
           </div>
           
           <div className="form-group">
-            <label className="form-label">URL</label>
-            <input className="form-control" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
+            <label className="form-label" htmlFor="link-url">URL</label>
+            <input id="link-url" className="form-control" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
           </div>
 
           <div className="form-group">
             <label className="form-label">Personalização (Logo)</label>
             <div className="personalization-grid">
               <div className="icon-selector">
-                <label className="form-label-sub">Ícone</label>
+                <span className="form-label-sub">Ícone</span>
                 <div className="icon-list">
                   {AVAILABLE_ICONS.map(i => (
                     <div 
                       key={i} 
                       className={`icon-option ${icon === i ? 'active' : ''}`} 
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Ícone ${i}`}
+                      aria-pressed={icon === i}
                       onClick={() => setIcon(i)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setIcon(i);
+                        }
+                      }}
                     >
                       <i className={`ti ${i}`}></i>
                     </div>
@@ -186,14 +196,25 @@ function LinkModal({ initialData, onSave, onClose }) {
               </div>
               
               <div className="color-selector">
-                <label className="form-label-sub">Tema</label>
+                <span className="form-label-sub">Tema</span>
                 <div className="palette-list">
                   {PALETTE.map((p, idx) => (
                     <div 
                       key={idx} 
                       className={`color-option ${bg === p.bg ? 'active' : ''}`}
                       style={{ background: p.bg, color: p.ic }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Cor do tema ${idx + 1}`}
+                      aria-pressed={bg === p.bg}
                       onClick={() => { setBg(p.bg); setIc(p.ic); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setBg(p.bg);
+                          setIc(p.ic);
+                        }
+                      }}
                     >
                       <i className={`ti ${icon}`}></i>
                     </div>

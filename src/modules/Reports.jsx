@@ -158,32 +158,32 @@ export default function Reports() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             {/* Transportadora */}
             <div className="form-group" style={{ flex: 2, minWidth: 180, marginBottom: 0 }}>
-              <label className="form-label">Transportadora</label>
-              <select className="form-control" value={transportadora} onChange={e => setTransportadora(e.target.value)} disabled={generating}>
+              <label className="form-label" htmlFor="report-carrier">Transportadora</label>
+              <select id="report-carrier" className="form-control" value={transportadora} onChange={e => setTransportadora(e.target.value)} disabled={generating}>
                 {transps.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
 
             {/* Período */}
             <div className="form-group" style={{ minWidth: 130, marginBottom: 0 }}>
-              <label className="form-label">Período</label>
-              <select className="form-control" value={months} onChange={e => setMonths(Number(e.target.value))} disabled={generating}>
+              <label className="form-label" htmlFor="report-period">Período</label>
+              <select id="report-period" className="form-control" value={months} onChange={e => setMonths(Number(e.target.value))} disabled={generating}>
                 {PERIOD_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
 
             {/* Provedor */}
             <div className="form-group" style={{ minWidth: 140, marginBottom: 0 }}>
-              <label className="form-label">Provedor</label>
-              <select className="form-control" value={provider} onChange={e => handleProviderChange(e.target.value)} disabled={generating || !aiCfgLoaded}>
+              <label className="form-label" htmlFor="report-provider">Provedor</label>
+              <select id="report-provider" className="form-control" value={provider} onChange={e => handleProviderChange(e.target.value)} disabled={generating || !aiCfgLoaded}>
                 {AI_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </div>
 
             {/* Modelo */}
             <div className="form-group" style={{ minWidth: 190, marginBottom: 0 }}>
-              <label className="form-label">Modelo</label>
-              <select className="form-control" value={model} onChange={e => setModel(e.target.value)} disabled={generating || !aiCfgLoaded}>
+              <label className="form-label" htmlFor="report-model">Modelo</label>
+              <select id="report-model" className="form-control" value={model} onChange={e => setModel(e.target.value)} disabled={generating || !aiCfgLoaded}>
                 {currentModels.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
             </div>

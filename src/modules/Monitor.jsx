@@ -684,14 +684,28 @@ export default function Monitor() {
       />
 
       {/* Tabs */}
-      <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
+      <nav className="tabs" aria-label="Abas do Monitor de Frota" style={{ display: 'flex', alignItems: 'center' }}>
         {[
           ['intervencao', 'ti-phone-call',  'Intervenção',       intervencaoList.length, 'var(--danger-500)'],
           ['reportar',    'ti-building',    'Reportar à empresa', reportarList.length,    'var(--warning-500)'],
           ['tecnicos',    'ti-camera-off',  'Só técnico',        tecList.length,          null],
           ['historico',   'ti-history',     'Histórico',         history.length,     null],
         ].map(([id, icon, lbl, cnt, color]) => (
-          <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`} onClick={() => navigate('/monitor/' + id)}>
+          <div 
+            key={id} 
+            className={`tab ${activeTab === id ? 'active' : ''}`} 
+            onClick={() => navigate('/monitor/' + id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/monitor/' + id);
+              }
+            }}
+            aria-selected={activeTab === id}
+            style={{ cursor: 'pointer' }}
+          >
             <i className={`ti ${icon}`} style={color ? { color } : {}}></i> {lbl}
             <span className="tab-count">{cnt}</span>
           </div>
@@ -715,7 +729,7 @@ export default function Monitor() {
             </button>
           </div>
         )}
-      </div>
+      </nav>
 
       {/* Tab: Intervenção */}
       {activeTab === 'intervencao' && (

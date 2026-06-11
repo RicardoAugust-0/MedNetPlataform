@@ -156,7 +156,7 @@ function AppShell() {
           <Sidebar />
           <div className="main-area">
             <Topbar />
-            <div className="content-area">
+            <main className="content-area">
               <Suspense fallback={null}>
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -203,7 +203,7 @@ function AppShell() {
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </Suspense>
-            </div>
+            </main>
           </div>
           {profile?.role === "admin" && maintenance.enabled && (
             <div

@@ -73,7 +73,19 @@ export default function Sidebar() {
     }
     const badge = item.id === 'monitor' ? (alertCount > 0 ? alertCount : null) : (item.badge || null);
     navRows.push(
-      <div key={item.id} className={'nav-item' + (isItemActive(item) ? ' active' : '')} onClick={() => navigate(item.path)}>
+      <div 
+        key={item.id} 
+        className={'nav-item' + (isItemActive(item) ? ' active' : '')} 
+        onClick={() => navigate(item.path)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            navigate(item.path);
+          }
+        }}
+      >
         <i className={`ti ${item.icon} nav-icon`}></i>
         <span className="nav-label">{item.label}</span>
         {badge ? <span className="nav-badge">{badge}</span> : null}
@@ -178,7 +190,20 @@ export default function Sidebar() {
             </button>
           </div>
         )}
-        <div className="user-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/perfil')} title="Abrir perfil">
+        <div 
+          className="user-card" 
+          style={{ cursor: 'pointer' }} 
+          onClick={() => navigate('/perfil')} 
+          title="Abrir perfil"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              navigate('/perfil');
+            }
+          }}
+        >
           <div className="user-avatar" style={profile?.avatar_url ? { padding: 0, overflow: 'hidden' } : null}>
             {profile?.avatar_url
               ? <img src={profile.avatar_url} alt={profile.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

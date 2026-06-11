@@ -133,8 +133,9 @@ export default function Admin() {
         </div>
         <form onSubmit={handleInvite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-            <label className="form-label">E-mail do novo operador</label>
+            <label className="form-label" htmlFor="invite-email">E-mail do novo operador</label>
             <input
+              id="invite-email"
               className="form-control"
               type="email"
               placeholder="operador@exemplo.com"
@@ -176,8 +177,9 @@ export default function Admin() {
           Quando ativo, operadores veem uma página de manutenção e não conseguem acessar a plataforma. Admins continuam com acesso normal.
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Mensagem opcional para os operadores</label>
+          <label className="form-label" htmlFor="maintenance-msg">Mensagem opcional para os operadores</label>
           <input
+            id="maintenance-msg"
             className="form-control"
             type="text"
             placeholder="Ex: Estamos atualizando o sistema, voltamos em breve."
@@ -257,8 +259,9 @@ export default function Admin() {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-            <label className="form-label">Nome no Monitor</label>
+            <label className="form-label" htmlFor="alias-monitor">Nome no Monitor</label>
             <input
+              id="alias-monitor"
               className="form-control"
               value={aliasMonitor}
               onChange={e => setAliasMonitor(e.target.value)}
@@ -268,8 +271,9 @@ export default function Admin() {
           </div>
           <i className="ti ti-arrow-right" style={{ marginBottom: 10, color: 'var(--text-muted)', flexShrink: 0 }}></i>
           <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-            <label className="form-label">Nome na planilha</label>
+            <label className="form-label" htmlFor="alias-sheet">Nome na planilha</label>
             <input
+              id="alias-sheet"
               className="form-control"
               value={aliasSheet}
               onChange={e => setAliasSheet(e.target.value)}
@@ -487,15 +491,15 @@ function AiCredentialsCard() {
       {/* Provedor e modelo padrão */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Provedor padrão</label>
-          <select className="form-control" style={{ width: 'auto' }} value={cfg.provider}
+          <label className="form-label" htmlFor="ai-provider">Provedor padrão</label>
+          <select id="ai-provider" className="form-control" style={{ width: 'auto' }} value={cfg.provider}
             onChange={e => setCfg(prev => ({ ...prev, provider: e.target.value }))}>
             {AI_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Modelo padrão</label>
-          <select className="form-control" style={{ width: 'auto' }}
+          <label className="form-label" htmlFor="ai-model">Modelo padrão</label>
+          <select id="ai-model" className="form-control" style={{ width: 'auto' }}
             value={cfg.provider === 'google' ? cfg.google_model : cfg.anthropic_model}
             onChange={e => {
               const key = cfg.provider === 'google' ? 'google_model' : 'anthropic_model';
@@ -526,8 +530,9 @@ function AiCredentialsCard() {
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div className="form-group" style={{ flex: 1, minWidth: 220, marginBottom: 0 }}>
-                <label className="form-label">API Key</label>
+                <label className="form-label" htmlFor={`ai-key-${prov.id}`}>API Key</label>
                 <input
+                  id={`ai-key-${prov.id}`}
                   className="form-control"
                   type="password"
                   placeholder={ps.configured ? '••••••••  (nova chave para substituir)' : `Cole sua ${prov.id === 'google' ? 'Google AI API Key' : 'Anthropic API Key'} aqui`}
@@ -719,8 +724,9 @@ function RpaCard() {
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Intervalo de atualização</label>
+          <label className="form-label" htmlFor="sync-interval">Intervalo de atualização</label>
           <select
+            id="sync-interval"
             className="form-control"
             style={{ width: 'auto' }}
             value={config.interval_minutes}
@@ -755,8 +761,9 @@ function RpaCard() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="form-group" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>
-            <label className="form-label">E-mail</label>
+            <label className="form-label" htmlFor="rpa-email">E-mail</label>
             <input
+              id="rpa-email"
               className="form-control"
               type="email"
               placeholder="rpa@empresa.com.br"
@@ -766,8 +773,9 @@ function RpaCard() {
             />
           </div>
           <div className="form-group" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>
-            <label className="form-label">Senha</label>
+            <label className="form-label" htmlFor="rpa-password">Senha</label>
             <input
+              id="rpa-password"
               className="form-control"
               type="password"
               placeholder={credConfigured ? '••••••••  (nova senha para alterar)' : 'Senha da conta RPA'}
@@ -899,8 +907,8 @@ function ClearHistoryCard() {
       </div>
 
       <div className="form-group" style={{ marginBottom: 10 }}>
-        <label className="form-label">Período</label>
-        <select className="form-control" value={period} onChange={e => { setPeriod(e.target.value); resetPreview(); }} disabled={confirming || deleting}>
+        <label className="form-label" htmlFor="clear-period">Período</label>
+        <select id="clear-period" className="form-control" value={period} onChange={e => { setPeriod(e.target.value); resetPreview(); }} disabled={confirming || deleting}>
           <option value="todos">Todos (apagar histórico inteiro)</option>
           <option value="hoje">Hoje</option>
           <option value="semana">Últimos 7 dias</option>
@@ -912,12 +920,12 @@ function ClearHistoryCard() {
       {period === 'intervalo' && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-            <label className="form-label">De</label>
-            <input className="form-control" type="date" value={from} onChange={e => { setFrom(e.target.value); resetPreview(); }} disabled={confirming || deleting} />
+            <label className="form-label" htmlFor="clear-date-from">De</label>
+            <input id="clear-date-from" className="form-control" type="date" value={from} onChange={e => { setFrom(e.target.value); resetPreview(); }} disabled={confirming || deleting} />
           </div>
           <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-            <label className="form-label">Até</label>
-            <input className="form-control" type="date" value={to} onChange={e => { setTo(e.target.value); resetPreview(); }} disabled={confirming || deleting} />
+            <label className="form-label" htmlFor="clear-date-to">Até</label>
+            <input id="clear-date-to" className="form-control" type="date" value={to} onChange={e => { setTo(e.target.value); resetPreview(); }} disabled={confirming || deleting} />
           </div>
         </div>
       )}

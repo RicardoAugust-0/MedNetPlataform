@@ -74,29 +74,29 @@ function EditModal({ reminder, onSave, onClose }) {
       <div className="edit-reminder-modal-card" onClick={e => e.stopPropagation()}>
         <div className="add-reminder-title" style={{ marginBottom: 14 }}><i className="ti ti-pencil"></i> Editar lembrete</div>
         <div className="form-group">
-          <label className="form-label">Título</label>
-          <input className="form-control" value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} autoFocus />
+          <label className="form-label" htmlFor="edit-reminder-title">Título</label>
+          <input id="edit-reminder-title" className="form-control" value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} autoFocus />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Data</label>
-            <input className="form-control" type="date" value={date} onChange={e => setDate(e.target.value)} />
+            <label className="form-label" htmlFor="edit-reminder-date">Data</label>
+            <input id="edit-reminder-date" className="form-control" type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Hora</label>
-            <input className="form-control" type="time" value={time} onChange={e => setTime(e.target.value)} />
+            <label className="form-label" htmlFor="edit-reminder-time">Hora</label>
+            <input id="edit-reminder-time" className="form-control" type="time" value={time} onChange={e => setTime(e.target.value)} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Prioridade</label>
-          <select className="form-control" value={prio} onChange={e => setPrio(e.target.value)}>
+          <label className="form-label" htmlFor="edit-reminder-prio">Prioridade</label>
+          <select id="edit-reminder-prio" className="form-control" value={prio} onChange={e => setPrio(e.target.value)}>
             <option value="">Normal</option>
             <option value="urgent">Urgente</option>
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Detalhe (opcional)</label>
-          <input className="form-control" value={sub} onChange={e => setSub(e.target.value)} placeholder="Ex: motorista Carlos · BR-101" />
+          <label className="form-label" htmlFor="edit-reminder-sub">Detalhe (opcional)</label>
+          <input id="edit-reminder-sub" className="form-control" value={sub} onChange={e => setSub(e.target.value)} placeholder="Ex: motorista Carlos · BR-101" />
         </div>
         <div className="form-group">
           <label className="form-label">Ícone</label>
@@ -215,29 +215,29 @@ export default function Agenda() {
       <div className="add-reminder-card">
         <div className="add-reminder-title"><i className="ti ti-plus"></i> Adicionar lembrete</div>
         <div className="form-group">
-          <label className="form-label">Título</label>
-          <input className="form-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: retornar contato com motorista" onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+          <label className="form-label" htmlFor="new-reminder-title">Título</label>
+          <input id="new-reminder-title" className="form-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: retornar contato com motorista" onKeyDown={e => e.key === 'Enter' && handleAdd()} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Data</label>
-            <input className="form-control" type="date" value={date} onChange={e => setDate(e.target.value)} />
+            <label className="form-label" htmlFor="new-reminder-date">Data</label>
+            <input id="new-reminder-date" className="form-control" type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Hora</label>
-            <input className="form-control" type="time" value={time} onChange={e => setTime(e.target.value)} />
+            <label className="form-label" htmlFor="new-reminder-time">Hora</label>
+            <input id="new-reminder-time" className="form-control" type="time" value={time} onChange={e => setTime(e.target.value)} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Prioridade</label>
-          <select className="form-control" value={prio} onChange={e => setPrio(e.target.value)}>
+          <label className="form-label" htmlFor="new-reminder-prio">Prioridade</label>
+          <select id="new-reminder-prio" className="form-control" value={prio} onChange={e => setPrio(e.target.value)}>
             <option value="">Normal</option>
             <option value="urgent">Urgente</option>
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Detalhe (opcional)</label>
-          <input className="form-control" value={sub} onChange={e => setSub(e.target.value)} placeholder="Ex: motorista Carlos · BR-101" />
+          <label className="form-label" htmlFor="new-reminder-sub">Detalhe (opcional)</label>
+          <input id="new-reminder-sub" className="form-control" value={sub} onChange={e => setSub(e.target.value)} placeholder="Ex: motorista Carlos · BR-101" />
         </div>
         <div className="form-group">
           <label className="form-label">Ícone</label>

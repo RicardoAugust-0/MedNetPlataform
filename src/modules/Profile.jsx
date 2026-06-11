@@ -317,8 +317,9 @@ export default function Profile() {
       <Section title={<><i className="ti ti-user" style={{ marginRight: 6 }}></i>Informações pessoais</>}>
         <form onSubmit={handleInfo}>
           <div className="form-group">
-            <label className="form-label">E-mail</label>
+            <label className="form-label" htmlFor="profile-email">E-mail</label>
             <input
+              id="profile-email"
               className="form-control"
               value={profile?.email || ''}
               disabled
@@ -329,8 +330,9 @@ export default function Profile() {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Nome completo</label>
+            <label className="form-label" htmlFor="profile-nome">Nome completo</label>
             <input
+              id="profile-nome"
               className="form-control"
               value={nome}
               onChange={e => setNome(e.target.value)}
@@ -338,8 +340,9 @@ export default function Profile() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Cargo / Função</label>
+            <label className="form-label" htmlFor="profile-cargo">Cargo / Função</label>
             <input
+              id="profile-cargo"
               className="form-control"
               value={cargo}
               onChange={e => setCargo(e.target.value)}
@@ -347,8 +350,9 @@ export default function Profile() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Telefone</label>
+            <label className="form-label" htmlFor="profile-telefone">Telefone</label>
             <input
+              id="profile-telefone"
               className="form-control"
               type="tel"
               value={telefone}
@@ -357,8 +361,9 @@ export default function Profile() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Bio</label>
+            <label className="form-label" htmlFor="profile-bio">Bio</label>
             <textarea
+              id="profile-bio"
               className="form-control"
               value={bio}
               onChange={e => setBio(e.target.value)}
@@ -381,8 +386,9 @@ export default function Profile() {
       <Section title={<><i className="ti ti-lock" style={{ marginRight: 6 }}></i>Alterar senha</>}>
         <form onSubmit={handleSenha}>
           <div className="form-group">
-            <label className="form-label">Nova senha</label>
+            <label className="form-label" htmlFor="profile-novasenha">Nova senha</label>
             <input
+              id="profile-novasenha"
               className="form-control"
               type="password"
               value={novaSenha}
@@ -391,8 +397,9 @@ export default function Profile() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Confirmar nova senha</label>
+            <label className="form-label" htmlFor="profile-confirmsenha">Confirmar nova senha</label>
             <input
+              id="profile-confirmsenha"
               className="form-control"
               type="password"
               value={confirmSenha}

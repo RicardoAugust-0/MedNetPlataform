@@ -676,7 +676,7 @@ export default function CrossCheck() {
         <div className="cc-results">
           {/* Tabs */}
           <div className="cc-results-header">
-            <div className="tabs" style={{ borderBottom: 'none', marginBottom: 0 }}>
+            <nav className="tabs" aria-label="Abas de resultados do CrossCheck" style={{ borderBottom: 'none', marginBottom: 0 }}>
               {[
                 { id: 'todos',           label: 'Todos',           count: displayedMatches.length },
                 { id: 'matches',         label: 'Matches',         count: tabMatchCount },
@@ -687,11 +687,21 @@ export default function CrossCheck() {
                   key={tab.id}
                   className={`tab ${activeTab === tab.id ? 'active' : ''}`}
                   onClick={() => setActiveTab(tab.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setActiveTab(tab.id);
+                    }
+                  }}
+                  aria-selected={activeTab === tab.id}
+                  style={{ cursor: 'pointer' }}
                 >
                   {tab.label} <span className="tab-count">{tab.count}</span>
                 </div>
               ))}
-            </div>
+            </nav>
           </div>
 
           {/* Active carrier filter badge */}

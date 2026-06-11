@@ -44,7 +44,7 @@ export default function Notes() {
             </button>
           ))}
         </div>
-        <div className="search-wrap" style={{ flex: 1 }}><i className="ti ti-search"></i><input placeholder="Buscar notas..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="search-wrap" style={{ flex: 1 }}><i className="ti ti-search"></i><input aria-label="Buscar notas" placeholder="Buscar notas..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <button className="btn btn-primary" onClick={create}><i className="ti ti-plus"></i> Nova nota</button>
       </div>
 
@@ -57,7 +57,20 @@ export default function Notes() {
           {visibleNotes.length === 0
             ? <div className="empty-state" style={{ padding: '30px 12px' }}><i className="ti ti-note-off"></i>Sem notas</div>
             : visibleNotes.map(n => (
-              <div key={n.id} className={`note-list-item ${current === n.id ? 'active' : ''}`} onClick={() => setCurrent(n.id)}>
+              <div
+                key={n.id}
+                className={`note-list-item ${current === n.id ? 'active' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-selected={current === n.id}
+                onClick={() => setCurrent(n.id)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setCurrent(n.id);
+                  }
+                }}
+              >
                 <div className="note-list-title">{n.title || '(sem título)'}</div>
                 <div className="note-list-date">{n.date}</div>
               </div>
@@ -69,10 +82,10 @@ export default function Notes() {
             ? <div className="card empty-state"><i className="ti ti-file-text"></i>Selecione uma nota</div>
             : <div className="note-editor-card">
                 <div className="note-editor-header">
-                  <input id="nt-title" className="note-title-input" value={note.title} onChange={e => update(note.id, { title: e.target.value })} />
+                  <input id="nt-title" className="note-title-input" aria-label="Título da nota" value={note.title} onChange={e => update(note.id, { title: e.target.value })} />
                   <button className="btn btn-sm btn-danger" onClick={handleRemove}><i className="ti ti-trash"></i></button>
                 </div>
-                <textarea className="note-body-input" value={note.body} onChange={e => update(note.id, { body: e.target.value })} placeholder="Comece a escrever..." />
+                <textarea className="note-body-input" aria-label="Corpo da nota" value={note.body} onChange={e => update(note.id, { body: e.target.value })} placeholder="Comece a escrever..." />
               </div>
           }
         </div>

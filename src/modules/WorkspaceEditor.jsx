@@ -105,6 +105,7 @@ function Toolbar({ editor, onImageClick, uploading }) {
         <select
           className="tb-font-size"
           title="Tamanho da fonte"
+          aria-label="Tamanho da fonte"
           value={editor.getAttributes('textStyle').fontSize || '14px'}
           onChange={e => editor.chain().focus().setFontSize(e.target.value).run()}
           onMouseDown={e => e.stopPropagation()}
@@ -296,7 +297,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         <button className="btn btn-sm" title={page.favorite ? 'Desfavoritar' : 'Favoritar'} onClick={() => onUpdate(page.id, { favorite: !page.favorite })} disabled={!canEdit}>
           <i className={`ti ${page.favorite ? 'ti-star-filled' : 'ti-star'}`} style={page.favorite ? { color: 'var(--warning-500)' } : {}}></i>
         </button>
-        <select className="form-control" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })} disabled={!canEdit}>
+        <select className="form-control" aria-label="Categoria do workspace" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })} disabled={!canEdit}>
           {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
@@ -305,7 +306,7 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         )}
       </div>
       <div className="ws-editor-area">
-        <input className="ws-page-title-input" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} disabled={!canEdit} />
+        <input className="ws-page-title-input" aria-label="Título do workspace" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} disabled={!canEdit} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
         <hr className="ws-divider" />
         {canEdit && (

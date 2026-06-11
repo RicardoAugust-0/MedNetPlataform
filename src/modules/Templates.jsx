@@ -97,21 +97,34 @@ export default function Templates() {
       <div className="search-row">
         <div className="search-wrap">
           <i className="ti ti-search"></i>
-          <input placeholder="Buscar templates..." value={search} onChange={e => setSearch(e.target.value)} disabled={filter === 'variaveis'} />
+          <input aria-label="Buscar templates" placeholder="Buscar templates..." value={search} onChange={e => setSearch(e.target.value)} disabled={filter === 'variaveis'} />
         </div>
         {canEdit && filter !== 'variaveis' && (
           <button className="btn btn-primary" onClick={() => setModal('new')}><i className="ti ti-plus"></i> Novo template</button>
         )}
       </div>
 
-      <div className="tabs">
+      <nav aria-label="Abas de templates" className="tabs" role="tablist">
         {TABS.map(f => (
-          <div key={f} className={`tab ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
+          <div 
+            key={f} 
+            className={`tab ${filter === f ? 'active' : ''}`} 
+            role="tab"
+            tabIndex={0}
+            aria-selected={filter === f}
+            onClick={() => setFilter(f)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setFilter(f);
+              }
+            }}
+          >
             {f === 'variaveis' ? <><i className="ti ti-variable"></i> {TAB_LABELS[f]}</> : TAB_LABELS[f]}
             {counts[f] != null && <span className="tab-count">{counts[f]}</span>}
           </div>
         ))}
-      </div>
+      </nav>
 
       {filter === 'variaveis' ? (
         <VariaveisPanel canEdit={canEdit} />
@@ -224,6 +237,7 @@ function VariaveisPanel({ canEdit }) {
                     style={{ flex: 1, fontSize: 13 }}
                     value={val}
                     autoFocus
+                    aria-label={`Valor para a variável ${key}`}
                     onChange={e => updateVal(key, e.target.value)}
                     onBlur={() => setEditingKey(null)}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingKey(null); }}
@@ -240,7 +254,15 @@ function VariaveisPanel({ canEdit }) {
                       border: '1px solid var(--border)'
                     }}
                     title={canEdit ? "Clique para editar" : ""}
+                    role={canEdit ? 'button' : undefined}
+                    tabIndex={canEdit ? 0 : undefined}
                     onClick={() => canEdit && setEditingKey(key)}
+                    onKeyDown={e => {
+                      if (canEdit && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        setEditingKey(key);
+                      }
+                    }}
                   >
                     {val || <em style={{ color: 'var(--text-muted)' }}>vazio</em>}
                   </span>
@@ -260,8 +282,9 @@ function VariaveisPanel({ canEdit }) {
         {canEdit && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className="form-group" style={{ flex: '0 0 180px', margin: 0 }}>
-              <label className="form-label" style={{ fontSize: 11 }}>Nome (sem colchetes)</label>
+              <label className="form-label" htmlFor="var-new-key" style={{ fontSize: 11 }}>Nome (sem colchetes)</label>
               <input
+                id="var-new-key"
                 className="form-control"
                 style={{ fontSize: 13, textTransform: 'uppercase' }}
                 placeholder="EX: OPERADOR_SETOR"
@@ -271,8 +294,9 @@ function VariaveisPanel({ canEdit }) {
               />
             </div>
             <div className="form-group" style={{ flex: 1, minWidth: 140, margin: 0 }}>
-              <label className="form-label" style={{ fontSize: 11 }}>Valor</label>
+              <label className="form-label" htmlFor="var-new-val" style={{ fontSize: 11 }}>Valor</label>
               <input
+                id="var-new-val"
                 className="form-control"
                 style={{ fontSize: 13 }}
                 placeholder="Ex: Fadiga Zero"
@@ -326,18 +350,18 @@ function TemplateModal({ tpl, onSave, onClose }) {
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Categoria</label>
-            <select className="form-control" value={tag} onChange={e => setTag(e.target.value)}>
+            <label className="form-label" htmlFor="template-tag">Categoria</label>
+            <select id="template-tag" className="form-control" value={tag} onChange={e => setTag(e.target.value)}>
               {TAG_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Nome</label>
-            <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Nome do template" />
+            <label className="form-label" htmlFor="template-name">Nome</label>
+            <input id="template-name" className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Nome do template" />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <label className="form-label" htmlFor="template-text" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             Conteúdo
           </label>
           <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -348,6 +372,7 @@ function TemplateModal({ tpl, onSave, onClose }) {
             ))}
           </div>
           <textarea 
+            id="template-text"
             ref={textareaRef}
             className="form-control" 
             value={text} 
