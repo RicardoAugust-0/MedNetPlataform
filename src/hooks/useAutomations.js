@@ -29,17 +29,31 @@ export function AutomationsProvider({ children }) {
   });
 
   // Helper to map DB log row to local log model
-  const toLocalLog = (row) => ({
-    id: row.id,
-    automationId: row.automation_id,
-    status: row.status,
-    dur: row.duration,
-    detail: row.detail,
-    when: new Date(row.created_at).toLocaleDateString('pt-BR') + ' ' + new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    date: row.created_at,
-    logs: row.logs || [], // detailed array of { t, lvl, m }
-  });
+  const toLocalLog = (row) => {
+    let parsedLogs = [];
+    if (row.logs) {
+      if (Array.isArray(row.logs)) {
+        parsedLogs = row.logs;
+      } else if (typeof row.logs === 'string') {
+        try {
+          parsedLogs = JSON.parse(row.logs);
+        } catch (e) {
+          console.error('[toLocalLog] Failed to parse logs string:', e);
+        }
+      }
+    }
+    return {
+      id: row.id,
+      automationId: row.automation_id,
+      status: row.status,
+      dur: row.duration,
+      detail: row.detail,
+      when: new Date(row.created_at).toLocaleDateString('pt-BR') + ' ' + new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      date: row.created_at,
+      logs: Array.isArray(parsedLogs) ? parsedLogs : [],
+    };
+  };
 
   // Fetch all automations and logs
   const loadData = useCallback(async () => {
