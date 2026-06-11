@@ -263,7 +263,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   const [name, setName] = useState(automation?.name || '');
   const [desc, setDesc] = useState(automation?.desc || '');
   const [icon, setIcon] = useState(automation?.icon || 'ti-robot');
-  const [endpoint, setEndpoint] = useState(automation?.endpoint || 'https://168.231.94.0/hooks/');
+  const [endpoint, setEndpoint] = useState(automation?.endpoint || 'https://botsplaywright.duckdns.org/automacoes/');
   const [trigger, setTrigger] = useState(automation?.trigger || 'manual');
   const [schedule, setSchedule] = useState(automation?.schedule || '');
   const [eventType, setEventType] = useState(automation?.eventType || EVENT_OPTIONS[0]);

@@ -10,7 +10,7 @@ export function AutomationsProvider({ children }) {
   const [logs, setLogs] = useState({}); // key: automation_id, value: array of log objects
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
-  const [healthUrl, setHealthUrl] = useState('https://168.231.94.0/health');
+  const [healthUrl, setHealthUrl] = useState('https://botsplaywright.duckdns.org/health');
   const [vncUrl, setVncUrl] = useState('');
   const timers = useRef({});
 
@@ -162,7 +162,7 @@ export function AutomationsProvider({ children }) {
         checking: false,
         error: null,
         data: {
-          label: hostname,
+          label: 'VPS',
           host: hostname,
           region: data.region || 'São Paulo (BR)',
           uptimeDays: data.uptimeDays ?? 0,
