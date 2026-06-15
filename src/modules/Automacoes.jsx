@@ -431,7 +431,7 @@ function DisparosTab() {
 }
 
 function VncModal({ vncUrl, onStopBot, onClose }) {
-  const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale`;
+  const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale&quality=6&compression=7`;
 
   return createPortal(
     <div className="modal-overlay open" onClick={onClose}>
