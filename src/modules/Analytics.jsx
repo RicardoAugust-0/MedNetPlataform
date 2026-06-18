@@ -25,6 +25,7 @@ export default function Analytics() {
   const [platformCounts, setPlatformCounts] = useState({});
   const [availableMonths, setAvailableMonths] = useState([]);
   const [availableCompanies, setAvailableCompanies] = useState([]);
+  const [availableTypes, setAvailableTypes] = useState([]);
 
   const [activeId, setActiveId] = useState(null);
 
@@ -99,6 +100,8 @@ export default function Analytics() {
   });
   const { resolveMonitorName } = useCarrierAliases();
   const [selectedCompany, setSelectedCompany] = useState('');
+  const [selectedClassification, setSelectedClassification] = useState('all');
+  const [selectedType, setSelectedType] = useState('');
 
   useEffect(() => {
     localStorage.setItem('mednet_analytics_severity', selectedSeverity);
@@ -122,6 +125,8 @@ export default function Analytics() {
 
   useEffect(() => {
     setSelectedCompany('');
+    setSelectedClassification('all');
+    setSelectedType('');
   }, [activeId, compare]);
 
   // Tick clock
@@ -215,6 +220,8 @@ export default function Analytics() {
       }
       if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
       if (selectedSeverity) url += `&severity=${selectedSeverity}`;
+      if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
+      if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -226,6 +233,7 @@ export default function Analytics() {
       
       setAvailableMonths(data.availableMonths || []);
       setAvailableCompanies(data.availableCompanies || []);
+      setAvailableTypes(data.availableTypes || []);
 
       const monthsList = data.availableMonths || [];
       if (monthsList.length > 0) {
@@ -303,7 +311,18 @@ export default function Analytics() {
     } else {
       loadFromDatabase(null, !platformChanged);
     }
-  }, [activeId, compare, comparePlatformIds, selectedMonth, startDate, endDate, selectedCompany, selectedSeverity]);
+  }, [
+    activeId,
+    compare,
+    comparePlatformIds,
+    selectedMonth,
+    startDate,
+    endDate,
+    selectedCompany,
+    selectedSeverity,
+    selectedClassification,
+    selectedType
+  ]);
 
   useEffect(() => {
     if (activeId) {
@@ -341,6 +360,8 @@ export default function Analytics() {
     }
     if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
     if (selectedSeverity) url += `&severity=${selectedSeverity}`;
+    if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
+    if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
 
     // Open download link directly in the browser
     window.location.href = url;
@@ -524,7 +545,7 @@ export default function Analytics() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             
             {/* Seletor Dinâmico de Mês */}
-            {activeId && (availableMonths.length > 0 || selectedMonth === 'custom') && (
+            {(activeId || compare) && (availableMonths.length > 0 || selectedMonth === 'custom') && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Mês:</span>
                 <select
@@ -556,7 +577,7 @@ export default function Analytics() {
             )}
 
             {/* Seletor de Período Customizado */}
-            {activeId && selectedMonth === 'custom' && (
+            {(activeId || compare) && selectedMonth === 'custom' && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginRight: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>De:</span>
@@ -597,36 +618,7 @@ export default function Analytics() {
               </div>
             )}
 
-            {/* Seletor Dinâmico de Empresa */}
-            {(activeSource || compare) && availableCompanies.length > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Empresa:</span>
-                <select
-                  value={selectedCompany}
-                  onChange={(e) => setSelectedCompany(e.target.value)}
-                  style={{
-                    padding: '6px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    fontSize: '12.5px',
-                    fontWeight: 500,
-                    color: 'var(--text-primary)',
-                    background: 'var(--surface-0)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <option value="">Todas as empresas</option>
-                  {availableCompanies.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+
 
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
               <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
@@ -853,6 +845,8 @@ export default function Analytics() {
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
             selectedCompany={selectedCompany}
+            setSelectedCompany={setSelectedCompany}
+            availableCompanies={availableCompanies}
             selectedSeverity={selectedSeverity}
           />
         )}
@@ -865,6 +859,15 @@ export default function Analytics() {
             formatMonthKey={formatMonthKey}
             selectedSeverity={selectedSeverity}
             setSelectedSeverity={setSelectedSeverity}
+            selectedClassification={selectedClassification}
+            setSelectedClassification={setSelectedClassification}
+            selectedType={selectedType}
+            setSelectedType={setSelectedType}
+            availableTypes={availableTypes}
+            selectedCompany={selectedCompany}
+            setSelectedCompany={setSelectedCompany}
+            availableCompanies={availableCompanies}
+            compare={compare}
           />
         )}
 

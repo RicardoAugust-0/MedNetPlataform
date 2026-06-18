@@ -2,7 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
 
-export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey, selectedSeverity, setSelectedSeverity }) {
+export default function FadigaCharts({
+  d,
+  noData,
+  selectedMonth,
+  formatMonthKey,
+  selectedSeverity,
+  setSelectedSeverity,
+  selectedClassification,
+  setSelectedClassification,
+  selectedType,
+  setSelectedType,
+  availableTypes = [],
+  selectedCompany,
+  setSelectedCompany,
+  availableCompanies = [],
+  compare
+}) {
   const [driversViewMode, setDriversViewMode] = useState('chart');
   const canvasMensalRef = useRef(null);
   const canvasCritRef = useRef(null);
@@ -731,10 +747,37 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey,
             </div>
           </div>
           <div data-card className="card" style={{ padding: '16px 18px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Classificação dos alertas</h4>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-              Resultado da análise feita pela operação no período selecionado.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Classificação dos alertas</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  Resultado da análise feita pela operação no período selecionado.
+                </p>
+              </div>
+              <div>
+                <select
+                  value={selectedClassification}
+                  onChange={(e) => setSelectedClassification(e.target.value)}
+                  style={{
+                    padding: '4px 8px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    background: 'var(--surface-1, rgba(255,255,255,0.05))',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="all">Todas as classificações</option>
+                  <option value="Positivo">Positivo</option>
+                  <option value="Falso positivo">Falso positivo</option>
+                  <option value="Não classificado">Não classificado</option>
+                </select>
+              </div>
+            </div>
             <div style={{ position: 'relative', width: '100%', height: '260px' }}>
               <canvas ref={canvasClfRef}></canvas>
               {noData && (
@@ -765,12 +808,44 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey,
             </div>
           </div>
           <div data-card className="card" style={{ padding: '16px 18px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Tipo de detecção</h4>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-              {selectedMonth && selectedMonth !== 'all'
-                ? 'Quais gatilhos de fadiga foram acionados ao longo dos dias (top 5).'
-                : 'Quais gatilhos de fadiga foram acionados ao longo dos meses (top 5).'}
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Tipo de detecção</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  {selectedMonth && selectedMonth !== 'all'
+                    ? 'Quais gatilhos de fadiga foram acionados ao longo dos dias (top 5).'
+                    : 'Quais gatilhos de fadiga foram acionados ao longo dos meses (top 5).'}
+                </p>
+              </div>
+              {availableTypes.length > 0 && (
+                <div>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      background: 'var(--surface-1, rgba(255,255,255,0.05))',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      maxWidth: '180px',
+                    }}
+                  >
+                    <option value="">Todos os tipos</option>
+                    {availableTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             <div style={{ position: 'relative', width: '100%', height: '220px' }}>
               <canvas ref={canvasTipoRef}></canvas>
               {noData && (
@@ -924,9 +999,9 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey,
           <div data-card className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
-                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Top 15 motoristas</h4>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Motoristas com mais alertas</h4>
                 <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                  Maior número de alertas registrados no período selecionado.
+                  Ranking dos motoristas com maior volume de eventos.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '2px', background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
@@ -1061,10 +1136,42 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey,
             </div>
           </div>
           <div data-card className="card" style={{ padding: '16px 18px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Por frota / base</h4>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-              Distribuição de ocorrências entre frotas, rodagem e filiais.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Por frota / base</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  Distribuição de ocorrências entre frotas, rodagem e filiais.
+                </p>
+              </div>
+              {!compare && availableCompanies.length > 0 && (
+                <div>
+                  <select
+                    value={selectedCompany}
+                    onChange={(e) => setSelectedCompany(e.target.value)}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      background: 'var(--surface-1, rgba(255,255,255,0.05))',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      maxWidth: '180px',
+                    }}
+                  >
+                    <option value="">Todas as empresas</option>
+                    {availableCompanies.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             <div style={{ position: 'relative', width: '100%', height: '300px' }}>
               <canvas ref={canvasFrotaRef}></canvas>
               {noData && (

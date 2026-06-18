@@ -182,8 +182,8 @@ const MAPPING = {
   description: 'description'
 };
 
-// Filter rows by company, severity, and date range in memory
-function filterRows(rows, { company, severity, month, startDate, endDate }) {
+// Filter rows by company, severity, classification, eventType, and date range in memory
+function filterRows(rows, { company, severity, month, startDate, endDate, classification, eventType }) {
   let filtered = rows;
 
   // Filter by company
@@ -200,6 +200,16 @@ function filterRows(rows, { company, severity, month, startDate, endDate }) {
     } else {
       filtered = filtered.filter(row => row[3] === severity);
     }
+  }
+
+  // Filter by classification
+  if (classification && classification !== 'all') {
+    filtered = filtered.filter(row => row[5] === classification);
+  }
+
+  // Filter by event type
+  if (eventType) {
+    filtered = filtered.filter(row => row[4] === eventType);
   }
 
   // Filter by date range (for custom or month)
@@ -253,7 +263,9 @@ app.get('/api/analytics', async (req, res) => {
     startDate,
     endDate,
     company,
-    severity
+    severity,
+    classification,
+    eventType
   } = req.query;
 
   try {
@@ -273,9 +285,10 @@ app.get('/api/analytics', async (req, res) => {
       allEventsByPlatform[pid] = await getRawEvents(pid);
     }
 
-    // Extract available months and companies from the loaded raw events
+    // Extract available months, companies, and event types from the loaded raw events
     const availableMonthsSet = new Set();
     const availableCompaniesSet = new Set();
+    const availableTypesSet = new Set();
 
     for (const pid of targetPlatformIds) {
       const events = allEventsByPlatform[pid];
@@ -291,11 +304,15 @@ app.get('/api/analytics', async (req, res) => {
         if (resolvedComp && resolvedComp !== 'Não informado') {
           availableCompaniesSet.add(resolvedComp);
         }
+        if (ev.nome_evento) {
+          availableTypesSet.add(ev.nome_evento);
+        }
       }
     }
 
     const availableMonths = Array.from(availableMonthsSet).sort().reverse().slice(0, 12);
     const availableCompanies = Array.from(availableCompaniesSet).sort();
+    const availableTypes = Array.from(availableTypesSet).sort();
 
     if (isCompare) {
       // Return aggregated sources for comparison view
@@ -319,7 +336,7 @@ app.get('/api/analytics', async (req, res) => {
         const rawRows = formatDataRows(events, aliases);
         
         // Filter current period
-        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate });
+        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
         for (const row of filtered) {
           combinedRawRows.push(row);
         }
@@ -327,7 +344,7 @@ app.get('/api/analytics', async (req, res) => {
         // Filter previous period
         let filteredPrev = [];
         if (prevMonthKey) {
-          filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey });
+          filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey, classification, eventType });
           for (const row of filteredPrev) {
             combinedRawRowsPrev.push(row);
           }
@@ -358,6 +375,7 @@ app.get('/api/analytics', async (req, res) => {
       return res.json({
         availableMonths,
         availableCompanies,
+        availableTypes,
         sources,
         d: combinedD,
         prevD: combinedPrevD
@@ -369,7 +387,7 @@ app.get('/api/analytics', async (req, res) => {
       const rawRows = formatDataRows(events, aliases);
 
       // Current month aggregation
-      const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate });
+      const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
       const d = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
 
       // Previous month aggregation (only if month is a specific month key like '2026-06')
@@ -383,13 +401,14 @@ app.get('/api/analytics', async (req, res) => {
         const pm = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
         const prevMonthKey = `${py}-${pm}`;
 
-        const filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey });
+        const filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey, classification, eventType });
         prevD = aggregate(HEADERS, filteredPrev, MAPPING, prevMonthKey);
       }
 
       return res.json({
         availableMonths,
         availableCompanies,
+        availableTypes,
         d,
         prevD
       });
@@ -408,7 +427,9 @@ app.get('/api/analytics/csv', async (req, res) => {
     startDate,
     endDate,
     company,
-    severity
+    severity,
+    classification,
+    eventType
   } = req.query;
 
   if (!platformId) {
@@ -420,8 +441,8 @@ app.get('/api/analytics/csv', async (req, res) => {
     const events = await getRawEvents(platformId);
     const rawRows = formatDataRows(events, aliases);
     
-    // Filter rows by date, month, company, severity
-    let rowsToExport = filterRows(rawRows, { company, severity, month, startDate, endDate });
+    // Filter rows by date, month, company, severity, classification, eventType
+    let rowsToExport = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
 
     // Filter by specific month code if month is standard month key
     if (month && month !== 'all' && month !== 'custom' && month.indexOf('-') > -1) {
