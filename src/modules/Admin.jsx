@@ -26,6 +26,10 @@ export default function Admin() {
   const [aliasMonitor, setAliasMonitor] = useState('');
   const [aliasSheet, setAliasSheet]     = useState('');
 
+  const [editingAliasKey, setEditingAliasKey] = useState(null);
+  const [editAliasMonitor, setEditAliasMonitor] = useState('');
+  const [editAliasSheet, setEditAliasSheet] = useState('');
+
   const addAlias = async () => {
     const m = aliasMonitor.trim();
     const s = aliasSheet.trim();
@@ -41,6 +45,35 @@ export default function Admin() {
     delete next[key];
     await setAliases(next);
     toast('Mapeamento removido', 'info');
+  };
+
+  const startEditAlias = (monitor, sheet) => {
+    setEditingAliasKey(monitor);
+    setEditAliasMonitor(monitor);
+    setEditAliasSheet(sheet);
+  };
+
+  const cancelEditAlias = () => {
+    setEditingAliasKey(null);
+    setEditAliasMonitor('');
+    setEditAliasSheet('');
+  };
+
+  const saveEditAlias = async () => {
+    const m = editAliasMonitor.trim();
+    const s = editAliasSheet.trim();
+    if (!m || !s) return;
+
+    const next = { ...aliases };
+    if (editingAliasKey !== m) {
+      delete next[editingAliasKey];
+    }
+    next[m] = s;
+    await setAliases(next);
+    setEditingAliasKey(null);
+    setEditAliasMonitor('');
+    setEditAliasSheet('');
+    toast('Mapeamento atualizado', 'success');
   };
 
   // Sincroniza o input quando a mensagem chega do servidor (load inicial ou
@@ -242,18 +275,54 @@ export default function Admin() {
               <span style={{ flex: 1 }}>Nome no Monitor</span>
               <span style={{ width: 20 }}></span>
               <span style={{ flex: 1 }}>Nome na planilha</span>
-              <span style={{ width: 28 }}></span>
+              <span style={{ width: 64 }}></span>
             </div>
-            {Object.entries(aliases).map(([monitor, sheet]) => (
-              <div key={monitor} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)' }}>
-                <span style={{ flex: 1, fontSize: 13 }}>{monitor}</span>
-                <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
-                <span style={{ flex: 1, fontSize: 13 }}>{sheet}</span>
-                <button className="btn-icon" onClick={() => removeAlias(monitor)} title="Remover mapeamento">
-                  <i className="ti ti-trash" style={{ color: 'var(--danger-500)' }}></i>
-                </button>
-              </div>
-            ))}
+            {Object.entries(aliases).map(([monitor, sheet]) => {
+              const isEditing = editingAliasKey === monitor;
+              return (
+                <div key={monitor} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)' }}>
+                  {isEditing ? (
+                    <>
+                      <input
+                        className="form-control"
+                        style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
+                        value={editAliasMonitor}
+                        onChange={e => setEditAliasMonitor(e.target.value)}
+                        placeholder="Nome no Monitor"
+                        onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
+                      />
+                      <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                      <input
+                        className="form-control"
+                        style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
+                        value={editAliasSheet}
+                        onChange={e => setEditAliasSheet(e.target.value)}
+                        placeholder="Nome na planilha"
+                        onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
+                      />
+                      <button className="btn-icon" onClick={saveEditAlias} title="Salvar alteração">
+                        <i className="ti ti-check" style={{ color: 'var(--success-500)' }}></i>
+                      </button>
+                      <button className="btn-icon" onClick={cancelEditAlias} title="Cancelar">
+                        <i className="ti ti-x" style={{ color: 'var(--text-muted)' }}></i>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ flex: 1, fontSize: 13 }}>{monitor}</span>
+                      <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                      <span style={{ flex: 1, fontSize: 13 }}>{sheet}</span>
+                      <button className="btn-icon" onClick={() => startEditAlias(monitor, sheet)} title="Editar mapeamento">
+                        <i className="ti ti-pencil" style={{ color: 'var(--accent-500)' }}></i>
+                      </button>
+                      <button className="btn-icon" onClick={() => removeAlias(monitor)} title="Remover mapeamento">
+                        <i className="ti ti-trash" style={{ color: 'var(--danger-500)' }}></i>
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
