@@ -12,6 +12,7 @@ import {
   TECNICO_EVENTOS,
   MIN_MOVING_SPEED_KMH,
 } from './columns.js';
+import { normClf } from '../../utils/fatigueParser.js';
 
 const INTERVENCAO_NORM = INTERVENCAO_EVENTOS.map(normalize);
 const TECNICO_NORM     = TECNICO_EVENTOS.map(normalize);
@@ -78,9 +79,15 @@ export async function parse(file) {
         let filtradosPorVelocidade = 0;
 
         const valid = rows.filter((r) => {
-          // Descartar falsos positivos ou descartados com base no status do OmniLink
+          // Descartar falsos positivos ou descartados com base no status ou método de processamento do OmniLink
           const statusRaw = String(r[COLUMNS.status] || '').toLowerCase();
-          if (statusRaw.includes('falso positivo') || statusRaw.includes('descartado')) {
+          const metodoRaw = String(r[COLUMNS.metodoProcessamento] || '').toLowerCase();
+          if (
+            statusRaw.includes('falso positivo') ||
+            statusRaw.includes('descartado') ||
+            metodoRaw.includes('falso') ||
+            metodoRaw.includes('descartado')
+          ) {
             falsosPositivos += 1;
             return false;
           }
@@ -216,7 +223,9 @@ export async function parse(file) {
             localidade:           r[COLUMNS.localidade] ? String(r[COLUMNS.localidade]).trim() : null,
             velocidade_kmh:       speed,
             duracao_seg:          null,
-            analise_ia_plataforma: null,
+            analise_ia_plataforma: r[COLUMNS.metodoProcessamento]
+              ? normClf(r[COLUMNS.metodoProcessamento])
+              : (r[COLUMNS.status] ? normClf(r[COLUMNS.status]) : 'Não classificado'),
             raw_event_type_id:    null,
             ocorrido_em,
           });

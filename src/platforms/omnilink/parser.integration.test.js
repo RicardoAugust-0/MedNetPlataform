@@ -92,6 +92,18 @@ describe('OmniLink parser · parse() integration', () => {
     expect(stats.falsosPositivos).toBe(2);
   });
 
+  it('descarta falsos positivos baseados em Método de processamento e mapeia analise_ia_plataforma', async () => {
+    const file = buildXlsxFile([
+      row({ 'Método de processamento': 'Evento confirmado' }),
+      row({ 'Método de processamento': 'Falso positivo - equipamento' }),
+    ]);
+    const { drivers, stats, rawEventRows } = await parse(file);
+    expect(drivers).toHaveLength(1);
+    expect(stats.falsosPositivos).toBe(1);
+    expect(rawEventRows).toHaveLength(1);
+    expect(rawEventRows[0].analise_ia_plataforma).toBe('Positivo');
+  });
+
   it('filtra eventos que nao foram tratados por hevilyntfzero@gmail.com', async () => {
     const file = buildXlsxFile([
       row({ 'Tratado por': 'hevilyntfzero@gmail.com' }),

@@ -114,11 +114,25 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
   const handleStagePlatformChange = (e) => {
     const id = e.target.value;
     const p = PLATFORMS.find((x) => x.id === id);
-    setStage((prev) => ({
-      ...prev,
-      platformId: id,
-      platformName: p ? p.name : 'Detecção automática',
-    }));
+    setStage((prev) => {
+      if (!prev) return null;
+      const updatedMapping = { ...prev.mapping };
+      if (id === 'omnilink') {
+        const metodoProcHeader = prev.headers.find(h => {
+          const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
+        });
+        if (metodoProcHeader) {
+          updatedMapping['classification'] = metodoProcHeader;
+        }
+      }
+      return {
+        ...prev,
+        platformId: id,
+        platformName: p ? p.name : 'Detecção automática',
+        mapping: updatedMapping,
+      };
+    });
   };
 
   const handleConfirmClick = () => {
@@ -130,14 +144,62 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
       return headerIdx > -1 ? row[headerIdx] : null;
     };
 
+    const isOmnilink = stage.platformId === 'omnilink';
+
+    // Find index for 'Tratado por' column for OmniLink filter
+    const tratadoPorIdx = stage.headers.findIndex(h => {
+      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return nh === 'tratado por';
+    });
+
+    // Find index for 'Método de processamento' column
+    const metodoProcIdx = stage.headers.findIndex(h => {
+      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
+    });
+
     const rowsToInsert = [];
     for (const row of stage.dataRows) {
       const dtRaw = getVal(row, 'datetime');
       const dt = toDate(dtRaw);
       if (!dt) continue;
 
+      // 1. Filter out by operator email if it is OmniLink
+      if (isOmnilink && tratadoPorIdx > -1) {
+        const tratadoPor = String(row[tratadoPorIdx] || '').trim().toLowerCase();
+        if (tratadoPor !== 'hevilyntfzero@gmail.com') {
+          continue; // skip
+        }
+      }
+
+      // 2. Filter by speed < 10 km/h (minimum moving speed limit)
+      const speedVal = toNum(getVal(row, 'speed'));
+      if (speedVal !== null && speedVal < 10) {
+        continue; // skip
+      }
+
+      // 3. Filter out false positives and discarded events
+      const classificationRaw = getVal(row, 'classification');
+      const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
+      
+      const hasMetodoFalso = isOmnilink && metodoProcIdx > -1 && 
+        (String(row[metodoProcIdx] || '').toLowerCase().includes('falso') || 
+         String(row[metodoProcIdx] || '').toLowerCase().includes('descartado'));
+
+      const hasClassificationFalso = classificationNorm === 'Falso positivo' || 
+        String(classificationRaw || '').toLowerCase().includes('descartado');
+
+      if (hasMetodoFalso || hasClassificationFalso) {
+        continue; // skip
+      }
+
       const plateVal = String(getVal(row, 'plate') || '').trim();
       const typeVal = String(getVal(row, 'type') || '').trim();
+
+      // For OmniLink, we prioritize 'Método de processamento' over 'Status' (classification)
+      const resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
+        ? normClf(row[metodoProcIdx])
+        : classificationNorm;
 
       rowsToInsert.push({
         platform_id: stage.platformId,
@@ -145,8 +207,8 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
         nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
         nome_evento: typeVal || 'Fadiga',
         severidade: getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio',
-        analise_ia_plataforma: getVal(row, 'classification') ? normClf(getVal(row, 'classification')) : 'Não classificado',
-        velocidade_kmh: toNum(getVal(row, 'speed')),
+        analise_ia_plataforma: resolvedClassification,
+        velocidade_kmh: speedVal,
         localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
         frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
         ocorrido_em: dt.toISOString(),
@@ -154,7 +216,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     }
 
     if (rowsToInsert.length === 0) {
-      setError('Nenhuma linha com data/hora válida foi encontrada.');
+      setError('Nenhuma linha com data/hora válida e filtros correspondentes foi encontrada.');
       return;
     }
 

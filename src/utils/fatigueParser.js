@@ -199,6 +199,18 @@ export function detect(headers, platformHint, fileName) {
     if (bestIdx > -1) { mapping[f.key] = headers[bestIdx]; used.add(bestIdx); }
     else mapping[f.key] = null;
   }
+
+  // Force classification to "Método de processamento" for OmniLink if present
+  if (platform && platform.id === 'omnilink') {
+    const metodoProcHeader = headers.find((h) => {
+      const nh = norm(h);
+      return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
+    });
+    if (metodoProcHeader) {
+      mapping['classification'] = metodoProcHeader;
+    }
+  }
+
   return { platform: platform ? platform.id : 'auto', platformName: platform ? platform.name : 'Detecção automática', mapping };
 }
 

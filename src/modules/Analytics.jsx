@@ -20,13 +20,7 @@ export default function Analytics() {
   const [platformCounts, setPlatformCounts] = useState({});
   const [availableMonths, setAvailableMonths] = useState([]);
 
-  const [activeId, setActiveId] = useState(() => {
-    try {
-      return localStorage.getItem('mednet_analytics_active_id') || null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [activeId, setActiveId] = useState(null);
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     try {
@@ -205,25 +199,18 @@ export default function Analytics() {
 
       // Determine active platform ID to load
       let targetPlatformId = preferredPlatformId;
-      if (!targetPlatformId) {
-        const savedActiveId = localStorage.getItem('mednet_analytics_active_id') || activeId;
-        if (savedActiveId && counts[savedActiveId.replace('src-', '')] > 0) {
-          targetPlatformId = savedActiveId.replace('src-', '');
-        } else {
-          // Find first platform with count > 0
-          const firstAvailable = Object.keys(counts).find((pid) => counts[pid] > 0);
-          targetPlatformId = firstAvailable || null;
+      if (!targetPlatformId && activeId) {
+        const cleanId = activeId.replace('src-', '');
+        if (counts[cleanId] > 0) {
+          targetPlatformId = cleanId;
         }
       }
 
-      // If there are no platforms with records, clear and return
+      // If we don't have a target platform selected and aren't in comparison mode, do not load any events
       if (!targetPlatformId && !compare) {
         setSources([]);
         setLoading(false);
-        const nextActiveId = null;
-        if (activeId !== nextActiveId) {
-          setActiveId(nextActiveId);
-        }
+        setActiveId(null);
         return;
       }
 
@@ -615,6 +602,10 @@ export default function Analytics() {
       if (error) throw error;
 
       toast(`Todos os registros de ${targetSource.platformName} foram excluídos.`, 'success');
+      if (activeId === id) {
+        setActiveId(null);
+        localStorage.removeItem('mednet_analytics_active_id');
+      }
       await loadFromDatabase();
     } catch (err) {
       console.error('Erro ao excluir registros:', err);
@@ -985,8 +976,31 @@ export default function Analytics() {
           </div>
         )}
 
+        {/* Placeholder para Selecionar Fonte */}
+        {sourcesList.length > 0 && !activeId && !compare && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(158, 26, 69, 0.04), rgba(15, 25, 35, 0.01))',
+            borderRadius: '12px',
+            padding: '46px 20px',
+            textAlign: 'center',
+            border: '1px dashed var(--border)',
+            marginBottom: '22px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <i className="ti ti-hand-finger" style={{ fontSize: '36px', color: '#9E1A45' }}></i>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>Nenhum relatório selecionado</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, maxWidth: '500px', lineHeight: '1.5' }}>
+              Selecione uma das fontes de dados acima para carregar o relatório e visualizar os gráficos e indicadores de fadiga.
+            </p>
+          </div>
+        )}
+
         {/* KPIs Row */}
-        <FadigaKPIs d={d} prevD={prevD} />
+        {(activeId || compare) && <FadigaKPIs d={d} prevD={prevD} />}
 
         {/* Comparação */}
         {compare && sources.length >= 2 ? (
@@ -999,14 +1013,16 @@ export default function Analytics() {
           />
         ) : (
           /* Gráficos Individuais */
-          <FadigaCharts
-            d={d}
-            noData={noData}
-            selectedMonth={selectedMonth}
-            formatMonthKey={formatMonthKey}
-            selectedSeverity={selectedSeverity}
-            setSelectedSeverity={setSelectedSeverity}
-          />
+          (activeId || compare) && (
+            <FadigaCharts
+              d={d}
+              noData={noData}
+              selectedMonth={selectedMonth}
+              formatMonthKey={formatMonthKey}
+              selectedSeverity={selectedSeverity}
+              setSelectedSeverity={setSelectedSeverity}
+            />
+          )
         )}
 
         {/* Nota explicativa de rodapé */}

@@ -11,6 +11,7 @@ export const COLUMNS = {
   hora:           'Data da ocorrência',
   status:         'Status',
   tratadoPor:     'Tratado por',
+  metodoProcessamento: 'Método de processamento',
 };
 
 // Eventos que disparam INTERVENÇÃO IMEDIATA (Fadiga humana detectada).
