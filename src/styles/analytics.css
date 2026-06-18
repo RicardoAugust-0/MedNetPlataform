@@ -119,10 +119,29 @@
 
 /* Print Rules */
 @media print {
-  [data-noprint] { display: none !important; }
-  [data-app] { display: block !important; height: auto !important; overflow: visible !important; }
-  [data-content] { overflow: visible !important; height: auto !important; padding: 0 !important; }
-  [data-card] { break-inside: avoid; border: 1px solid #ccc !important; }
-  body { background: #fff !important; color: #000 !important; }
-  .card { page-break-inside: avoid; }
+  .sidebar, .topbar, button, select, .btn, .no-print, [data-noprint] {
+    display: none !important;
+  }
+  body, #app, .main-area, .content-area, .analytics-container {
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    left: 0 !important;
+    position: relative !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .card, [data-card] {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 20px !important;
+  }
 }

@@ -10,6 +10,7 @@
 
 import sascar   from './sascar/index.js';
 import maxtrack from './maxtrack/index.js';
+import omnilink from './omnilink/index.js';
 
 // Lista ordenada das plataformas disponíveis na UI.
 // 'active'  → exibida e selecionável no Monitor
@@ -18,7 +19,7 @@ import maxtrack from './maxtrack/index.js';
 export const PLATFORMS = [
   sascar,
   maxtrack,
-  // futuro: autotrack,
+  omnilink,
   // futuro: autotrack,
   // futuro: trimble,
   // futuro: cobli,

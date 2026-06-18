@@ -51,6 +51,8 @@ export const FIELD_DEFS = [
     aliases: ['inicio da tratativa', 'inicio tratativa', 'inicio do atendimento', 'atendido em', 'data inicio tratativa'] },
   { key: 'treatEnd',       label: 'Fim da tratativa', req: false,
     aliases: ['fim da tratativa', 'fim tratativa', 'finalizado em', 'encerramento', 'data fim tratativa', 'conclusao'] },
+  { key: 'description',    label: 'Descrição / Categoria', req: false,
+    aliases: ['descricao', 'categoria', 'description', 'category'] },
 ];
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -253,6 +255,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
 
   const timeSet = {}, critByTime = {}, typeByTime = {}, typeTotal = {};
   const falsoByTime = {}, totByTimeForFalso = {};
+  const categoryCounts = {};
 
   for (const tk of timeKeys) {
     timeSet[tk] = 0;
@@ -336,6 +339,11 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
 
     if (idx.evidence > -1) { if (hasEvid(get(row, 'evidence'))) evidDisp++; else evidAguard++; }
 
+    const desc = String(get(row, 'description') || '').trim();
+    if (desc) {
+      categoryCounts[desc] = (categoryCounts[desc] || 0) + 1;
+    }
+
     if (idx.treatStart > -1 && d) { const ts = toDate(get(row, 'treatStart')); if (ts) { const m = (ts - d) / 60000; if (m >= 0 && m < 1440) treatStartDiffs.push(m); } }
     if (idx.treatEnd > -1 && d) { const te = toDate(get(row, 'treatEnd')); if (te) { const m = (te - d) / 60000; if (m >= 0 && m < 4320) treatEndDiffs.push(m); } }
   }
@@ -406,6 +414,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
     vel: { labels: velLabels, valores: velBuckets },
     evidencia: (evidDisp + evidAguard) ? { disp: evidDisp, aguard: evidAguard } : null,
     hasEvidence: idx.evidence > -1 && (evidDisp + evidAguard) > 0,
+    categorias: categoryCounts,
   };
 }
 

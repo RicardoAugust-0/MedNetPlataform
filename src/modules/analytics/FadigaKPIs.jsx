@@ -1,4 +1,4 @@
-export default function FadigaKPIs({ d }) {
+export default function FadigaKPIs({ d, prevD }) {
   const k = d ? d.kpis : {};
   const pct = (v) => (v == null ? '—' : v + '%');
 
@@ -14,6 +14,52 @@ export default function FadigaKPIs({ d }) {
     color: accent,
   });
 
+  const renderTrend = (activeVal, prevVal, isRate, label) => {
+    if (activeVal == null || prevVal == null || prevVal === 0) return null;
+    
+    let diff;
+    if (isRate) {
+      diff = activeVal - prevVal;
+    } else {
+      diff = ((activeVal - prevVal) / prevVal) * 100;
+    }
+    
+    const absDiff = Math.abs(diff).toFixed(1).replace('.0', '');
+    const isUp = diff > 0;
+    
+    if (diff === 0) {
+      return (
+        <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 500 }}>
+          0% vs anterior
+        </span>
+      );
+    }
+    
+    const goodUpLabels = ['Alertas positivos', 'Com evidência'];
+    const isGoodUp = goodUpLabels.includes(label);
+    
+    let color;
+    if (isUp) {
+      color = isGoodUp ? 'var(--success-500, #2DA75A)' : 'var(--danger-500, #E24B4A)';
+    } else {
+      color = isGoodUp ? 'var(--danger-500, #E24B4A)' : 'var(--success-500, #2DA75A)';
+    }
+    
+    return (
+      <span style={{
+        fontSize: '11px',
+        color: color,
+        marginLeft: '6px',
+        fontWeight: 600,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '2px'
+      }}>
+        {isUp ? '▲' : '▼'} {absDiff}% vs anterior
+      </span>
+    );
+  };
+
   const kpis = [
     {
       icon: 'ti-alert-triangle',
@@ -23,6 +69,7 @@ export default function FadigaKPIs({ d }) {
         ? `${d.meta.motoristas.toLocaleString('pt-BR')} motoristas · ${d.meta.veiculos.toLocaleString('pt-BR')} veículos`
         : 'aguardando importação',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
+      trend: renderTrend(k.total, prevD?.kpis?.total, false, 'Total de alertas'),
     },
     {
       icon: 'ti-eye-check',
@@ -30,6 +77,7 @@ export default function FadigaKPIs({ d }) {
       value: d ? pct(k.pct_positivo) : '—',
       sub: 'fadiga / desatenção confirmada',
       iconStyle: iconStyle('#E24B4A', '#FCEBEB'),
+      trend: renderTrend(k.pct_positivo, prevD?.kpis?.pct_positivo, true, 'Alertas positivos'),
     },
     {
       icon: 'ti-shield-x',
@@ -37,6 +85,7 @@ export default function FadigaKPIs({ d }) {
       value: d ? pct(k.pct_falso) : '—',
       sub: d ? `${k.pct_naoclass}% sem classificação` : ' ',
       iconStyle: iconStyle('#E8A020', '#FAEEDA'),
+      trend: renderTrend(k.pct_falso, prevD?.kpis?.pct_falso, true, 'Falso positivo'),
     },
     {
       icon: 'ti-help-circle',
@@ -44,6 +93,7 @@ export default function FadigaKPIs({ d }) {
       value: d ? pct(k.pct_naoclass) : '—',
       sub: 'aguardando análise da operação',
       iconStyle: iconStyle('var(--text-secondary, #8A94A6)', 'var(--surface-2, #EAECF1)'),
+      trend: renderTrend(k.pct_naoclass, prevD?.kpis?.pct_naoclass, true, 'Sem classificação'),
     },
     {
       icon: 'ti-gauge',
@@ -51,6 +101,7 @@ export default function FadigaKPIs({ d }) {
       value: d && k.vel_mediana != null ? k.vel_mediana + ' km/h' : '—',
       sub: d && k.pct_vel_alta != null ? `${k.pct_vel_alta}% acima de 60 km/h` : 'sem dados de velocidade',
       iconStyle: iconStyle('#2A8DD9', '#E6F1FB'),
+      trend: renderTrend(k.vel_mediana, prevD?.kpis?.vel_mediana, false, 'Velocidade mediana'),
     },
     {
       icon: 'ti-video',
@@ -58,6 +109,7 @@ export default function FadigaKPIs({ d }) {
       value: d && k.pct_evidencia != null ? pct(k.pct_evidencia) : '—',
       sub: 'vídeo disponível p/ auditoria',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
+      trend: renderTrend(k.pct_evidencia, prevD?.kpis?.pct_evidencia, true, 'Com evidência'),
     },
     {
       icon: 'ti-clock-play',
@@ -65,6 +117,7 @@ export default function FadigaKPIs({ d }) {
       value: d && k.t_ini_mediana != null ? k.t_ini_mediana + ' min' : '—',
       sub: 'mediana do início da tratativa',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
+      trend: renderTrend(k.t_ini_mediana, prevD?.kpis?.t_ini_mediana, false, 'Tempo até tratar'),
     },
     {
       icon: 'ti-clock-check',
@@ -72,6 +125,7 @@ export default function FadigaKPIs({ d }) {
       value: d && k.t_fin_mediana != null ? k.t_fin_mediana + ' min' : '—',
       sub: 'mediana até finalização',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
+      trend: renderTrend(k.t_fin_mediana, prevD?.kpis?.t_fin_mediana, false, 'Tempo até finalizar'),
     },
   ];
 
@@ -87,8 +141,11 @@ export default function FadigaKPIs({ d }) {
               {k.label}
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, margin: '12px 0 6px', fontFeatureSettings: "'tnum'" }}>
-            {k.value}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap', margin: '12px 0 6px' }}>
+            <span style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, fontFeatureSettings: "'tnum'" }}>
+              {k.value}
+            </span>
+            {k.trend}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', minHeight: '15px' }}>
             {k.sub}

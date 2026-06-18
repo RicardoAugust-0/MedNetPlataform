@@ -44,11 +44,55 @@ export default function Analytics() {
     }
   });
 
+  const [selectedSeverity, setSelectedSeverity] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_severity') || 'all';
+    } catch (e) {
+      return 'all';
+    }
+  });
+
+  const [startDate, setStartDate] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_start_date') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
+  const [endDate, setEndDate] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_end_date') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
   const [modalOpen, setModalOpen] = useState(false);
   const [clock, setClock] = useState('');
   const toast = useToast();
   const { resolveMonitorName } = useCarrierAliases();
   const [selectedCompany, setSelectedCompany] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('mednet_analytics_severity', selectedSeverity);
+  }, [selectedSeverity]);
+
+  useEffect(() => {
+    if (startDate) {
+      localStorage.setItem('mednet_analytics_start_date', startDate);
+    } else {
+      localStorage.removeItem('mednet_analytics_start_date');
+    }
+  }, [startDate]);
+
+  useEffect(() => {
+    if (endDate) {
+      localStorage.setItem('mednet_analytics_end_date', endDate);
+    } else {
+      localStorage.removeItem('mednet_analytics_end_date');
+    }
+  }, [endDate]);
 
   useEffect(() => {
     setSelectedCompany('');
@@ -94,7 +138,8 @@ export default function Analytics() {
         'classification',
         'speed',
         'location',
-        'fleet'
+        'fleet',
+        'description'
       ];
 
       const mapping = {
@@ -106,7 +151,8 @@ export default function Analytics() {
         classification: 'classification',
         speed: 'speed',
         location: 'location',
-        fleet: 'fleet'
+        fleet: 'fleet',
+        description: 'description'
       };
 
       const dataRows = groupEvents.map((ev) => [
@@ -118,7 +164,8 @@ export default function Analytics() {
         ev.analise_ia_plataforma || '',
         ev.velocidade_kmh != null ? String(ev.velocidade_kmh) : '',
         ev.localidade || '',
-        ev.frota || ev.transportadora || ''
+        ev.frota || ev.transportadora || '',
+        ev.descricao || ''
       ]);
 
       const aggregatedData = aggregate(headers, dataRows, mapping, null);
@@ -204,7 +251,7 @@ export default function Analytics() {
           }
           setAvailableMonths(monthsList);
 
-          if (activeMonth === null || (activeMonth !== 'all' && !monthsList.includes(activeMonth))) {
+          if (activeMonth === null || (activeMonth !== 'all' && activeMonth !== 'custom' && !monthsList.includes(activeMonth))) {
             // Default to latest month on initial load or if the active month is invalid
             activeMonth = monthsList[0];
             setSelectedMonth(monthsList[0]);
@@ -219,47 +266,48 @@ export default function Analytics() {
 
       // Calculate total records we are actually loading (scoped by activeMonth if set)
       let loadingTotal = 0;
+      let startISO = null;
+      let endISO = null;
+
+      if (activeMonth === 'custom' && startDate && endDate) {
+        startISO = new Date(startDate + 'T00:00:00.000Z').toISOString();
+        endISO = new Date(endDate + 'T23:59:59.999Z').toISOString();
+      } else if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
+        const [y, m] = activeMonth.split('-');
+        const year = parseInt(y);
+        const month = parseInt(m);
+        if (!isNaN(year) && !isNaN(month)) {
+          // Query current month AND previous month (2 months total)
+          startISO = new Date(Date.UTC(year, month - 2, 1)).toISOString();
+          endISO = new Date(Date.UTC(year, month, 1)).toISOString();
+        }
+      }
+
       if (compare) {
-        if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
-          const [y, m] = activeMonth.split('-');
-          const year = parseInt(y);
-          const month = parseInt(m);
-          if (!isNaN(year) && !isNaN(month)) {
-            const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
-            const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
+        if (startISO && endISO) {
+          const { count: monthCount, error: monthCountErr } = await supabase
+            .from('driver_events')
+            .select('*', { count: 'exact', head: true })
+            .gte('ocorrido_em', startISO)
+            .lt('ocorrido_em', endISO);
 
-            const { count: monthCount, error: monthCountErr } = await supabase
-              .from('driver_events')
-              .select('*', { count: 'exact', head: true })
-              .gte('ocorrido_em', startDate)
-              .lt('ocorrido_em', endDate);
-
-            if (!monthCountErr) {
-              loadingTotal = monthCount || 0;
-            }
+          if (!monthCountErr) {
+            loadingTotal = monthCount || 0;
           }
         } else {
           loadingTotal = Object.values(counts).reduce((a, b) => a + b, 0);
         }
       } else {
-        if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
-          const [y, m] = activeMonth.split('-');
-          const year = parseInt(y);
-          const month = parseInt(m);
-          if (!isNaN(year) && !isNaN(month)) {
-            const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
-            const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
+        if (startISO && endISO) {
+          const { count: monthCount, error: monthCountErr } = await supabase
+            .from('driver_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('platform_id', targetPlatformId)
+            .gte('ocorrido_em', startISO)
+            .lt('ocorrido_em', endISO);
 
-            const { count: monthCount, error: monthCountErr } = await supabase
-              .from('driver_events')
-              .select('*', { count: 'exact', head: true })
-              .eq('platform_id', targetPlatformId)
-              .gte('ocorrido_em', startDate)
-              .lt('ocorrido_em', endDate);
-
-            if (!monthCountErr) {
-              loadingTotal = monthCount || 0;
-            }
+          if (!monthCountErr) {
+            loadingTotal = monthCount || 0;
           }
         } else {
           loadingTotal = counts[targetPlatformId] || 0;
@@ -277,23 +325,15 @@ export default function Analytics() {
           
           let query = supabase
             .from('driver_events')
-            .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em')
+            .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao')
             .order('ocorrido_em', { ascending: false });
 
           if (!compare && targetPlatformId) {
             query = query.eq('platform_id', targetPlatformId);
           }
 
-          if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
-            const [y, m] = activeMonth.split('-');
-            const year = parseInt(y);
-            const month = parseInt(m);
-            if (!isNaN(year) && !isNaN(month)) {
-              const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
-              const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
-
-              query = query.gte('ocorrido_em', startDate).lt('ocorrido_em', endDate);
-            }
+          if (startISO && endISO) {
+            query = query.gte('ocorrido_em', startISO).lt('ocorrido_em', endISO);
           }
 
           const { data, error } = await query.range(pageFrom, pageTo);
@@ -332,8 +372,35 @@ export default function Analytics() {
   };
 
   useEffect(() => {
-    loadFromDatabase();
-  }, [activeId, compare, selectedMonth]);
+    if (selectedMonth === 'custom' && (!startDate || !endDate)) {
+      let year, month;
+      if (availableMonths.length > 0) {
+        const [y, m] = availableMonths[0].split('-');
+        year = parseInt(y);
+        month = parseInt(m);
+      } else {
+        const today = new Date();
+        year = today.getFullYear();
+        month = today.getMonth() + 1;
+      }
+      const pad = (n) => String(n).padStart(2, '0');
+      const start = `${year}-${pad(month)}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const end = `${year}-${pad(month)}-${pad(lastDay)}`;
+      setStartDate(start);
+      setEndDate(end);
+    }
+  }, [selectedMonth, availableMonths, startDate, endDate]);
+
+  useEffect(() => {
+    if (selectedMonth === 'custom') {
+      if (startDate && endDate) {
+        loadFromDatabase();
+      }
+    } else {
+      loadFromDatabase();
+    }
+  }, [activeId, compare, selectedMonth, startDate, endDate]);
 
   useEffect(() => {
     if (activeId) {
@@ -393,13 +460,106 @@ export default function Analytics() {
     if (selectedCompany) {
       filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
     }
+    if (selectedSeverity && selectedSeverity !== 'all') {
+      if (selectedSeverity === 'high') {
+        filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+      } else if (selectedSeverity === 'medium') {
+        filteredRows = filteredRows.filter(row => row[3] === 'Médio');
+      } else {
+        filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
+      }
+    }
     return aggregate(
       activeSource.headers,
       filteredRows,
       activeSource.mapping,
-      selectedMonth === 'all' ? null : selectedMonth
+      selectedMonth === 'all' || selectedMonth === 'custom' ? null : selectedMonth
     );
-  }, [activeSource, selectedMonth, selectedCompany]);
+  }, [activeSource, selectedMonth, selectedCompany, selectedSeverity]);
+
+  const prevD = useMemo(() => {
+    if (!activeSource || !selectedMonth || selectedMonth === 'all' || selectedMonth === 'custom' || selectedMonth.indexOf('-') === -1) return null;
+    
+    const [y, m] = selectedMonth.split('-');
+    const year = parseInt(y);
+    const month = parseInt(m);
+    const prevDate = new Date(Date.UTC(year, month - 2, 1));
+    const py = prevDate.getUTCFullYear();
+    const pm = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
+    const prevMonthKey = `${py}-${pm}`;
+
+    let filteredRows = activeSource.dataRows;
+    if (selectedCompany) {
+      filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
+    }
+    if (selectedSeverity && selectedSeverity !== 'all') {
+      if (selectedSeverity === 'high') {
+        filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+      } else if (selectedSeverity === 'medium') {
+        filteredRows = filteredRows.filter(row => row[3] === 'Médio');
+      } else {
+        filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
+      }
+    }
+    return aggregate(
+      activeSource.headers,
+      filteredRows,
+      activeSource.mapping,
+      prevMonthKey
+    );
+  }, [activeSource, selectedMonth, selectedCompany, selectedSeverity]);
+
+  const exportToCSV = () => {
+    if (!activeSource) return;
+    let rowsToExport = activeSource.dataRows;
+    
+    if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom' && selectedMonth.indexOf('-') > -1) {
+      rowsToExport = rowsToExport.filter(row => {
+        const dt = new Date(row[0]);
+        if (isNaN(dt.getTime())) return false;
+        const mk = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        return mk === selectedMonth;
+      });
+    }
+
+    if (selectedCompany) {
+      rowsToExport = rowsToExport.filter(row => row[8] === selectedCompany);
+    }
+    if (selectedSeverity && selectedSeverity !== 'all') {
+      if (selectedSeverity === 'high') {
+        rowsToExport = rowsToExport.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+      } else if (selectedSeverity === 'medium') {
+        rowsToExport = rowsToExport.filter(row => row[3] === 'Médio');
+      } else {
+        rowsToExport = rowsToExport.filter(row => row[3] === selectedSeverity);
+      }
+    }
+    if (!rowsToExport.length) {
+      toast('Nenhum dado disponível para exportar com os filtros atuais.', 'warning');
+      return;
+    }
+    const headers = ['Data/Hora', 'Motorista', 'Placa', 'Severidade', 'Evento', 'Classificação', 'Velocidade (km/h)', 'Localidade', 'Frota/Empresa'];
+    const csvEscape = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(';') || str.includes('\n') || str.includes('"')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const lines = rowsToExport.map(row => row.map(csvEscape).join(';'));
+    const csvContent = '\uFEFF' + [headers.join(';'), ...lines].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio_fadiga_${activeSource.platformId}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast('Relatório CSV exportado com sucesso!', 'success');
+  };
 
   const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
     setSaving(true);
@@ -531,7 +691,7 @@ export default function Analytics() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             
             {/* Seletor Dinâmico de Mês */}
-            {activeId && availableMonths.length > 0 && (
+            {activeId && (availableMonths.length > 0 || selectedMonth === 'custom') && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Mês:</span>
                 <select
@@ -557,7 +717,50 @@ export default function Analytics() {
                       {formatMonthKey(m)}
                     </option>
                   ))}
+                  <option value="custom">Período Customizado...</option>
                 </select>
+              </div>
+            )}
+
+            {/* Seletor de Período Customizado */}
+            {activeId && selectedMonth === 'custom' && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginRight: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>De:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    style={{
+                      padding: '5px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: 'var(--text-primary)',
+                      background: 'var(--surface-0)',
+                      fontFamily: 'inherit',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>Até:</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{
+                      padding: '5px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: 'var(--text-primary)',
+                      background: 'var(--surface-0)',
+                      fontFamily: 'inherit',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -619,6 +822,27 @@ export default function Analytics() {
               </button>
             )}
             
+            {activeSource && (
+              <button
+                onClick={exportToCSV}
+                className="btn btn-sm btn-ghost"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-0)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 500,
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                }}
+              >
+                <i className="ti ti-download" style={{ fontSize: '14px' }}></i> Exportar CSV
+              </button>
+            )}
+
             <button
               onClick={() => window.print()}
               className="btn btn-sm btn-ghost"
@@ -762,7 +986,7 @@ export default function Analytics() {
         )}
 
         {/* KPIs Row */}
-        <FadigaKPIs d={d} />
+        <FadigaKPIs d={d} prevD={prevD} />
 
         {/* Comparação */}
         {compare && sources.length >= 2 ? (
@@ -771,6 +995,7 @@ export default function Analytics() {
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
             selectedCompany={selectedCompany}
+            selectedSeverity={selectedSeverity}
           />
         ) : (
           /* Gráficos Individuais */
@@ -779,6 +1004,8 @@ export default function Analytics() {
             noData={noData}
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
+            selectedSeverity={selectedSeverity}
+            setSelectedSeverity={setSelectedSeverity}
           />
         )}
 

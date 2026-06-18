@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
 
-export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey }) {
+export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey, selectedSeverity, setSelectedSeverity }) {
+  const [driversViewMode, setDriversViewMode] = useState('chart');
   const canvasMensalRef = useRef(null);
   const canvasCritRef = useRef(null);
   const canvasClfRef = useRef(null);
@@ -15,6 +17,7 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
   const canvasPlacaRef = useRef(null);
   const canvasUfRef = useRef(null);
   const canvasFrotaRef = useRef(null);
+  const canvasSascarCatRef = useRef(null);
 
   const chartsRef = useRef({});
 
@@ -464,6 +467,53 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
       });
     }
 
+    // 9.5. Sascar Categories
+    if (canvasSascarCatRef.current && d.categorias && Object.keys(d.categorias).length > 0) {
+      const catLabels = Object.keys(d.categorias);
+      const catValores = Object.values(d.categorias);
+      const total = catValores.reduce((a, b) => a + b, 0) || 1;
+      const cols = [C.vinho, C.info, C.warning, C.success, C.vinho2, C.orange];
+      
+      chartsRef.current.sascarCat = new Chart(canvasSascarCatRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels,
+          datasets: [
+            {
+              data: catValores,
+              backgroundColor: catLabels.map((_, i) => cols[i % cols.length]),
+              borderColor: 'var(--surface-0, #fff)',
+              borderWidth: 3,
+              hoverOffset: 6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: {
+                boxWidth: 10,
+                boxHeight: 10,
+                padding: 12,
+                usePointStyle: true,
+                pointStyle: 'rectRounded',
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (c) => ' ' + c.label + ': ' + fmt(c.parsed) + ' alertas (' + ((c.parsed / total) * 100).toFixed(1) + '%)',
+              },
+            },
+          },
+        },
+      });
+    }
+
     // Rankings Helper
     const hbar = (canvasRef, dd, color, key) => {
       if (!canvasRef.current || !dd.labels.length) return;
@@ -587,13 +637,89 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
           Severidade e qualidade dos alertas
         </div>
         <div className="grid-equal-2col">
-          <div data-card className="card" style={{ padding: '16px 18px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Volume por criticidade</h4>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-              {selectedMonth && selectedMonth !== 'all'
-                ? 'Composição da severidade ao longo dos dias do mês.'
-                : 'Composição da severidade ao longo dos meses.'}
-            </p>
+          <div data-card className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Volume por criticidade</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  {selectedMonth && selectedMonth !== 'all'
+                    ? 'Composição da severidade ao longo dos dias do mês.'
+                    : 'Composição da severidade ao longo dos meses.'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '2px', background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                <button
+                  onClick={() => setSelectedSeverity('all')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: selectedSeverity === 'all' ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: selectedSeverity === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => setSelectedSeverity('high')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: selectedSeverity === 'high' ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: selectedSeverity === 'high' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Grave/Gravíssimo
+                </button>
+                <button
+                  onClick={() => setSelectedSeverity('medium')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: selectedSeverity === 'medium' ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: selectedSeverity === 'medium' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Médios
+                </button>
+              </div>
+            </div>
+            {!noData && d && d.mensal_crit && d.mensal_crit.series && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(226,75,74,0.06)', border: '1px solid rgba(226,75,74,0.15)', padding: '4px 10px', borderRadius: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E24B4A' }}></span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Gravíssimo: <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{d.mensal_crit.series['Gravíssimo'].reduce((a, b) => a + b, 0).toLocaleString('pt-BR')}</span>
+                  </span>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(232,160,32,0.06)', border: '1px solid rgba(232,160,32,0.15)', padding: '4px 10px', borderRadius: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E8A020' }}></span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Grave: <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{d.mensal_crit.series['Grave'].reduce((a, b) => a + b, 0).toLocaleString('pt-BR')}</span>
+                  </span>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(42,141,217,0.06)', border: '1px solid rgba(42,141,217,0.15)', padding: '4px 10px', borderRadius: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2A8DD9' }}></span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Médio: <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{d.mensal_crit.series['Médio'].reduce((a, b) => a + b, 0).toLocaleString('pt-BR')}</span>
+                  </span>
+                </div>
+              </div>
+            )}
             <div style={{ position: 'relative', width: '100%', height: '260px' }}>
               <canvas ref={canvasCritRef}></canvas>
               {noData && (
@@ -656,6 +782,64 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
             </div>
           </div>
         </div>
+
+        {/* Categorias de Evento Sascar */}
+        {!noData && d && d.categorias && Object.keys(d.categorias).length > 0 && (
+          <div style={{ marginTop: '14px' }}>
+            <div style={{ fontSize: '10px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, margin: '28px 2px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ width: '16px', height: '2px', background: '#9E1A45', borderRadius: '2px', display: 'inline-block' }}></span>
+              Categorias de eventos (Sascar)
+            </div>
+            <div className="grid-equal-2col">
+              <div data-card className="card" style={{ padding: '16px 18px' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Alertas por categoria</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
+                  Distribuição proporcional de alertas por categoria na Sascar.
+                </p>
+                <div style={{ position: 'relative', width: '100%', height: '240px' }}>
+                  <canvas ref={canvasSascarCatRef}></canvas>
+                </div>
+              </div>
+              <div data-card className="card" style={{ padding: '16px 18px' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Resumo de categorias</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
+                  Detalhamento numérico e representação proporcional dos alertas.
+                </p>
+                <div style={{ overflowY: 'auto', height: '240px', marginTop: '10px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <th style={{ padding: '8px 4px', fontWeight: 600 }}>Categoria</th>
+                        <th style={{ padding: '8px 4px', fontWeight: 600, textAlign: 'right' }}>Alertas</th>
+                        <th style={{ padding: '8px 4px', fontWeight: 600, textAlign: 'right' }}>Representação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(d.categorias).map((cat) => {
+                        const total = Object.values(d.categorias).reduce((a, b) => a + b, 0) || 1;
+                        const val = d.categorias[cat];
+                        const pctVal = ((val / total) * 100).toFixed(1);
+                        return (
+                          <tr key={cat} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))' }}>
+                            <td style={{ padding: '8px 4px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {cat}
+                            </td>
+                            <td style={{ padding: '8px 4px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace" }}>
+                              {val.toLocaleString('pt-BR')}
+                            </td>
+                            <td style={{ padding: '8px 4px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: 'var(--text-muted)' }}>
+                              {pctVal}%
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quando os alertas acontecem */}
@@ -737,12 +921,50 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
           Ranking de exposição
         </div>
         <div className="grid-equal-2col">
-          <div data-card className="card" style={{ padding: '16px 18px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Top 15 motoristas</h4>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-              Maior número de alertas registrados no período selecionado.
-            </p>
-            <div style={{ position: 'relative', width: '100%', height: '400px' }}>
+          <div data-card className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Top 15 motoristas</h4>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  Maior número de alertas registrados no período selecionado.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '2px', background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                <button
+                  onClick={() => setDriversViewMode('chart')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: driversViewMode === 'chart' ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: driversViewMode === 'chart' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Gráfico
+                </button>
+                <button
+                  onClick={() => setDriversViewMode('table')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: driversViewMode === 'table' ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: driversViewMode === 'table' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Tabela
+                </button>
+              </div>
+            </div>
+            <div style={{ position: 'relative', width: '100%', height: '400px', display: driversViewMode === 'chart' ? 'block' : 'none', marginTop: '14px' }}>
               <canvas ref={canvasMotRef}></canvas>
               {noData && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '150px' }}>
@@ -751,6 +973,60 @@ export default function FadigaCharts({ d, noData, selectedMonth, formatMonthKey 
                 </div>
               )}
             </div>
+            {driversViewMode === 'table' && (
+              <div style={{ overflowY: 'auto', height: '400px', marginTop: '14px' }}>
+                {noData || !d?.top_motoristas?.labels?.length ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', height: '100%' }}>
+                    <i className="ti ti-user-exclamation" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
+                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <th style={{ padding: '8px 4px', fontWeight: 600 }}>Pos.</th>
+                        <th style={{ padding: '8px 4px', fontWeight: 600 }}>Motorista</th>
+                        <th style={{ padding: '8px 4px', fontWeight: 600, textAlign: 'right' }}>Alertas</th>
+                        <th style={{ padding: '8px 4px', fontWeight: 600, textAlign: 'center' }}>Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.top_motoristas.labels.map((driver, idx) => (
+                        <tr key={driver} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))' }}>
+                          <td style={{ padding: '8px 4px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                            #{idx + 1}
+                          </td>
+                          <td style={{ padding: '8px 4px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }} title={driver}>
+                            {driver}
+                          </td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 500 }}>
+                            {d.top_motoristas.valores[idx].toLocaleString('pt-BR')}
+                          </td>
+                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
+                            <Link
+                              to={`/dossies?driver=${encodeURIComponent(driver)}`}
+                              className="btn btn-sm btn-ghost"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 8px',
+                                fontSize: '11px',
+                                color: 'var(--accent-500, #9E1A45)',
+                                textDecoration: 'none',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <i className="ti ti-arrow-up-right"></i> Dossiê
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </div>
           <div data-card className="card" style={{ padding: '16px 18px' }}>
             <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Top 15 veículos (placa)</h4>

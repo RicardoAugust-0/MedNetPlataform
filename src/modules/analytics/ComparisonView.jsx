@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo } from 'react';
 import Chart from 'chart.js/auto';
 import { aggregate } from '../../utils/fatigueParser.js';
 
-export default function ComparisonView({ sources, selectedMonth, formatMonthKey, selectedCompany }) {
+export default function ComparisonView({ sources, selectedMonth, formatMonthKey, selectedCompany, selectedSeverity }) {
   const canvasCmpRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -13,6 +13,15 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
       let filteredRows = x.dataRows;
       if (selectedCompany) {
         filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
+      }
+      if (selectedSeverity && selectedSeverity !== 'all') {
+        if (selectedSeverity === 'high') {
+          filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+        } else if (selectedSeverity === 'medium') {
+          filteredRows = filteredRows.filter(row => row[3] === 'Médio');
+        } else {
+          filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
+        }
       }
       const agg = aggregate(x.headers, filteredRows, x.mapping, selectedMonth === 'all' ? null : selectedMonth);
       return {
@@ -25,7 +34,7 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
         evid: agg.kpis.pct_evidencia != null ? agg.kpis.pct_evidencia + '%' : '—',
       };
     });
-  }, [sources, selectedMonth, selectedCompany]);
+  }, [sources, selectedMonth, selectedCompany, selectedSeverity]);
 
   useEffect(() => {
     // Config Chart.js defaults
@@ -70,6 +79,15 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
         if (selectedCompany) {
           filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
         }
+        if (selectedSeverity && selectedSeverity !== 'all') {
+          if (selectedSeverity === 'high') {
+            filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+          } else if (selectedSeverity === 'medium') {
+            filteredRows = filteredRows.filter(row => row[3] === 'Médio');
+          } else {
+            filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
+          }
+        }
         const agg = aggregate(s.headers, filteredRows, s.mapping, selectedMonth === 'all' ? null : selectedMonth);
         return agg.kpis.total;
       });
@@ -77,6 +95,15 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
         let filteredRows = s.dataRows;
         if (selectedCompany) {
           filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
+        }
+        if (selectedSeverity && selectedSeverity !== 'all') {
+          if (selectedSeverity === 'high') {
+            filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
+          } else if (selectedSeverity === 'medium') {
+            filteredRows = filteredRows.filter(row => row[3] === 'Médio');
+          } else {
+            filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
+          }
         }
         const agg = aggregate(s.headers, filteredRows, s.mapping, selectedMonth === 'all' ? null : selectedMonth);
         return Math.round((agg.kpis.total * (agg.kpis.pct_positivo || 0)) / 100);
@@ -138,7 +165,7 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
         chartRef.current = null;
       }
     };
-  }, [sources, selectedMonth, selectedCompany]);
+  }, [sources, selectedMonth, selectedCompany, selectedSeverity]);
 
   return (
     <div style={{ marginTop: '20px' }}>
