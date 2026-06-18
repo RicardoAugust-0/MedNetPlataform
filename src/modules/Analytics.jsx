@@ -11,6 +11,9 @@ import ComparisonView from './analytics/ComparisonView.jsx';
 import FadigaCharts from './analytics/FadigaCharts.jsx';
 import ImportModal from './analytics/ImportModal.jsx';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+
 export default function Analytics() {
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +22,7 @@ export default function Analytics() {
   const [totalCount, setTotalCount] = useState(0);
   const [platformCounts, setPlatformCounts] = useState({});
   const [availableMonths, setAvailableMonths] = useState([]);
+  const [availableCompanies, setAvailableCompanies] = useState([]);
 
   const [activeId, setActiveId] = useState(null);
 
@@ -37,6 +41,24 @@ export default function Analytics() {
       return false;
     }
   });
+
+  const [comparePlatformIds, setComparePlatformIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mednet_analytics_compare_platform_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [tempSelected, setTempSelected] = useState([]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mednet_analytics_compare_platform_ids', JSON.stringify(comparePlatformIds));
+    } catch (e) {}
+  }, [comparePlatformIds]);
 
   const [selectedSeverity, setSelectedSeverity] = useState(() => {
     try {
@@ -108,93 +130,34 @@ export default function Analytics() {
     return () => clearInterval(id);
   }, []);
 
-  // Group database events by platform_id and shape them as sources format
-  const eventsToSources = (events) => {
-    const groups = {};
-    for (const ev of events) {
-      const pid = ev.platform_id || 'auto';
-      if (!groups[pid]) {
-        groups[pid] = [];
-      }
-      groups[pid].push(ev);
-    }
-
-    return Object.keys(groups).map((pid) => {
-      const platformName = PLATFORMS.find((p) => p.id === pid)?.name || pid;
-      const groupEvents = groups[pid];
-
-      const headers = [
-        'datetime',
-        'driver',
-        'plate',
-        'criticality',
-        'type',
-        'classification',
-        'speed',
-        'location',
-        'fleet',
-        'description'
-      ];
-
-      const mapping = {
-        datetime: 'datetime',
-        driver: 'driver',
-        plate: 'plate',
-        criticality: 'criticality',
-        type: 'type',
-        classification: 'classification',
-        speed: 'speed',
-        location: 'location',
-        fleet: 'fleet',
-        description: 'description'
-      };
-
-      const dataRows = groupEvents.map((ev) => [
-        ev.ocorrido_em,
-        ev.nome || '',
-        ev.placa || '',
-        ev.severidade || '',
-        ev.nome_evento || '',
-        ev.analise_ia_plataforma || '',
-        ev.velocidade_kmh != null ? String(ev.velocidade_kmh) : '',
-        ev.localidade || '',
-        ev.frota || ev.transportadora || '',
-        ev.descricao || ''
-      ]);
-
-      const aggregatedData = aggregate(headers, dataRows, mapping, null);
-
-      return {
-        id: 'src-' + pid,
-        name: platformName,
-        platformId: pid,
-        platformName,
-        rows: dataRows.length,
-        headers,
-        dataRows,
-        mapping,
-        data: aggregatedData
-      };
-    });
-  };
-
   const loadFromDatabase = async (preferredPlatformId = null) => {
     setLoading(true);
     setLoadProgress(0);
     setTotalCount(0);
     try {
-      // 1. Fetch exact total counts for all platforms in parallel
-      const counts = {};
-      const promises = PLATFORMS.map(async (p) => {
-        const { count, error } = await supabase
-          .from('driver_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('platform_id', p.id);
-        if (!error && count !== null) {
-          counts[p.id] = count;
+      // 1. Fetch platform counts from backend
+      let counts = {};
+      try {
+        const res = await fetch(`${API_URL}/api/platforms`);
+        if (res.ok) {
+          counts = await res.json();
+        } else {
+          throw new Error('Falha ao obter contagem do servidor');
         }
-      });
-      await Promise.all(promises);
+      } catch (err) {
+        console.warn('[MedNet] Fallback para Supabase local para contagem:', err);
+        // Fallback to client-side Supabase query
+        const promises = PLATFORMS.map(async (p) => {
+          const { count, error } = await supabase
+            .from('driver_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('platform_id', p.id);
+          if (!error && count !== null) {
+            counts[p.id] = count;
+          }
+        });
+        await Promise.all(promises);
+      }
       setPlatformCounts(counts);
 
       // Determine active platform ID to load
@@ -214,145 +177,69 @@ export default function Analytics() {
         return;
       }
 
-      // 2. Fetch the latest date to generate available months list (last 12 months)
       let activeMonth = selectedMonth;
-      if (targetPlatformId) {
-        const { data: latestRecord, error: latestErr } = await supabase
-          .from('driver_events')
-          .select('ocorrido_em')
-          .eq('platform_id', targetPlatformId)
-          .order('ocorrido_em', { ascending: false })
-          .limit(1);
 
-        if (!latestErr && latestRecord && latestRecord.length > 0) {
-          const latestDate = new Date(latestRecord[0].ocorrido_em);
-          const monthsList = [];
-          const currYear = latestDate.getFullYear();
-          const currMonth = latestDate.getMonth();
-          
-          for (let i = 0; i < 12; i++) {
-            const d = new Date(Date.UTC(currYear, currMonth - i, 1));
-            const y = d.getUTCFullYear();
-            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-            monthsList.push(`${y}-${m}`);
-          }
-          setAvailableMonths(monthsList);
-
-          if (activeMonth === null || (activeMonth !== 'all' && activeMonth !== 'custom' && !monthsList.includes(activeMonth))) {
-            // Default to latest month on initial load or if the active month is invalid
-            activeMonth = monthsList[0];
-            setSelectedMonth(monthsList[0]);
-          }
-        } else {
-          setAvailableMonths([]);
-        }
+      if (compare && (!comparePlatformIds || comparePlatformIds.length === 0)) {
+        setSources([]);
+        setLoading(false);
+        return;
       }
 
-      let allEvents = [];
-      const limit = 1000; // Optimized: Fetch 1000 records per page (PostgREST server-side max-rows limit)
+      // Load analytics from backend Express server
+      let url = `${API_URL}/api/analytics?`;
+      if (compare) {
+        url += `compare=true&platformIds=${comparePlatformIds.join(',')}`;
+      } else {
+        url += `platformId=${targetPlatformId}`;
+      }
 
-      // Calculate total records we are actually loading (scoped by activeMonth if set)
-      let loadingTotal = 0;
-      let startISO = null;
-      let endISO = null;
-
+      if (activeMonth) url += `&month=${activeMonth}`;
       if (activeMonth === 'custom' && startDate && endDate) {
-        startISO = new Date(startDate + 'T00:00:00.000Z').toISOString();
-        endISO = new Date(endDate + 'T23:59:59.999Z').toISOString();
-      } else if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
-        const [y, m] = activeMonth.split('-');
-        const year = parseInt(y);
-        const month = parseInt(m);
-        if (!isNaN(year) && !isNaN(month)) {
-          // Query current month AND previous month (2 months total)
-          startISO = new Date(Date.UTC(year, month - 2, 1)).toISOString();
-          endISO = new Date(Date.UTC(year, month, 1)).toISOString();
+        url += `&startDate=${startDate}&endDate=${endDate}`;
+      }
+      if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
+      if (selectedSeverity) url += `&severity=${selectedSeverity}`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Erro no servidor de analytics');
+      }
+
+      const data = await res.json();
+      
+      setAvailableMonths(data.availableMonths || []);
+      setAvailableCompanies(data.availableCompanies || []);
+
+      const monthsList = data.availableMonths || [];
+      if (monthsList.length > 0) {
+        if (activeMonth === null || (activeMonth !== 'all' && activeMonth !== 'custom' && !monthsList.includes(activeMonth))) {
+          // Default to latest month on initial load or if the active month is invalid
+          setSelectedMonth(monthsList[0]);
         }
       }
 
       if (compare) {
-        if (startISO && endISO) {
-          const { count: monthCount, error: monthCountErr } = await supabase
-            .from('driver_events')
-            .select('*', { count: 'exact', head: true })
-            .gte('ocorrido_em', startISO)
-            .lt('ocorrido_em', endISO);
-
-          if (!monthCountErr) {
-            loadingTotal = monthCount || 0;
-          }
-        } else {
-          loadingTotal = Object.values(counts).reduce((a, b) => a + b, 0);
-        }
+        setSources(data.sources || []);
       } else {
-        if (startISO && endISO) {
-          const { count: monthCount, error: monthCountErr } = await supabase
-            .from('driver_events')
-            .select('*', { count: 'exact', head: true })
-            .eq('platform_id', targetPlatformId)
-            .gte('ocorrido_em', startISO)
-            .lt('ocorrido_em', endISO);
-
-          if (!monthCountErr) {
-            loadingTotal = monthCount || 0;
-          }
-        } else {
-          loadingTotal = counts[targetPlatformId] || 0;
-        }
-      }
-      setTotalCount(loadingTotal);
-
-      if (loadingTotal > 0) {
-        const numPages = Math.ceil(loadingTotal / limit);
-        console.log(`[MedNet] loadingTotal: ${loadingTotal}, numPages: ${numPages}, platform: ${targetPlatformId}, month: ${activeMonth}`);
-        
-        const fetchPage = async (pageIdx) => {
-          const pageFrom = pageIdx * limit;
-          const pageTo = pageFrom + limit - 1;
-          
-          let query = supabase
-            .from('driver_events')
-            .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao')
-            .order('ocorrido_em', { ascending: false });
-
-          if (!compare && targetPlatformId) {
-            query = query.eq('platform_id', targetPlatformId);
-          }
-
-          if (startISO && endISO) {
-            query = query.gte('ocorrido_em', startISO).lt('ocorrido_em', endISO);
-          }
-
-          const { data, error } = await query.range(pageFrom, pageTo);
-          if (error) throw error;
-          return data || [];
+        const platformName = PLATFORMS.find(p => p.id === targetPlatformId)?.name || targetPlatformId;
+        const singleSource = {
+          id: 'src-' + targetPlatformId,
+          platformId: targetPlatformId,
+          platformName,
+          data: data.d,
+          prevD: data.prevD
         };
-
-        // Query pages in batches of 10 parallel connections to maximize speed while preventing DB pool exhaustion
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < numPages; i += BATCH_SIZE) {
-          const batchPromises = [];
-          for (let j = i; j < Math.min(i + BATCH_SIZE, numPages); j++) {
-            batchPromises.push(fetchPage(j));
-          }
-          const results = await Promise.all(batchPromises);
-          for (const res of results) {
-            allEvents.push(...res);
-          }
-          setLoadProgress(allEvents.length);
-        }
+        setSources([singleSource]);
       }
-
-      const nextSources = eventsToSources(allEvents);
-      setSources(nextSources);
 
       const nextActiveId = targetPlatformId ? 'src-' + targetPlatformId : null;
       if (activeId !== nextActiveId) {
         setActiveId(nextActiveId);
       }
     } catch (err) {
-      console.error('Erro ao carregar dados do banco:', err);
-      toast('Erro ao carregar banco: ' + (err.message || String(err)), 'error');
+      console.error('Erro ao carregar dados do banco/servidor:', err);
+      toast('Erro ao carregar dados: ' + (err.message || String(err)), 'error');
     } finally {
       setLoading(false);
     }
@@ -387,7 +274,7 @@ export default function Analytics() {
     } else {
       loadFromDatabase();
     }
-  }, [activeId, compare, selectedMonth, startDate, endDate]);
+  }, [activeId, compare, comparePlatformIds, selectedMonth, startDate, endDate, selectedCompany, selectedSeverity]);
 
   useEffect(() => {
     if (activeId) {
@@ -409,143 +296,31 @@ export default function Analytics() {
     localStorage.setItem('mednet_analytics_compare', String(compare));
   }, [compare]);
 
-  // Process loaded sources to resolve raw fleet names to clean carrier/company names
-  const processedSources = useMemo(() => {
-    return sources.map(src => ({
-      ...src,
-      dataRows: src.dataRows.map(row => {
-        const copy = [...row];
-        // Resolve raw fleet name (row[8]) to clean company name
-        copy[8] = resolveMonitorName(row[8]) || 'Não informado';
-        return copy;
-      })
-    }));
-  }, [sources, resolveMonitorName]);
-
   // Compute active source and its aggregated data reactively
   const activeSource = useMemo(() => {
-    return processedSources.find((s) => s.id === activeId) || null;
-  }, [processedSources, activeId]);
-
-  // Calculate unique clean companies present in the active data
-  const availableCompanies = useMemo(() => {
-    const set = new Set();
-    const targets = compare ? processedSources : (activeSource ? [activeSource] : []);
-    targets.forEach(src => {
-      src.dataRows.forEach(row => {
-        if (row[8] && row[8] !== 'Não informado') {
-          set.add(row[8]);
-        }
-      });
-    });
-    return Array.from(set).sort();
-  }, [processedSources, activeSource, compare]);
+    return sources.find((s) => s.id === activeId) || null;
+  }, [sources, activeId]);
 
   const d = useMemo(() => {
-    if (!activeSource) return null;
-    let filteredRows = activeSource.dataRows;
-    if (selectedCompany) {
-      filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
-    }
-    if (selectedSeverity && selectedSeverity !== 'all') {
-      if (selectedSeverity === 'high') {
-        filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-      } else if (selectedSeverity === 'medium') {
-        filteredRows = filteredRows.filter(row => row[3] === 'Médio');
-      } else {
-        filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
-      }
-    }
-    return aggregate(
-      activeSource.headers,
-      filteredRows,
-      activeSource.mapping,
-      selectedMonth === 'all' || selectedMonth === 'custom' ? null : selectedMonth
-    );
-  }, [activeSource, selectedMonth, selectedCompany, selectedSeverity]);
+    return activeSource ? activeSource.data : null;
+  }, [activeSource]);
 
   const prevD = useMemo(() => {
-    if (!activeSource || !selectedMonth || selectedMonth === 'all' || selectedMonth === 'custom' || selectedMonth.indexOf('-') === -1) return null;
-    
-    const [y, m] = selectedMonth.split('-');
-    const year = parseInt(y);
-    const month = parseInt(m);
-    const prevDate = new Date(Date.UTC(year, month - 2, 1));
-    const py = prevDate.getUTCFullYear();
-    const pm = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
-    const prevMonthKey = `${py}-${pm}`;
-
-    let filteredRows = activeSource.dataRows;
-    if (selectedCompany) {
-      filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
-    }
-    if (selectedSeverity && selectedSeverity !== 'all') {
-      if (selectedSeverity === 'high') {
-        filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-      } else if (selectedSeverity === 'medium') {
-        filteredRows = filteredRows.filter(row => row[3] === 'Médio');
-      } else {
-        filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
-      }
-    }
-    return aggregate(
-      activeSource.headers,
-      filteredRows,
-      activeSource.mapping,
-      prevMonthKey
-    );
-  }, [activeSource, selectedMonth, selectedCompany, selectedSeverity]);
+    return activeSource ? activeSource.prevD : null;
+  }, [activeSource]);
 
   const exportToCSV = () => {
     if (!activeSource) return;
-    let rowsToExport = activeSource.dataRows;
-    
-    if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom' && selectedMonth.indexOf('-') > -1) {
-      rowsToExport = rowsToExport.filter(row => {
-        const dt = new Date(row[0]);
-        if (isNaN(dt.getTime())) return false;
-        const mk = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-        return mk === selectedMonth;
-      });
+    let url = `${API_URL}/api/analytics/csv?platformId=${activeSource.platformId}`;
+    if (selectedMonth) url += `&month=${selectedMonth}`;
+    if (selectedMonth === 'custom' && startDate && endDate) {
+      url += `&startDate=${startDate}&endDate=${endDate}`;
     }
+    if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
+    if (selectedSeverity) url += `&severity=${selectedSeverity}`;
 
-    if (selectedCompany) {
-      rowsToExport = rowsToExport.filter(row => row[8] === selectedCompany);
-    }
-    if (selectedSeverity && selectedSeverity !== 'all') {
-      if (selectedSeverity === 'high') {
-        rowsToExport = rowsToExport.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-      } else if (selectedSeverity === 'medium') {
-        rowsToExport = rowsToExport.filter(row => row[3] === 'Médio');
-      } else {
-        rowsToExport = rowsToExport.filter(row => row[3] === selectedSeverity);
-      }
-    }
-    if (!rowsToExport.length) {
-      toast('Nenhum dado disponível para exportar com os filtros atuais.', 'warning');
-      return;
-    }
-    const headers = ['Data/Hora', 'Motorista', 'Placa', 'Severidade', 'Evento', 'Classificação', 'Velocidade (km/h)', 'Localidade', 'Frota/Empresa'];
-    const csvEscape = (val) => {
-      if (val === null || val === undefined) return '';
-      const str = String(val);
-      if (str.includes(';') || str.includes('\n') || str.includes('"')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-    const lines = rowsToExport.map(row => row.map(csvEscape).join(';'));
-    const csvContent = '\uFEFF' + [headers.join(';'), ...lines].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `relatorio_fadiga_${activeSource.platformId}_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast('Relatório CSV exportado com sucesso!', 'success');
+    // Open download link directly in the browser
+    window.location.href = url;
   };
 
   const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
@@ -565,6 +340,17 @@ export default function Analytics() {
         if (upsertError) throw upsertError;
       }
 
+      // Clear cache on the backend to reflect imported data immediately
+      try {
+        await fetch(`${API_URL}/api/clear-cache`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platformId }),
+        });
+      } catch (cacheErr) {
+        console.warn('[MedNet] Falha ao limpar cache no backend:', cacheErr);
+      }
+
       setModalOpen(false);
       toast(
         `Planilha processada · ${platformName} · ${rowsToInsert.length.toLocaleString(
@@ -580,6 +366,39 @@ export default function Analytics() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCompareClick = () => {
+    if (compare) {
+      setCompare(false);
+      setComparePlatformIds([]);
+      const firstAvailable = sourcesList[0]?.id || null;
+      setActiveId(firstAvailable);
+    } else {
+      const initialSelected = activeId ? [activeId.replace('src-', '')] : [];
+      setTempSelected(initialSelected);
+      setCompareModalOpen(true);
+    }
+  };
+
+  const handleToggleTempCompare = (pid) => {
+    setTempSelected((prev) => {
+      if (prev.includes(pid)) {
+        return prev.filter((x) => x !== pid);
+      } else {
+        return [...prev, pid];
+      }
+    });
+  };
+
+  const handleConfirmCompare = () => {
+    if (tempSelected.length < 2) {
+      toast('Por favor, selecione pelo menos duas plataformas para comparar.', 'warning');
+      return;
+    }
+    setComparePlatformIds(tempSelected);
+    setCompare(true);
+    setCompareModalOpen(false);
   };
 
   const removeSource = async (id, event) => {
@@ -791,9 +610,11 @@ export default function Analytics() {
               {d && d.meta.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
             </span>
             
+
+            
             {sourcesList.length >= 2 && (
               <button
-                onClick={() => setCompare(!compare)}
+                onClick={handleCompareClick}
                 className="btn btn-sm"
                 style={{
                   display: 'inline-flex',
@@ -1005,7 +826,7 @@ export default function Analytics() {
         {/* Comparação */}
         {compare && sources.length >= 2 ? (
           <ComparisonView
-            sources={processedSources}
+            sources={sources}
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
             selectedCompany={selectedCompany}
@@ -1040,6 +861,106 @@ export default function Analytics() {
         saving={saving}
         onImportConfirm={onImportConfirm}
       />
+
+      {/* MODAL DE SELEÇÃO PARA COMPARAÇÃO */}
+      {compareModalOpen && (
+        <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '450px', maxWidth: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
+            
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="ti ti-arrows-diff" style={{ fontSize: '18px', color: '#9E1A45' }}></i> Selecionar plataformas para comparar
+              </div>
+              <button
+                onClick={() => setCompareModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '18px', padding: '4px', display: 'flex' }}
+              >
+                <i className="ti ti-x"></i>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+                Escolha pelo menos duas plataformas com dados importados para comparar seus volumes, criticidades e distribuições de alertas:
+              </p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {sourcesList.map((src) => {
+                  const pid = src.platformId;
+                  const isChecked = tempSelected.includes(pid);
+                  return (
+                    <label
+                      key={src.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        background: isChecked ? 'rgba(158, 26, 69, 0.03)' : 'var(--surface-1)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleTempCompare(pid)}
+                          style={{
+                            cursor: 'pointer',
+                            accentColor: '#9E1A45',
+                            width: '15px',
+                            height: '15px'
+                          }}
+                        />
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {src.platformName}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {src.rows.toLocaleString('pt-BR')} reg.
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
+              <button
+                onClick={() => setCompareModalOpen(false)}
+                className="btn btn-sm btn-ghost"
+                style={{ borderRadius: '8px', padding: '8px 14px', fontSize: '12.5px', cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmCompare}
+                disabled={tempSelected.length < 2}
+                className="btn btn-sm btn-primary"
+                style={{
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '12.5px',
+                  cursor: tempSelected.length >= 2 ? 'pointer' : 'not-allowed',
+                  opacity: tempSelected.length >= 2 ? 1 : 0.6,
+                  border: 'none',
+                  background: '#9E1A45',
+                  color: '#fff'
+                }}
+              >
+                Comparar ({tempSelected.length})
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

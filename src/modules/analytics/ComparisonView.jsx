@@ -1,6 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
 import Chart from 'chart.js/auto';
-import { aggregate } from '../../utils/fatigueParser.js';
 
 export default function ComparisonView({ sources, selectedMonth, formatMonthKey, selectedCompany, selectedSeverity }) {
   const canvasCmpRef = useRef(null);
@@ -10,31 +9,19 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
   const compareRows = useMemo(() => {
     const cmpCols = ['#9E1A45', '#2A8DD9', '#E8A020', '#2DA75A', '#C24A6A', '#F26931', '#7A1235', '#6F6A88'];
     return sources.map((x, i) => {
-      let filteredRows = x.dataRows;
-      if (selectedCompany) {
-        filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
-      }
-      if (selectedSeverity && selectedSeverity !== 'all') {
-        if (selectedSeverity === 'high') {
-          filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-        } else if (selectedSeverity === 'medium') {
-          filteredRows = filteredRows.filter(row => row[3] === 'Médio');
-        } else {
-          filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
-        }
-      }
-      const agg = aggregate(x.headers, filteredRows, x.mapping, selectedMonth === 'all' ? null : selectedMonth);
+      const agg = x.data;
+      if (!agg) return null;
       return {
         platformName: x.platformName,
         color: cmpCols[i % cmpCols.length],
-        total: agg.kpis.total.toLocaleString('pt-BR'),
+        total: agg.kpis.total != null ? agg.kpis.total.toLocaleString('pt-BR') : '0',
         pos: agg.kpis.pct_positivo != null ? agg.kpis.pct_positivo + '%' : '—',
         falso: agg.kpis.pct_falso != null ? agg.kpis.pct_falso + '%' : '—',
         vel: agg.kpis.vel_mediana != null ? agg.kpis.vel_mediana : '—',
         evid: agg.kpis.pct_evidencia != null ? agg.kpis.pct_evidencia + '%' : '—',
       };
-    });
-  }, [sources, selectedMonth, selectedCompany, selectedSeverity]);
+    }).filter(Boolean);
+  }, [sources]);
 
   useEffect(() => {
     // Config Chart.js defaults
@@ -74,39 +61,11 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
 
     if (sources.length >= 2 && canvasCmpRef.current) {
       const labels = sources.map((s) => s.platformName);
-      const datasetsTotal = sources.map((s) => {
-        let filteredRows = s.dataRows;
-        if (selectedCompany) {
-          filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
-        }
-        if (selectedSeverity && selectedSeverity !== 'all') {
-          if (selectedSeverity === 'high') {
-            filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-          } else if (selectedSeverity === 'medium') {
-            filteredRows = filteredRows.filter(row => row[3] === 'Médio');
-          } else {
-            filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
-          }
-        }
-        const agg = aggregate(s.headers, filteredRows, s.mapping, selectedMonth === 'all' ? null : selectedMonth);
-        return agg.kpis.total;
-      });
+      const datasetsTotal = sources.map((s) => (s.data?.kpis?.total || 0));
       const datasetsPos = sources.map((s) => {
-        let filteredRows = s.dataRows;
-        if (selectedCompany) {
-          filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
-        }
-        if (selectedSeverity && selectedSeverity !== 'all') {
-          if (selectedSeverity === 'high') {
-            filteredRows = filteredRows.filter(row => row[3] === 'Grave' || row[3] === 'Gravíssimo');
-          } else if (selectedSeverity === 'medium') {
-            filteredRows = filteredRows.filter(row => row[3] === 'Médio');
-          } else {
-            filteredRows = filteredRows.filter(row => row[3] === selectedSeverity);
-          }
-        }
-        const agg = aggregate(s.headers, filteredRows, s.mapping, selectedMonth === 'all' ? null : selectedMonth);
-        return Math.round((agg.kpis.total * (agg.kpis.pct_positivo || 0)) / 100);
+        const total = s.data?.kpis?.total || 0;
+        const pctPos = s.data?.kpis?.pct_positivo || 0;
+        return Math.round((total * pctPos) / 100);
       });
 
       chartRef.current = new Chart(canvasCmpRef.current, {
