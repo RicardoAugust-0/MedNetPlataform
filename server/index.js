@@ -111,6 +111,7 @@ async function getRawEvents(platformId) {
           .from('driver_events')
           .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao')
           .eq('platform_id', platformId)
+          .order('id')
           .range(from, to)
           .then(({ data, error }) => {
             if (error) throw error;

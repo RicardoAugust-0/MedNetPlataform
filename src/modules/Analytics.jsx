@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { PLATFORMS, aggregate } from '../utils/fatigueParser.js';
+import { PLATFORMS } from '../utils/fatigueParser.js';
 import { supabase } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
@@ -11,8 +11,12 @@ import ComparisonView from './analytics/ComparisonView.jsx';
 import FadigaCharts from './analytics/FadigaCharts.jsx';
 import ImportModal from './analytics/ImportModal.jsx';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Modular components
+import AnalyticsHeader from './analytics/components/AnalyticsHeader.jsx';
+import SourceChips from './analytics/components/SourceChips.jsx';
+import ComparisonModal from './analytics/components/ComparisonModal.jsx';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function Analytics() {
   const [sources, setSources] = useState([]);
@@ -132,8 +136,10 @@ export default function Analytics() {
   // Tick clock
   useEffect(() => {
     const tick = () => {
+      const now = new Date();
       setClock(
-        new Date().toLocaleTimeString('pt-BR', {
+        now.toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
@@ -254,39 +260,40 @@ export default function Analytics() {
           id: 'src-' + targetPlatformId,
           platformId: targetPlatformId,
           platformName,
-          data: data.d,
+          rows: data.d,
           prevD: data.prevD
         };
         setSources([singleSource]);
-      }
-
-      const nextActiveId = targetPlatformId ? 'src-' + targetPlatformId : null;
-      if (activeId !== nextActiveId) {
-        setActiveId(nextActiveId);
+        if (activeId !== 'src-' + targetPlatformId) {
+          setActiveId('src-' + targetPlatformId);
+        }
       }
     } catch (err) {
-      console.error('Erro ao carregar dados do banco/servidor:', err);
-      toast('Erro ao carregar dados: ' + (err.message || String(err)), 'error');
+      console.error('[MedNet] Erro ao carregar analíticos:', err);
+      toast('Não foi possível carregar os dados de analytics: ' + (err.message || String(err)), 'error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (selectedMonth === 'custom' && (!startDate || !endDate)) {
-      let year, month;
-      if (availableMonths.length > 0) {
-        const [y, m] = availableMonths[0].split('-');
-        year = parseInt(y);
-        month = parseInt(m);
-      } else {
-        const today = new Date();
-        year = today.getFullYear();
-        month = today.getMonth() + 1;
-      }
-      const pad = (n) => String(n).padStart(2, '0');
-      const start = `${year}-${pad(month)}-01`;
+    // Read saved active_id if present
+    const saved = localStorage.getItem('mednet_analytics_active_id');
+    if (saved && !activeId && !compare) {
+      setActiveId(saved);
+      loadFromDatabase(saved.replace('src-', ''), false);
+    } else {
+      loadFromDatabase(null, false);
+    }
+  }, []);
+
+  // Update dates automatically when selecting a dynamic month
+  useEffect(() => {
+    if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom') {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const start = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(year, month, 0).getDate();
+      const pad = (n) => String(n).padStart(2, '0');
       const end = `${year}-${pad(month)}-${pad(lastDay)}`;
       setStartDate(start);
       setEndDate(end);
@@ -349,8 +356,6 @@ export default function Analytics() {
     return sources.find((s) => s.id === activeId) || null;
   }, [sources, activeId]);
 
-  // d and prevD are now state hooks populated directly from loadFromDatabase
-
   const exportToCSV = () => {
     if (!activeSource) return;
     let url = `${API_URL}/api/analytics/csv?platformId=${activeSource.platformId}`;
@@ -363,14 +368,12 @@ export default function Analytics() {
     if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
     if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
 
-    // Open download link directly in the browser
     window.location.href = url;
   };
 
   const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
     setSaving(true);
     try {
-      // Bulk upsert in chunks of 2500 for optimized performance
       const CHUNK_SIZE = 2500;
       for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
         const chunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
@@ -384,7 +387,6 @@ export default function Analytics() {
         if (upsertError) throw upsertError;
       }
 
-      // Clear cache on the backend to reflect imported data immediately
       try {
         await fetch(`${API_URL}/api/clear-cache`, {
           method: 'POST',
@@ -447,7 +449,7 @@ export default function Analytics() {
 
   const removeSource = async (id, event) => {
     event.stopPropagation();
-    const targetSource = processedSources.find((s) => s.id === id);
+    const targetSource = sourcesList.find((s) => s.id === id);
     if (!targetSource) return;
 
     const confirmed = window.confirm(
@@ -534,234 +536,33 @@ export default function Analytics() {
     <div style={{ width: '100%', padding: '4px 0 24px' }}>
       <div className="analytics-container">
         
-        {/* Header da Página */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          <div>
-            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Análise de Fadiga</h2>
-            <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Consolidação multi-plataforma de alertas de fadiga e desatenção
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            
-            {/* Seletor Dinâmico de Mês */}
-            {(activeId || compare) && (availableMonths.length > 0 || selectedMonth === 'custom') && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Mês:</span>
-                <select
-                  value={selectedMonth || 'all'}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  style={{
-                    padding: '6px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    fontSize: '12.5px',
-                    fontWeight: 500,
-                    color: 'var(--text-primary)',
-                    background: 'var(--surface-0)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <option value="all">Todos os meses</option>
-                  {availableMonths.map((m) => (
-                    <option key={m} value={m}>
-                      {formatMonthKey(m)}
-                    </option>
-                  ))}
-                  <option value="custom">Período Customizado...</option>
-                </select>
-              </div>
-            )}
+        <AnalyticsHeader
+          activeId={activeId}
+          compare={compare}
+          availableMonths={availableMonths}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          formatMonthKey={formatMonthKey}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
+          d={d}
+          sourcesList={sourcesList}
+          handleCompareClick={handleCompareClick}
+          activeSource={activeSource}
+          exportToCSV={exportToCSV}
+          setModalOpen={setModalOpen}
+        />
 
-            {/* Seletor de Período Customizado */}
-            {(activeId || compare) && selectedMonth === 'custom' && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginRight: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>De:</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    style={{
-                      padding: '5px 8px',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      color: 'var(--text-primary)',
-                      background: 'var(--surface-0)',
-                      fontFamily: 'inherit',
-                      outline: 'none'
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>Até:</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    style={{
-                      padding: '5px 8px',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      color: 'var(--text-primary)',
-                      background: 'var(--surface-0)',
-                      fontFamily: 'inherit',
-                      outline: 'none'
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-
-
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
-              <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
-              {d && d.meta.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
-            </span>
-            
-
-            
-            {sourcesList.length >= 2 && (
-              <button
-                onClick={handleCompareClick}
-                className="btn btn-sm"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontFamily: 'inherit',
-                  border: compare ? '1px solid #9E1A45' : '1px solid var(--border)',
-                  background: compare ? 'rgba(158, 26, 69, 0.05)' : 'var(--surface-0)',
-                  color: compare ? '#9E1A45' : 'var(--text-primary)',
-                  fontWeight: 500,
-                  borderRadius: '8px',
-                  padding: '7px 12px',
-                  cursor: 'pointer',
-                }}
-              >
-                <i className="ti ti-arrows-diff" style={{ fontSize: '14px' }}></i> Comparar plataformas
-              </button>
-            )}
-            
-            {activeSource && (
-              <button
-                onClick={exportToCSV}
-                className="btn btn-sm btn-ghost"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 12px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface-0)',
-                  color: 'var(--text-primary)',
-                  fontWeight: 500,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                }}
-              >
-                <i className="ti ti-download" style={{ fontSize: '14px' }}></i> Exportar CSV
-              </button>
-            )}
-
-            <button
-              onClick={() => window.print()}
-              className="btn btn-sm btn-ghost"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 12px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface-0)',
-                color: 'var(--text-primary)',
-                fontWeight: 500,
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
-            >
-              <i className="ti ti-file-type-pdf" style={{ fontSize: '14px' }}></i> Exportar PDF
-            </button>
-            
-            <button
-              onClick={() => setModalOpen(true)}
-              className="btn btn-sm btn-primary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 13px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
-            >
-              <i className="ti ti-upload" style={{ fontSize: '14px' }}></i> Importar planilha
-            </button>
-          </div>
-        </div>
-
-        {/* Chips de Fontes */}
-        {sourcesList.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
-            <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontWeight: 600 }}>
-              Fontes
-            </span>
-            {sourcesList.map((src) => (
-              <div
-                key={src.id}
-                onClick={() => {
-                  setCompare(false);
-                  setActiveId(src.id);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '9px',
-                  padding: '7px 10px',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  background: 'var(--surface-0)',
-                  border: src.id === activeId && !compare ? '1px solid #9E1A45' : '1px solid var(--border)',
-                  boxShadow: src.id === activeId && !compare ? '0 0 0 1px rgba(158,26,69,0.15)' : 'none',
-                  transition: 'all .15s ease',
-                }}
-              >
-                <i className="ti ti-table" style={{ fontSize: '14px', flexShrink: 0, color: '#9E1A45' }}></i>
-                <div style={{ minWidth: 0, lineHeight: 1.25 }}>
-                  <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)' }}>{src.platformName}</div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                    {src.rows.toLocaleString('pt-BR')} reg.
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => removeSource(src.id, e)}
-                  title="Remover fonte"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: '2px',
-                    display: 'grid',
-                    placeItems: 'center',
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger-500, #E24B4A)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-                >
-                  <i className="ti ti-x" style={{ fontSize: '13px' }}></i>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <SourceChips
+          sourcesList={sourcesList}
+          activeId={activeId}
+          compare={compare}
+          setCompare={setCompare}
+          setActiveId={setActiveId}
+          removeSource={removeSource}
+        />
 
         {/* Hero de Sem Dados */}
         {sourcesList.length === 0 && (
@@ -879,7 +680,6 @@ export default function Analytics() {
 
       </div>
 
-      {/* MODAL DE IMPORTAÇÃO */}
       <ImportModal
         modalOpen={modalOpen}
         setModalOpen={setModalOpen}
@@ -887,105 +687,13 @@ export default function Analytics() {
         onImportConfirm={onImportConfirm}
       />
 
-      {/* MODAL DE SELEÇÃO PARA COMPARAÇÃO */}
-      {compareModalOpen && (
-        <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '450px', maxWidth: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
-            
-            {/* Modal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="ti ti-arrows-diff" style={{ fontSize: '18px', color: '#9E1A45' }}></i> Selecionar plataformas para comparar
-              </div>
-              <button
-                onClick={() => setCompareModalOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '18px', padding: '4px', display: 'flex' }}
-              >
-                <i className="ti ti-x"></i>
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ marginBottom: '20px' }}>
-              <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
-                Escolha pelo menos duas plataformas com dados importados para comparar seus volumes, criticidades e distribuições de alertas:
-              </p>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {sourcesList.map((src) => {
-                  const pid = src.platformId;
-                  const isChecked = tempSelected.includes(pid);
-                  return (
-                    <label
-                      key={src.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '10px 12px',
-                        border: '1px solid var(--border)',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        background: isChecked ? 'rgba(158, 26, 69, 0.03)' : 'var(--surface-1)',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleTempCompare(pid)}
-                          style={{
-                            cursor: 'pointer',
-                            accentColor: '#9E1A45',
-                            width: '15px',
-                            height: '15px'
-                          }}
-                        />
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                          {src.platformName}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {src.rows.toLocaleString('pt-BR')} reg.
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-              <button
-                onClick={() => setCompareModalOpen(false)}
-                className="btn btn-sm btn-ghost"
-                style={{ borderRadius: '8px', padding: '8px 14px', fontSize: '12.5px', cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)' }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmCompare}
-                disabled={tempSelected.length < 2}
-                className="btn btn-sm btn-primary"
-                style={{
-                  borderRadius: '8px',
-                  padding: '8px 14px',
-                  fontSize: '12.5px',
-                  cursor: tempSelected.length >= 2 ? 'pointer' : 'not-allowed',
-                  opacity: tempSelected.length >= 2 ? 1 : 0.6,
-                  border: 'none',
-                  background: '#9E1A45',
-                  color: '#fff'
-                }}
-              >
-                Comparar ({tempSelected.length})
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      <ComparisonModal
+        sourcesList={sourcesList}
+        tempSelected={tempSelected}
+        handleToggleTempCompare={handleToggleTempCompare}
+        handleConfirmCompare={handleConfirmCompare}
+        setCompareModalOpen={setCompareModalOpen}
+      />
     </div>
   );
 }
