@@ -89,6 +89,14 @@ export default function Analytics() {
   const [modalOpen, setModalOpen] = useState(false);
   const [clock, setClock] = useState('');
   const toast = useToast();
+  const lastLoadedRef = useRef({
+    activeId: null,
+    compare: false,
+    comparePlatformIds: [],
+    selectedMonth: null,
+    startDate: '',
+    endDate: ''
+  });
   const { resolveMonitorName } = useCarrierAliases();
   const [selectedCompany, setSelectedCompany] = useState('');
 
@@ -132,8 +140,10 @@ export default function Analytics() {
     return () => clearInterval(id);
   }, []);
 
-  const loadFromDatabase = async (preferredPlatformId = null) => {
-    setLoading(true);
+  const loadFromDatabase = async (preferredPlatformId = null, isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
     setLoadProgress(0);
     setTotalCount(0);
     try {
@@ -276,12 +286,22 @@ export default function Analytics() {
   }, [selectedMonth, availableMonths, startDate, endDate]);
 
   useEffect(() => {
+    const last = lastLoadedRef.current;
+    const platformChanged = last.activeId !== activeId || 
+                           last.compare !== compare || 
+                           JSON.stringify(last.comparePlatformIds) !== JSON.stringify(comparePlatformIds) ||
+                           last.selectedMonth !== selectedMonth ||
+                           last.startDate !== startDate ||
+                           last.endDate !== endDate;
+    
+    lastLoadedRef.current = { activeId, compare, comparePlatformIds, selectedMonth, startDate, endDate };
+
     if (selectedMonth === 'custom') {
       if (startDate && endDate) {
-        loadFromDatabase();
+        loadFromDatabase(null, !platformChanged);
       }
     } else {
-      loadFromDatabase();
+      loadFromDatabase(null, !platformChanged);
     }
   }, [activeId, compare, comparePlatformIds, selectedMonth, startDate, endDate, selectedCompany, selectedSeverity]);
 
@@ -578,7 +598,7 @@ export default function Analytics() {
             )}
 
             {/* Seletor Dinâmico de Empresa */}
-            {activeSource && availableCompanies.length > 0 && (
+            {(activeSource || compare) && availableCompanies.length > 0 && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Empresa:</span>
                 <select
