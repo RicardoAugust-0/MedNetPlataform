@@ -11,6 +11,7 @@ RUN npm install
 
 # Copy shared code (needed for fatigueParser.js relative import)
 WORKDIR /app
+COPY package.json ./
 COPY src/utils/fatigueParser.js ./src/utils/
 COPY server/index.js ./server/
 
