@@ -320,13 +320,17 @@ app.get('/api/analytics', async (req, res) => {
         
         // Filter current period
         const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate });
-        combinedRawRows.push(...filtered);
+        for (const row of filtered) {
+          combinedRawRows.push(row);
+        }
 
         // Filter previous period
         let filteredPrev = [];
         if (prevMonthKey) {
           filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey });
-          combinedRawRowsPrev.push(...filteredPrev);
+          for (const row of filteredPrev) {
+            combinedRawRowsPrev.push(row);
+          }
         }
 
         const agg = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
