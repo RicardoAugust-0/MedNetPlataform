@@ -687,13 +687,15 @@ export default function Analytics() {
         onImportConfirm={onImportConfirm}
       />
 
-      <ComparisonModal
-        sourcesList={sourcesList}
-        tempSelected={tempSelected}
-        handleToggleTempCompare={handleToggleTempCompare}
-        handleConfirmCompare={handleConfirmCompare}
-        setCompareModalOpen={setCompareModalOpen}
-      />
+      {compareModalOpen && (
+        <ComparisonModal
+          sourcesList={sourcesList}
+          tempSelected={tempSelected}
+          handleToggleTempCompare={handleToggleTempCompare}
+          handleConfirmCompare={handleConfirmCompare}
+          setCompareModalOpen={setCompareModalOpen}
+        />
+      )}
     </div>
   );
 }
