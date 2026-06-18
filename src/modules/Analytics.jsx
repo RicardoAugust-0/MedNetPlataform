@@ -104,6 +104,20 @@ export default function Analytics() {
   });
   const { resolveMonitorName } = useCarrierAliases();
   const [selectedCompany, setSelectedCompany] = useState('');
+  const [compareCompanies, setCompareCompanies] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mednet_analytics_compare_companies');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mednet_analytics_compare_companies', JSON.stringify(compareCompanies));
+    } catch (e) {}
+  }, [compareCompanies]);
   const [selectedClassification, setSelectedClassification] = useState('all');
   const [selectedType, setSelectedType] = useState('');
 
@@ -216,15 +230,20 @@ export default function Analytics() {
       let url = `${API_URL}/api/analytics?`;
       if (compare) {
         url += `compare=true&platformIds=${comparePlatformIds.join(',')}`;
+        for (const pid of comparePlatformIds) {
+          const comp = compareCompanies[pid] || '';
+          if (comp) {
+            url += `&company_${pid}=${encodeURIComponent(comp)}`;
+          }
+        }
       } else {
         url += `platformId=${targetPlatformId}`;
+        if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
       }
-
       if (activeMonth) url += `&month=${activeMonth}`;
       if (activeMonth === 'custom' && startDate && endDate) {
         url += `&startDate=${startDate}&endDate=${endDate}`;
       }
-      if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
       if (selectedSeverity) url += `&severity=${selectedSeverity}`;
       if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
       if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
@@ -326,6 +345,7 @@ export default function Analytics() {
     startDate,
     endDate,
     selectedCompany,
+    compareCompanies,
     selectedSeverity,
     selectedClassification,
     selectedType
@@ -645,9 +665,8 @@ export default function Analytics() {
             sources={sources}
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
-            selectedCompany={selectedCompany}
-            setSelectedCompany={setSelectedCompany}
-            availableCompanies={availableCompanies}
+            compareCompanies={compareCompanies}
+            setCompareCompanies={setCompareCompanies}
             selectedSeverity={selectedSeverity}
           />
         )}

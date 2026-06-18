@@ -336,8 +336,21 @@ app.get('/api/analytics', async (req, res) => {
         const events = allEventsByPlatform[pid] || [];
         const rawRows = formatDataRows(events, aliases);
         
+        // Extract companies available for this platform SPECIFICALLY
+        const platformCompaniesSet = new Set();
+        for (const ev of events) {
+          const resolvedComp = resolveMonitorName(ev.frota || ev.transportadora || '', aliases);
+          if (resolvedComp && resolvedComp !== 'Não informado') {
+            platformCompaniesSet.add(resolvedComp);
+          }
+        }
+        const platformCompanies = Array.from(platformCompaniesSet).sort();
+
+        // Determine company filter specifically for this platform
+        const platformCompany = req.query[`company_${pid}`] !== undefined ? req.query[`company_${pid}`] : company;
+
         // Filter current period
-        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
+        const filtered = filterRows(rawRows, { company: platformCompany, severity, month, startDate, endDate, classification, eventType });
         for (const row of filtered) {
           combinedRawRows.push(row);
         }
@@ -345,7 +358,7 @@ app.get('/api/analytics', async (req, res) => {
         // Filter previous period
         let filteredPrev = [];
         if (prevMonthKey) {
-          filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey, classification, eventType });
+          filteredPrev = filterRows(rawRows, { company: platformCompany, severity, month: prevMonthKey, classification, eventType });
           for (const row of filteredPrev) {
             combinedRawRowsPrev.push(row);
           }
@@ -362,6 +375,7 @@ app.get('/api/analytics', async (req, res) => {
           platformId: pid,
           platformName,
           rows: rawRows.length,
+          availableCompanies: platformCompanies,
           data: agg
         };
       });

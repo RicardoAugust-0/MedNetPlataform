@@ -1,7 +1,14 @@
 import { useEffect, useRef, useMemo } from 'react';
 import Chart from 'chart.js/auto';
 
-export default function ComparisonView({ sources, selectedMonth, formatMonthKey, selectedCompany, setSelectedCompany, availableCompanies = [], selectedSeverity }) {
+export default function ComparisonView({
+  sources,
+  selectedMonth,
+  formatMonthKey,
+  compareCompanies = {},
+  setCompareCompanies,
+  selectedSeverity
+}) {
   const canvasCmpRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -124,7 +131,7 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
         chartRef.current = null;
       }
     };
-  }, [sources, selectedMonth, selectedCompany, selectedSeverity]);
+  }, [sources, selectedMonth, compareCompanies, selectedSeverity]);
 
   return (
     <div style={{ marginTop: '20px' }}>
@@ -133,35 +140,63 @@ export default function ComparisonView({ sources, selectedMonth, formatMonthKey,
           <span style={{ width: '16px', height: '2px', background: '#9E1A45', borderRadius: '2px', display: 'inline-block' }}></span>
           Comparação entre plataformas {selectedMonth && `(${formatMonthKey(selectedMonth)})`}
         </div>
-        {availableCompanies.length > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Empresa:</span>
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                fontSize: '12.5px',
-                fontWeight: 500,
-                color: 'var(--text-primary)',
-                background: 'var(--surface-0)',
-                cursor: 'pointer',
-                outline: 'none',
-                fontFamily: 'inherit',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <option value="">Todas as empresas juntas</option>
-              {availableCompanies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {sources.map((src) => {
+            const pCompanies = src.availableCompanies || [];
+            if (pCompanies.length === 0) return null;
+            return (
+              <div
+                key={src.platformId}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'var(--surface-1)',
+                  padding: '4px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  {src.platformName}:
+                </span>
+                <select
+                  value={compareCompanies[src.platformId] || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCompareCompanies((prev) => {
+                      const next = { ...prev };
+                      if (val) {
+                        next[src.platformId] = val;
+                      } else {
+                        delete next[src.platformId];
+                      }
+                      return next;
+                    });
+                  }}
+                  style={{
+                    padding: '2px 4px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '11.5px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="">Todas as empresas</option>
+                  {pCompanies.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
       </div>
       <div className="grid-2col">
         <div data-card className="card" style={{ padding: '16px 18px' }}>
