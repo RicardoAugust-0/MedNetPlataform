@@ -1,0 +1,128 @@
+/* =============================================================
+   MedNet · Fadiga Zero — Estilos para Analytics
+   ============================================================= */
+
+:root {
+  --chart-grid: rgba(15, 25, 35, 0.025);
+}
+
+[data-theme="dark"] {
+  --chart-grid: rgba(255, 255, 255, 0.035);
+}
+
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes fz-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fz-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s infinite;
+}
+
+.fz-spin {
+  animation: fz-spin 0.8s linear infinite;
+}
+
+.fz-in {
+  animation: fz-in 0.2s ease both;
+}
+
+.analytics-container {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 14px;
+}
+
+.grid-equal-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .grid-2col, .grid-equal-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dropzone {
+  border: 1.5px dashed var(--border-strong, rgba(15, 25, 35, 0.18));
+  border-radius: 12px;
+  padding: 30px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface-0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropzone.drag-over {
+  border-color: #9E1A45;
+  background: rgba(158, 26, 69, 0.05);
+}
+
+.field-mapping-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.field-mapping-row {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.field-mapping-row:last-child {
+  border-bottom: none;
+}
+
+/* Print Rules */
+@media print {
+  [data-noprint] { display: none !important; }
+  [data-app] { display: block !important; height: auto !important; overflow: visible !important; }
+  [data-content] { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  [data-card] { break-inside: avoid; border: 1px solid #ccc !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .card { page-break-inside: avoid; }
+}

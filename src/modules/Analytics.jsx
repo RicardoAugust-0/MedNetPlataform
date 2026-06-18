@@ -1,229 +1,783 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useAtendimentos } from '../hooks/useAtendimentos';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
-} from 'recharts';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { PLATFORMS, aggregate } from '../utils/fatigueParser.js';
+import { supabase } from '../supabase.js';
+import { useToast } from '../hooks/useToast.jsx';
+import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
+import '../styles/analytics.css';
 
-const COLORS = ['#0C447C', '#D14343', '#F59E0B', '#10B981', '#6366F1'];
+// Subcomponents
+import FadigaKPIs from './analytics/FadigaKPIs.jsx';
+import ComparisonView from './analytics/ComparisonView.jsx';
+import FadigaCharts from './analytics/FadigaCharts.jsx';
+import ImportModal from './analytics/ImportModal.jsx';
 
 export default function Analytics() {
-  const { loadByRange } = useAtendimentos();
-  const [data, setData] = useState([]);
+  const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [platformCounts, setPlatformCounts] = useState({});
+  const [availableMonths, setAvailableMonths] = useState([]);
+
+  const [activeId, setActiveId] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_active_id') || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_selected_month') || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [compare, setCompare] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_compare') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [clock, setClock] = useState('');
+  const toast = useToast();
+  const { resolveMonitorName } = useCarrierAliases();
+  const [selectedCompany, setSelectedCompany] = useState('');
 
   useEffect(() => {
-    async function fetchAnalytics() {
-      setLoading(true);
-      const d = new Date();
-      const end = d.toISOString().slice(0, 10);
-      d.setDate(d.getDate() - 30);
-      const start = d.toISOString().slice(0, 10);
-      
-      const { data: res } = await loadByRange(start, end);
-      if (res) setData(res);
+    setSelectedCompany('');
+  }, [activeId, compare]);
+
+  // Tick clock
+  useEffect(() => {
+    const tick = () => {
+      setClock(
+        new Date().toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Group database events by platform_id and shape them as sources format
+  const eventsToSources = (events) => {
+    const groups = {};
+    for (const ev of events) {
+      const pid = ev.platform_id || 'auto';
+      if (!groups[pid]) {
+        groups[pid] = [];
+      }
+      groups[pid].push(ev);
+    }
+
+    return Object.keys(groups).map((pid) => {
+      const platformName = PLATFORMS.find((p) => p.id === pid)?.name || pid;
+      const groupEvents = groups[pid];
+
+      const headers = [
+        'datetime',
+        'driver',
+        'plate',
+        'criticality',
+        'type',
+        'classification',
+        'speed',
+        'location',
+        'fleet'
+      ];
+
+      const mapping = {
+        datetime: 'datetime',
+        driver: 'driver',
+        plate: 'plate',
+        criticality: 'criticality',
+        type: 'type',
+        classification: 'classification',
+        speed: 'speed',
+        location: 'location',
+        fleet: 'fleet'
+      };
+
+      const dataRows = groupEvents.map((ev) => [
+        ev.ocorrido_em,
+        ev.nome || '',
+        ev.placa || '',
+        ev.severidade || '',
+        ev.nome_evento || '',
+        ev.analise_ia_plataforma || '',
+        ev.velocidade_kmh != null ? String(ev.velocidade_kmh) : '',
+        ev.localidade || '',
+        ev.frota || ev.transportadora || ''
+      ]);
+
+      const aggregatedData = aggregate(headers, dataRows, mapping, null);
+
+      return {
+        id: 'src-' + pid,
+        name: platformName,
+        platformId: pid,
+        platformName,
+        rows: dataRows.length,
+        headers,
+        dataRows,
+        mapping,
+        data: aggregatedData
+      };
+    });
+  };
+
+  const loadFromDatabase = async (preferredPlatformId = null) => {
+    setLoading(true);
+    setLoadProgress(0);
+    setTotalCount(0);
+    try {
+      // 1. Fetch exact total counts for all platforms in parallel
+      const counts = {};
+      const promises = PLATFORMS.map(async (p) => {
+        const { count, error } = await supabase
+          .from('driver_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('platform_id', p.id);
+        if (!error && count !== null) {
+          counts[p.id] = count;
+        }
+      });
+      await Promise.all(promises);
+      setPlatformCounts(counts);
+
+      // Determine active platform ID to load
+      let targetPlatformId = preferredPlatformId;
+      if (!targetPlatformId) {
+        const savedActiveId = localStorage.getItem('mednet_analytics_active_id') || activeId;
+        if (savedActiveId && counts[savedActiveId.replace('src-', '')] > 0) {
+          targetPlatformId = savedActiveId.replace('src-', '');
+        } else {
+          // Find first platform with count > 0
+          const firstAvailable = Object.keys(counts).find((pid) => counts[pid] > 0);
+          targetPlatformId = firstAvailable || null;
+        }
+      }
+
+      // If there are no platforms with records, clear and return
+      if (!targetPlatformId && !compare) {
+        setSources([]);
+        setLoading(false);
+        const nextActiveId = null;
+        if (activeId !== nextActiveId) {
+          setActiveId(nextActiveId);
+        }
+        return;
+      }
+
+      // 2. Fetch the latest date to generate available months list (last 12 months)
+      let activeMonth = selectedMonth;
+      if (targetPlatformId) {
+        const { data: latestRecord, error: latestErr } = await supabase
+          .from('driver_events')
+          .select('ocorrido_em')
+          .eq('platform_id', targetPlatformId)
+          .order('ocorrido_em', { ascending: false })
+          .limit(1);
+
+        if (!latestErr && latestRecord && latestRecord.length > 0) {
+          const latestDate = new Date(latestRecord[0].ocorrido_em);
+          const monthsList = [];
+          const currYear = latestDate.getFullYear();
+          const currMonth = latestDate.getMonth();
+          
+          for (let i = 0; i < 12; i++) {
+            const d = new Date(Date.UTC(currYear, currMonth - i, 1));
+            const y = d.getUTCFullYear();
+            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            monthsList.push(`${y}-${m}`);
+          }
+          setAvailableMonths(monthsList);
+
+          const savedMonth = localStorage.getItem('mednet_analytics_selected_month');
+          if (savedMonth && (savedMonth === 'all' || monthsList.includes(savedMonth))) {
+            activeMonth = savedMonth;
+          } else if (activeMonth === null || (activeMonth !== 'all' && !monthsList.includes(activeMonth))) {
+            // Default to latest month on initial load or if the active month is invalid
+            activeMonth = monthsList[0];
+            setSelectedMonth(monthsList[0]);
+          }
+        } else {
+          setAvailableMonths([]);
+        }
+      }
+
+      let allEvents = [];
+      const limit = 5000; // Optimized: Fetch 5000 records per page (PostgREST server-side max-rows limit)
+
+      // Calculate total records we are actually loading (scoped by activeMonth if set)
+      let loadingTotal = 0;
+      if (compare) {
+        loadingTotal = Object.values(counts).reduce((a, b) => a + b, 0);
+      } else {
+        if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
+          const [y, m] = activeMonth.split('-');
+          const year = parseInt(y);
+          const month = parseInt(m);
+          if (!isNaN(year) && !isNaN(month)) {
+            const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+            const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
+
+            const { count: monthCount, error: monthCountErr } = await supabase
+              .from('driver_events')
+              .select('*', { count: 'exact', head: true })
+              .eq('platform_id', targetPlatformId)
+              .gte('ocorrido_em', startDate)
+              .lt('ocorrido_em', endDate);
+
+            if (!monthCountErr) {
+              loadingTotal = monthCount || 0;
+            }
+          }
+        } else {
+          loadingTotal = counts[targetPlatformId] || 0;
+        }
+      }
+      setTotalCount(loadingTotal);
+
+      if (loadingTotal > 0) {
+        const numPages = Math.ceil(loadingTotal / limit);
+        
+        const fetchPage = async (pageIdx) => {
+          const pageFrom = pageIdx * limit;
+          const pageTo = pageFrom + limit - 1;
+          
+          let query = supabase
+            .from('driver_events')
+            .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em')
+            .order('ocorrido_em', { ascending: false });
+
+          if (!compare && targetPlatformId) {
+            query = query.eq('platform_id', targetPlatformId);
+          }
+
+          if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
+            const [y, m] = activeMonth.split('-');
+            const year = parseInt(y);
+            const month = parseInt(m);
+            if (!isNaN(year) && !isNaN(month)) {
+              const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+              const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
+
+              query = query.gte('ocorrido_em', startDate).lt('ocorrido_em', endDate);
+            }
+          }
+
+          const { data, error } = await query.range(pageFrom, pageTo);
+          if (error) throw error;
+          return data || [];
+        };
+
+        // Query pages in batches of 5 parallel connections to maximize speed while preventing DB pool exhaustion
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < numPages; i += BATCH_SIZE) {
+          const batchPromises = [];
+          for (let j = i; j < Math.min(i + BATCH_SIZE, numPages); j++) {
+            batchPromises.push(fetchPage(j));
+          }
+          const results = await Promise.all(batchPromises);
+          for (const res of results) {
+            allEvents.push(...res);
+          }
+          setLoadProgress(allEvents.length);
+        }
+      }
+
+      const nextSources = eventsToSources(allEvents);
+      setSources(nextSources);
+
+      const nextActiveId = targetPlatformId ? 'src-' + targetPlatformId : null;
+      if (activeId !== nextActiveId) {
+        setActiveId(nextActiveId);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar dados do banco:', err);
+      toast('Erro ao carregar banco: ' + (err.message || String(err)), 'error');
+    } finally {
       setLoading(false);
     }
-    fetchAnalytics();
-  }, [loadByRange]);
+  };
 
-  const { topDrivers, topTransp, timeSeries } = useMemo(() => {
-    if (!data.length) return { topDrivers: [], topTransp: [], timeSeries: [] };
+  useEffect(() => {
+    loadFromDatabase();
+  }, [activeId, compare, selectedMonth]);
 
-    // Apenas intervenções reais para métricas de reincidência
-    const intervs = data.filter(d => d.tipo === 'intervencao');
-
-    // Agrupar por Motorista
-    const driverMap = {};
-    intervs.forEach(d => {
-      const name = d.motorista || 'Desconhecido';
-      driverMap[name] = (driverMap[name] || 0) + 1;
-    });
-    const topDrivers = Object.entries(driverMap)
-      .map(([name, count]) => ({ name: name.split(' ')[0] + ' ' + (name.split(' ')[1] || ''), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Agrupar por Transportadora
-    const transpMap = {};
-    intervs.forEach(d => {
-      const transp = d.transportadora || 'Não informada';
-      transpMap[transp] = (transpMap[transp] || 0) + 1;
-    });
-    const topTransp = Object.entries(transpMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    // Agrupar por Dia (Últimos 14 dias)
-    const timeMap = {};
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const str = date.toISOString().slice(0, 10);
-      const label = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      timeMap[str] = { name: label, intervs: 0, descartes: 0 };
+  useEffect(() => {
+    if (activeId) {
+      localStorage.setItem('mednet_analytics_active_id', activeId);
+    } else {
+      localStorage.removeItem('mednet_analytics_active_id');
     }
+  }, [activeId]);
 
-    data.forEach(d => {
-      const dateStr = d.created_at?.slice(0, 10);
-      if (timeMap[dateStr]) {
-        if (d.tipo === 'intervencao') timeMap[dateStr].intervs++;
-        else if (d.tipo === 'descarte') timeMap[dateStr].descartes++;
-      }
+  useEffect(() => {
+    if (selectedMonth) {
+      localStorage.setItem('mednet_analytics_selected_month', selectedMonth);
+    } else {
+      localStorage.removeItem('mednet_analytics_selected_month');
+    }
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    localStorage.setItem('mednet_analytics_compare', String(compare));
+  }, [compare]);
+
+  // Process loaded sources to resolve raw fleet names to clean carrier/company names
+  const processedSources = useMemo(() => {
+    return sources.map(src => ({
+      ...src,
+      dataRows: src.dataRows.map(row => {
+        const copy = [...row];
+        // Resolve raw fleet name (row[8]) to clean company name
+        copy[8] = resolveMonitorName(row[8]) || 'Não informado';
+        return copy;
+      })
+    }));
+  }, [sources, resolveMonitorName]);
+
+  // Compute active source and its aggregated data reactively
+  const activeSource = useMemo(() => {
+    return processedSources.find((s) => s.id === activeId) || null;
+  }, [processedSources, activeId]);
+
+  // Calculate unique clean companies present in the active data
+  const availableCompanies = useMemo(() => {
+    const set = new Set();
+    const targets = compare ? processedSources : (activeSource ? [activeSource] : []);
+    targets.forEach(src => {
+      src.dataRows.forEach(row => {
+        if (row[8] && row[8] !== 'Não informado') {
+          set.add(row[8]);
+        }
+      });
     });
+    return Array.from(set).sort();
+  }, [processedSources, activeSource, compare]);
 
-    const timeSeries = Object.values(timeMap);
+  const d = useMemo(() => {
+    if (!activeSource) return null;
+    let filteredRows = activeSource.dataRows;
+    if (selectedCompany) {
+      filteredRows = filteredRows.filter(row => row[8] === selectedCompany);
+    }
+    return aggregate(
+      activeSource.headers,
+      filteredRows,
+      activeSource.mapping,
+      selectedMonth === 'all' ? null : selectedMonth
+    );
+  }, [activeSource, selectedMonth, selectedCompany]);
 
-    return { topDrivers, topTransp, timeSeries };
-  }, [data]);
+  const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
+    setSaving(true);
+    try {
+      // Bulk upsert in chunks of 2500 for optimized performance
+      const CHUNK_SIZE = 2500;
+      for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error: upsertError } = await supabase
+          .from('driver_events')
+          .upsert(chunk, {
+            onConflict: 'platform_id,placa,ocorrido_em,nome_evento',
+            ignoreDuplicates: true,
+          });
 
-  function exportAnalytics() {
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const row = (...cols) => cols.map(esc).join(',');
-    const lines = [
-      'ANALYTICS DA OPERAÇÃO — ÚLTIMOS 30 DIAS',
-      '',
-      'TOP MOTORISTAS REINCIDENTES',
-      row('Motorista', 'Intervenções'),
-      ...topDrivers.map(d => row(d.name, d.count)),
-      '',
-      'TOP TRANSPORTADORAS',
-      row('Transportadora', 'Intervenções'),
-      ...topTransp.map(t => row(t.name, t.value)),
-      '',
-      'EVOLUÇÃO (14 DIAS)',
-      row('Data', 'Intervenções', 'Descartes'),
-      ...timeSeries.map(t => row(t.name, t.intervs, t.descartes)),
+        if (upsertError) throw upsertError;
+      }
+
+      setModalOpen(false);
+      toast(
+        `Planilha processada · ${platformName} · ${rowsToInsert.length.toLocaleString(
+          'pt-BR'
+        )} registros salvos.`,
+        'success'
+      );
+
+      await loadFromDatabase(platformId);
+    } catch (err) {
+      console.error('Erro ao salvar no banco:', err);
+      toast('Erro ao salvar no banco de dados: ' + (err.message || String(err)), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeSource = async (id, event) => {
+    event.stopPropagation();
+    const targetSource = processedSources.find((s) => s.id === id);
+    if (!targetSource) return;
+
+    const confirmed = window.confirm(
+      `Deseja realmente excluir todos os registros de "${targetSource.platformName}" do banco de dados? Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('driver_events')
+        .delete()
+        .eq('platform_id', targetSource.platformId);
+
+      if (error) throw error;
+
+      toast(`Todos os registros de ${targetSource.platformName} foram excluídos.`, 'success');
+      await loadFromDatabase();
+    } catch (err) {
+      console.error('Erro ao excluir registros:', err);
+      toast('Erro ao excluir registros do banco de dados: ' + (err.message || String(err)), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatMonthKey = (mk) => {
+    if (!mk || mk === 'all') return 'Todos os meses';
+    const [y, m] = mk.split('-');
+    const MESES_COMPLETOS = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
     ];
-    const csv = lines.join('\r\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `analytics-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+    return `${MESES_COMPLETOS[parseInt(m) - 1]} de ${y}`;
+  };
+
+  const noData = !d;
+
+  const sourcesList = useMemo(() => {
+    return Object.keys(platformCounts)
+      .filter((pid) => platformCounts[pid] > 0)
+      .map((pid) => {
+        const platform = PLATFORMS.find((p) => p.id === pid);
+        return {
+          id: 'src-' + pid,
+          platformId: pid,
+          platformName: platform ? platform.name : pid,
+          rows: platformCounts[pid]
+        };
+      });
+  }, [platformCounts]);
 
   if (loading) {
     return (
-      <div className="empty-state">
-        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 32 }}></i>
-        <div style={{ marginTop: 12 }}>Carregando dados (últimos 30 dias)...</div>
+      <div style={{ width: '100%', minHeight: '60vh', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+          <i className="ti ti-loader-2 fz-spin" style={{ fontSize: '38px', color: '#9E1A45' }}></i>
+          <span style={{ fontSize: '13.5px', fontWeight: 500 }}>Carregando dados da plataforma...</span>
+          {totalCount > 0 && (
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              {loadProgress.toLocaleString('pt-BR')} de {totalCount.toLocaleString('pt-BR')} registros carregados
+            </span>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 1000 }}>
-      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Analytics da Operação</h2>
-          <p style={{ color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Análise de reincidência e volume dos últimos 30 dias</p>
-        </div>
-        <button
-          className="btn btn-sm btn-ghost"
-          onClick={exportAnalytics}
-          disabled={!topDrivers.length && !topTransp.length}
-          title="Exportar dados como CSV"
-        >
-          <i className="ti ti-download"></i> Exportar CSV
-        </button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        {/* Gráfico de Reincidência (Motoristas) */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">
-              <i className="ti ti-steering-wheel"></i>
-              Top 10 Motoristas Reincidentes
-            </div>
+    <div style={{ width: '100%', padding: '4px 0 24px' }}>
+      <div className="analytics-container">
+        
+        {/* Header da Página */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '20px' }}>
+          <div>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Análise de Fadiga</h2>
+            <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Consolidação multi-plataforma de alertas de fadiga e desatenção
+            </p>
           </div>
-          <div style={{ height: 300, padding: 16 }}>
-            {topDrivers.length === 0 ? (
-              <div className="empty-state" style={{ height: '100%', padding: 0 }}>Sem dados</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topDrivers} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" />
-                  <YAxis dataKey="name" type="category" width={100} stroke="var(--text-primary)" fontSize={11} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-panel)' }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                  />
-                  <Bar dataKey="count" name="Intervenções" fill="var(--danger-500)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            
+            {/* Seletor Dinâmico de Mês */}
+            {activeSource && availableMonths.length > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Mês:</span>
+                <select
+                  value={selectedMonth || 'all'}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    background: 'var(--surface-0)',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <option value="all">Todos os meses</option>
+                  {availableMonths.map((m) => (
+                    <option key={m} value={m}>
+                      {formatMonthKey(m)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
+
+            {/* Seletor Dinâmico de Empresa */}
+            {activeSource && availableCompanies.length > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Empresa:</span>
+                <select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    background: 'var(--surface-0)',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <option value="">Todas as empresas</option>
+                  {availableCompanies.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
+              <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
+              {d && d.meta.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
+            </span>
+            
+            {sourcesList.length >= 2 && (
+              <button
+                onClick={() => setCompare(!compare)}
+                className="btn btn-sm"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontFamily: 'inherit',
+                  border: compare ? '1px solid #9E1A45' : '1px solid var(--border)',
+                  background: compare ? 'rgba(158, 26, 69, 0.05)' : 'var(--surface-0)',
+                  color: compare ? '#9E1A45' : 'var(--text-primary)',
+                  fontWeight: 500,
+                  borderRadius: '8px',
+                  padding: '7px 12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <i className="ti ti-arrows-diff" style={{ fontSize: '14px' }}></i> Comparar plataformas
+              </button>
+            )}
+            
+            <button
+              onClick={() => window.print()}
+              className="btn btn-sm btn-ghost"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                border: '1px solid var(--border)',
+                background: 'var(--surface-0)',
+                color: 'var(--text-primary)',
+                fontWeight: 500,
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-file-type-pdf" style={{ fontSize: '14px' }}></i> Exportar PDF
+            </button>
+            
+            <button
+              onClick={() => setModalOpen(true)}
+              className="btn btn-sm btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 13px',
+                fontWeight: 500,
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-upload" style={{ fontSize: '14px' }}></i> Importar planilha
+            </button>
           </div>
         </div>
 
-        {/* Gráfico de Transportadoras */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">
-              <i className="ti ti-building-community"></i>
-              Top 5 Transportadoras (Alertas)
+        {/* Chips de Fontes */}
+        {sourcesList.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
+            <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Fontes
+            </span>
+            {sourcesList.map((src) => (
+              <div
+                key={src.id}
+                onClick={() => {
+                  setCompare(false);
+                  setActiveId(src.id);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '9px',
+                  padding: '7px 10px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  background: 'var(--surface-0)',
+                  border: src.id === activeId && !compare ? '1px solid #9E1A45' : '1px solid var(--border)',
+                  boxShadow: src.id === activeId && !compare ? '0 0 0 1px rgba(158,26,69,0.15)' : 'none',
+                  transition: 'all .15s ease',
+                }}
+              >
+                <i className="ti ti-table" style={{ fontSize: '14px', flexShrink: 0, color: '#9E1A45' }}></i>
+                <div style={{ minWidth: 0, lineHeight: 1.25 }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)' }}>{src.platformName}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
+                    {src.rows.toLocaleString('pt-BR')} reg.
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => removeSource(src.id, e)}
+                  title="Remover fonte"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    padding: '2px',
+                    display: 'grid',
+                    placeItems: 'center',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger-500, #E24B4A)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                >
+                  <i className="ti ti-x" style={{ fontSize: '13px' }}></i>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hero de Sem Dados */}
+        {noData && (
+          <div style={{
+            background: 'linear-gradient(135deg, #5A0F25, #1A0308)',
+            color: '#fff',
+            borderRadius: '12px',
+            padding: '24px 26px',
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '20px',
+            marginBottom: '22px',
+            border: '1px solid rgba(158,26,69,0.3)',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ position: 'relative', minWidth: 0 }}>
+              <div style={{ fontSize: '10px', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#E09AB5', fontWeight: 600, marginBottom: '5px' }}>
+                Importação universal
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>Nenhuma planilha carregada</h3>
+              <p style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.72)', marginTop: '6px', maxWidth: '620px', lineHeight: 1.6, margin: '6px 0 0' }}>
+                Importe um relatório de qualquer plataforma — MaxTrack, Sascar, Sascar JD, Sighra, Horizon, AutoTrac, OmniLink ou Trimble. O sistema detecta o layout, mapeia as colunas e preenche os indicadores automaticamente. Os gráficos abaixo mostram a estrutura final dos dados.
+              </p>
             </div>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="btn btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '7px',
+                padding: '10px 16px',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: 'none',
+                backgroundColor: '#F26931',
+                color: '#fff',
+                flexShrink: 0,
+              }}
+            >
+              <i className="ti ti-upload" style={{ fontSize: '16px' }}></i> Importar planilha
+            </button>
           </div>
-          <div style={{ height: 300, padding: 16 }}>
-             {topTransp.length === 0 ? (
-              <div className="empty-state" style={{ height: '100%', padding: 0 }}>Sem dados</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={topTransp}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={false}
-                    style={{ fontSize: 11 }}
-                  >
-                    {topTransp.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-panel)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-             )}
-          </div>
+        )}
+
+        {/* KPIs Row */}
+        <FadigaKPIs d={d} />
+
+        {/* Comparação */}
+        {compare && sources.length >= 2 ? (
+          <ComparisonView
+            sources={sources}
+            selectedMonth={selectedMonth}
+            formatMonthKey={formatMonthKey}
+          />
+        ) : (
+          /* Gráficos Individuais */
+          <FadigaCharts
+            d={d}
+            noData={noData}
+            selectedMonth={selectedMonth}
+            formatMonthKey={formatMonthKey}
+          />
+        )}
+
+        {/* Nota explicativa de rodapé */}
+        <div style={{ marginTop: '24px', fontSize: '11.5px', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px 18px', background: 'var(--surface-0)', lineHeight: '1.7' }}>
+          <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Como ler. </b>
+          Os indicadores são recalculados a cada importação e filtragem. Criticidades com grafias divergentes são unificadas em Gravíssimo / Grave / Médio; a classificação é normalizada em Positivo / Falso positivo / Não classificado. A UF é extraída do texto da localidade. Use <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Comparar plataformas</b> para confrontar duas ou mais fontes e <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Exportar PDF</b> para gerar o relatório completo para impressão.
         </div>
+
       </div>
 
-      {/* Gráfico de Tendência (Tempo) */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">
-            <i className="ti ti-chart-line"></i>
-            Evolução de Eventos (Últimos 14 Dias)
-          </div>
-        </div>
-        <div style={{ height: 300, padding: 16 }}>
-           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={timeSeries} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} />
-              <YAxis stroke="var(--text-muted)" fontSize={11} />
-              <Tooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-panel)' }}
-              />
-              <Legend verticalAlign="top" height={36}/>
-              <Line type="monotone" dataKey="intervs" name="Intervenções" stroke="var(--danger-500)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="descartes" name="Descartes" stroke="var(--text-muted)" strokeWidth={2} strokeDasharray="5 5" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
+      {/* MODAL DE IMPORTAÇÃO */}
+      <ImportModal
+        modalOpen={modalOpen}
+        setModalOpen={setModalOpen}
+        saving={saving}
+        onImportConfirm={onImportConfirm}
+      />
     </div>
   );
 }
