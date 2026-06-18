@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { aggregate } from '../src/utils/fatigueParser.js';
+import { aggregate, PLATFORMS } from '../src/utils/fatigueParser.js';
 
 // Load env variables from root and server directory
 dotenv.config({ path: '../.env' });
@@ -225,19 +225,17 @@ app.get('/', (req, res) => {
 // 1. Get platform counts from the database
 app.get('/api/platforms', async (req, res) => {
   try {
-    const { data: platforms, error } = await supabase
-      .from('driver_events')
-      .select('platform_id');
-      
-    if (error) throw error;
-
     const counts = {};
-    if (platforms) {
-      for (const p of platforms) {
-        const pid = p.platform_id || 'auto';
-        counts[pid] = (counts[pid] || 0) + 1;
+    const promises = PLATFORMS.map(async (p) => {
+      const { count, error } = await supabase
+        .from('driver_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('platform_id', p.id);
+      if (!error && count !== null) {
+        counts[p.id] = count;
       }
-    }
+    });
+    await Promise.all(promises);
     res.json(counts);
   } catch (err) {
     console.error('[MedNet Backend] Erro no /api/platforms:', err);
