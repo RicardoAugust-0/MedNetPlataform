@@ -61,7 +61,14 @@ export function CarrierAliasesProvider({ children }) {
   // Resolve o nome da planilha/raw de volta para o nome do Monitor (clean).
   const resolveMonitorName = useCallback((name) => {
     if (!name) return '';
-    const clean = Object.keys(aliases).find(key => aliases[key] === name);
+    // Exact match first
+    let clean = Object.keys(aliases).find(key => aliases[key] === name);
+    if (clean) return clean;
+    // Containment match (e.g. raw fleet name "LSL 2W" contains mapped value "LSL")
+    clean = Object.keys(aliases).find(key => {
+      const val = aliases[key];
+      return val && name.toLowerCase().includes(val.toLowerCase());
+    });
     return clean || name;
   }, [aliases]);
 

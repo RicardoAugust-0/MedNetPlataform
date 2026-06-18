@@ -204,10 +204,7 @@ export default function Analytics() {
           }
           setAvailableMonths(monthsList);
 
-          const savedMonth = localStorage.getItem('mednet_analytics_selected_month');
-          if (savedMonth && (savedMonth === 'all' || monthsList.includes(savedMonth))) {
-            activeMonth = savedMonth;
-          } else if (activeMonth === null || (activeMonth !== 'all' && !monthsList.includes(activeMonth))) {
+          if (activeMonth === null || (activeMonth !== 'all' && !monthsList.includes(activeMonth))) {
             // Default to latest month on initial load or if the active month is invalid
             activeMonth = monthsList[0];
             setSelectedMonth(monthsList[0]);
@@ -218,12 +215,32 @@ export default function Analytics() {
       }
 
       let allEvents = [];
-      const limit = 5000; // Optimized: Fetch 5000 records per page (PostgREST server-side max-rows limit)
+      const limit = 1000; // Optimized: Fetch 1000 records per page (PostgREST server-side max-rows limit)
 
       // Calculate total records we are actually loading (scoped by activeMonth if set)
       let loadingTotal = 0;
       if (compare) {
-        loadingTotal = Object.values(counts).reduce((a, b) => a + b, 0);
+        if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
+          const [y, m] = activeMonth.split('-');
+          const year = parseInt(y);
+          const month = parseInt(m);
+          if (!isNaN(year) && !isNaN(month)) {
+            const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+            const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
+
+            const { count: monthCount, error: monthCountErr } = await supabase
+              .from('driver_events')
+              .select('*', { count: 'exact', head: true })
+              .gte('ocorrido_em', startDate)
+              .lt('ocorrido_em', endDate);
+
+            if (!monthCountErr) {
+              loadingTotal = monthCount || 0;
+            }
+          }
+        } else {
+          loadingTotal = Object.values(counts).reduce((a, b) => a + b, 0);
+        }
       } else {
         if (activeMonth && activeMonth !== 'all' && activeMonth.indexOf('-') > -1) {
           const [y, m] = activeMonth.split('-');
@@ -252,6 +269,7 @@ export default function Analytics() {
 
       if (loadingTotal > 0) {
         const numPages = Math.ceil(loadingTotal / limit);
+        console.log(`[MedNet] loadingTotal: ${loadingTotal}, numPages: ${numPages}, platform: ${targetPlatformId}, month: ${activeMonth}`);
         
         const fetchPage = async (pageIdx) => {
           const pageFrom = pageIdx * limit;
@@ -283,8 +301,8 @@ export default function Analytics() {
           return data || [];
         };
 
-        // Query pages in batches of 5 parallel connections to maximize speed while preventing DB pool exhaustion
-        const BATCH_SIZE = 5;
+        // Query pages in batches of 10 parallel connections to maximize speed while preventing DB pool exhaustion
+        const BATCH_SIZE = 10;
         for (let i = 0; i < numPages; i += BATCH_SIZE) {
           const batchPromises = [];
           for (let j = i; j < Math.min(i + BATCH_SIZE, numPages); j++) {
@@ -513,7 +531,7 @@ export default function Analytics() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             
             {/* Seletor Dinâmico de Mês */}
-            {activeSource && availableMonths.length > 0 && (
+            {activeId && availableMonths.length > 0 && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filtrar Mês:</span>
                 <select
@@ -695,7 +713,7 @@ export default function Analytics() {
         )}
 
         {/* Hero de Sem Dados */}
-        {noData && (
+        {sourcesList.length === 0 && (
           <div style={{
             background: 'linear-gradient(135deg, #5A0F25, #1A0308)',
             color: '#fff',
@@ -749,9 +767,10 @@ export default function Analytics() {
         {/* Comparação */}
         {compare && sources.length >= 2 ? (
           <ComparisonView
-            sources={sources}
+            sources={processedSources}
             selectedMonth={selectedMonth}
             formatMonthKey={formatMonthKey}
+            selectedCompany={selectedCompany}
           />
         ) : (
           /* Gráficos Individuais */
