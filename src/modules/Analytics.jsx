@@ -16,6 +16,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function Analytics() {
   const [sources, setSources] = useState([]);
+  const [d, setD] = useState(null);
+  const [prevD, setPrevD] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -172,6 +174,8 @@ export default function Analytics() {
       // If we don't have a target platform selected and aren't in comparison mode, do not load any events
       if (!targetPlatformId && !compare) {
         setSources([]);
+        setD(null);
+        setPrevD(null);
         setLoading(false);
         setActiveId(null);
         return;
@@ -181,6 +185,8 @@ export default function Analytics() {
 
       if (compare && (!comparePlatformIds || comparePlatformIds.length === 0)) {
         setSources([]);
+        setD(null);
+        setPrevD(null);
         setLoading(false);
         return;
       }
@@ -218,6 +224,9 @@ export default function Analytics() {
           setSelectedMonth(monthsList[0]);
         }
       }
+
+      setD(data.d || null);
+      setPrevD(data.prevD || null);
 
       if (compare) {
         setSources(data.sources || []);
@@ -301,13 +310,7 @@ export default function Analytics() {
     return sources.find((s) => s.id === activeId) || null;
   }, [sources, activeId]);
 
-  const d = useMemo(() => {
-    return activeSource ? activeSource.data : null;
-  }, [activeSource]);
-
-  const prevD = useMemo(() => {
-    return activeSource ? activeSource.prevD : null;
-  }, [activeSource]);
+  // d and prevD are now state hooks populated directly from loadFromDatabase
 
   const exportToCSV = () => {
     if (!activeSource) return;
@@ -824,7 +827,7 @@ export default function Analytics() {
         {(activeId || compare) && <FadigaKPIs d={d} prevD={prevD} />}
 
         {/* Comparação */}
-        {compare && sources.length >= 2 ? (
+        {compare && sources.length >= 2 && (
           <ComparisonView
             sources={sources}
             selectedMonth={selectedMonth}
@@ -832,18 +835,17 @@ export default function Analytics() {
             selectedCompany={selectedCompany}
             selectedSeverity={selectedSeverity}
           />
-        ) : (
-          /* Gráficos Individuais */
-          (activeId || compare) && (
-            <FadigaCharts
-              d={d}
-              noData={noData}
-              selectedMonth={selectedMonth}
-              formatMonthKey={formatMonthKey}
-              selectedSeverity={selectedSeverity}
-              setSelectedSeverity={setSelectedSeverity}
-            />
-          )
+        )}
+
+        {(activeId || compare) && (
+          <FadigaCharts
+            d={d}
+            noData={noData}
+            selectedMonth={selectedMonth}
+            formatMonthKey={formatMonthKey}
+            selectedSeverity={selectedSeverity}
+            setSelectedSeverity={setSelectedSeverity}
+          />
         )}
 
         {/* Nota explicativa de rodapé */}
