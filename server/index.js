@@ -299,11 +299,36 @@ app.get('/api/analytics', async (req, res) => {
 
     if (isCompare) {
       // Return aggregated sources for comparison view
+      const combinedRawRows = [];
+      const combinedRawRowsPrev = [];
+
+      // Generate prevMonthKey if monthly view
+      let prevMonthKey = null;
+      if (month && month !== 'all' && month !== 'custom' && month.indexOf('-') > -1) {
+        const [y, m] = month.split('-');
+        const year = parseInt(y);
+        const monthNum = parseInt(m);
+        const prevDate = new Date(Date.UTC(year, monthNum - 2, 1));
+        const py = prevDate.getUTCFullYear();
+        const pm = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
+        prevMonthKey = `${py}-${pm}`;
+      }
+
       const sources = targetPlatformIds.map((pid) => {
         const events = allEventsByPlatform[pid] || [];
         const rawRows = formatDataRows(events, aliases);
-        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate });
         
+        // Filter current period
+        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate });
+        combinedRawRows.push(...filtered);
+
+        // Filter previous period
+        let filteredPrev = [];
+        if (prevMonthKey) {
+          filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey });
+          combinedRawRowsPrev.push(...filteredPrev);
+        }
+
         const agg = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
         
         const platformName = pid === 'omnilink' ? 'OmniLink'
@@ -319,10 +344,19 @@ app.get('/api/analytics', async (req, res) => {
         };
       });
 
+      // Aggregate combined data
+      const combinedD = aggregate(HEADERS, combinedRawRows, MAPPING, month === 'all' || month === 'custom' ? null : month);
+      let combinedPrevD = null;
+      if (prevMonthKey) {
+        combinedPrevD = aggregate(HEADERS, combinedRawRowsPrev, MAPPING, prevMonthKey);
+      }
+
       return res.json({
         availableMonths,
         availableCompanies,
-        sources
+        sources,
+        d: combinedD,
+        prevD: combinedPrevD
       });
     } else {
       // Single platform aggregated view
