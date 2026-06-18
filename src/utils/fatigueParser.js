@@ -103,7 +103,7 @@ export function normCrit(v) {
 export function normClf(v) {
   const s = norm(v); if (!s) return 'Não classificado';
   if (s.includes('falso')) return 'Falso positivo';
-  if (s.includes('positiv') || s.includes('confirmad') || s.includes('procede') || s.includes('verdadeir') || s.includes('real')) return 'Positivo';
+  if (s.includes('positiv') || s.includes('confirmad') || s.includes('procede') || s.includes('verdadeir') || s.includes('real') || s.includes('valido')) return 'Positivo';
   return 'Não classificado';
 }
 
