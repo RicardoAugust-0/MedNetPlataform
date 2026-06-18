@@ -143,7 +143,6 @@ export default function ComparisonView({
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {sources.map((src) => {
             const pCompanies = src.availableCompanies || [];
-            if (pCompanies.length === 0) return null;
             return (
               <div
                 key={src.platformId}
