@@ -217,6 +217,11 @@ function filterRows(rows, { company, severity, month, startDate, endDate }) {
 
 // ── ENDPOINTS ──
 
+// Health check endpoint for Coolify
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'MedNet Analytics API' });
+});
+
 // 1. Get platform counts from the database
 app.get('/api/platforms', async (req, res) => {
   try {
