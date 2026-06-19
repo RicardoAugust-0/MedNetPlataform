@@ -50,7 +50,7 @@ export const FIELD_DEFS = [
   { key: 'treatStart',     label: 'Início da tratativa', req: false,
     aliases: ['inicio da tratativa', 'inicio tratativa', 'inicio do atendimento', 'atendido em', 'data inicio tratativa'] },
   { key: 'treatEnd',       label: 'Fim da tratativa', req: false,
-    aliases: ['fim da tratativa', 'fim tratativa', 'finalizado em', 'encerramento', 'data fim tratativa', 'conclusao'] },
+    aliases: ['fim da tratativa', 'fim tratativa', 'finalizado em', 'encerramento', 'data fim tratativa', 'conclusao', 'data finalizacao evento'] },
   { key: 'description',    label: 'Descrição / Categoria', req: false,
     aliases: ['descricao', 'categoria', 'description', 'category'] },
 ];
@@ -89,6 +89,7 @@ export const PLATFORM_COLUMN_MAPS = {
     fleet:          ['Empresa', 'Cliente'],
     evidence:       ['Possui evidência?'],
     treatStart:     ['Início da Tratativa'],
+    treatEnd:       ['Data finalização evento'],
     description:    ['Categoria', 'Descrição'],
   },
   omnilink: {

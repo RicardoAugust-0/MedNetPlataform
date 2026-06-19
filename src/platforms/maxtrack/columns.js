@@ -21,6 +21,9 @@ export const COLUMNS = {
   analise_ia:     'Análise de IA',
   id_evento:      'Id do Evento',
   status:         'Status',
+  evidence:       'Possui evidência?',
+  treatStart:     'Início da Tratativa',
+  treatEnd:       'Data finalização evento',
 };
 
 export const FINALIZADO_STATUS = new Set([

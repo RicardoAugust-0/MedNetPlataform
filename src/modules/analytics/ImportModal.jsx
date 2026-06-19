@@ -248,6 +248,8 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     return stage.dataRows.slice(0, 3).map((row) => {
       const sev = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
       const clfRaw = getVal(row, 'classification');
+      const startDt = toDate(getVal(row, 'treatStart'));
+      const endDt = toDate(getVal(row, 'treatEnd'));
       return {
         data: fmtDateTimeShort(toDate(getVal(row, 'datetime'))),
         placa: String(getVal(row, 'plate') || '—').trim() || '—',
@@ -257,6 +259,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
         vel: toNum(getVal(row, 'speed')),
         frota: String(getVal(row, 'fleet') || '—').trim() || '—',
         isLeve: sev === 'Leve',
+        evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : '—',
+        inicio_tratativa: startDt ? fmtDateTimeShort(startDt) : '—',
+        fim_tratativa: endDt ? fmtDateTimeShort(endDt) : '—',
       };
     });
   }, [stage]);
@@ -477,6 +482,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                       <th style={{ padding: '6px 8px', fontWeight: 600 }}>Classif.</th>
                       <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>Vel.</th>
                       <th style={{ padding: '6px 8px', fontWeight: 600 }}>Frota</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Evid.</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Início Trat.</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Fim Trat.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -491,6 +499,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                         <td style={{ padding: '6px 8px' }}>{r.clf}</td>
                         <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace" }}>{r.vel != null ? r.vel : '—'}</td>
                         <td style={{ padding: '6px 8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.frota}>{r.frota}</td>
+                        <td style={{ padding: '6px 8px' }} title={r.evidencia}>{r.evidencia}</td>
+                        <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{r.inicio_tratativa}</td>
+                        <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{r.fim_tratativa}</td>
                       </tr>
                     ))}
                   </tbody>
