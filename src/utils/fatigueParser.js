@@ -395,6 +395,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
   }
 
   const clf = { 'Positivo': 0, 'Falso positivo': 0, 'Não classificado': 0 };
+  const naoclass_reasons = { autoFinalizado: 0, imagemNaoVisivel: 0, outros: 0 };
   const drivers = {}, plates = {}, fleets = {}, ufs = {};
   const driverSet = new Set(), vehSet = new Set();
   const hora = new Array(24).fill(0), horaPos = new Array(24).fill(0);
@@ -414,6 +415,17 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
     const clfV = normClf(get(row, 'classification'));
     clf[clfV] = (clf[clfV] || 0) + 1;
     const isPos = clfV === 'Positivo';
+
+    if (clfV === 'Não classificado') {
+      const rawClf = get(row, 'classification') || '';
+      if (rawClf === 'Não classificado - Auto Finalizado') {
+        naoclass_reasons.autoFinalizado++;
+      } else if (rawClf === 'Não classificado - Imagem não visível') {
+        naoclass_reasons.imagemNaoVisivel++;
+      } else {
+        naoclass_reasons.outros++;
+      }
+    }
 
     if (d) {
       if (!minD || d < minD) minD = d;
@@ -547,6 +559,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
     evidencia: (evidDisp + evidAguard) ? { disp: evidDisp, aguard: evidAguard } : null,
     hasEvidence: idx.evidence > -1 && (evidDisp + evidAguard) > 0,
     categorias: categoryCounts,
+    naoclass_reasons,
   };
 }
 

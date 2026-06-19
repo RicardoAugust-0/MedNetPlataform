@@ -24,6 +24,7 @@ export const COLUMNS = {
   evidence:       'Possui evidência?',
   treatStart:     'Início da Tratativa',
   treatEnd:       'Data finalização evento',
+  tipo_classificacao: 'Tipo de Classificação',
 };
 
 export const FINALIZADO_STATUS = new Set([

@@ -35,6 +35,11 @@ function buildImportRows(stage, operatorEmail) {
     const nh = normHeaderName(h);
     return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
   });
+  const statusIdx = stage.headers.findIndex((h) => normHeaderName(h) === 'status');
+  const tipoClfIdx = stage.headers.findIndex((h) => {
+    const nh = normHeaderName(h);
+    return nh === 'tipo de classificacao' || nh === 'tipo classificacao';
+  });
 
   const rows = [];
   const stats = { lidas: stage.dataRows.length, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 };
@@ -59,9 +64,19 @@ function buildImportRows(stage, operatorEmail) {
     const typeVal = String(getVal(row, 'type') || '').trim();
 
     // Para OmniLink, "Método de processamento" tem prioridade sobre "Status".
-    const resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
+    let resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
       ? normClf(row[metodoProcIdx])
       : classificationNorm;
+
+    if (stage.platformId === 'maxtrack' && resolvedClassification === 'Não classificado') {
+      const statusRaw = statusIdx > -1 ? String(row[statusIdx] || '').trim() : '';
+      const tipoClfRaw = tipoClfIdx > -1 ? String(row[tipoClfIdx] || '').trim() : '';
+      if (statusRaw.startsWith('Auto Finalizado')) {
+        resolvedClassification = 'Não classificado - Auto Finalizado';
+      } else if (statusRaw === 'Finalizado' && tipoClfRaw === 'Imagem não visível') {
+        resolvedClassification = 'Não classificado - Imagem não visível';
+      }
+    }
 
     const severidade = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
     // "Leve" é salvo (entra em rows) mas não entra na análise (excluído no servidor).

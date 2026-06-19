@@ -1,4 +1,4 @@
-export default function FadigaKPIs({ d, prevD }) {
+export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
   const k = d ? d.kpis : {};
   const pct = (v) => (v == null ? '—' : v + '%');
 
@@ -62,6 +62,7 @@ export default function FadigaKPIs({ d, prevD }) {
 
   const kpis = [
     {
+      id: 'total',
       icon: 'ti-alert-triangle',
       label: 'Total de alertas',
       value: d ? k.total.toLocaleString('pt-BR') : '—',
@@ -72,6 +73,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.total, prevD?.kpis?.total, false, 'Total de alertas'),
     },
     {
+      id: 'positivo',
       icon: 'ti-eye-check',
       label: 'Alertas positivos',
       value: d ? pct(k.pct_positivo) : '—',
@@ -80,6 +82,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.pct_positivo, prevD?.kpis?.pct_positivo, true, 'Alertas positivos'),
     },
     {
+      id: 'falso',
       icon: 'ti-shield-x',
       label: 'Falso positivo',
       value: d ? pct(k.pct_falso) : '—',
@@ -88,6 +91,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.pct_falso, prevD?.kpis?.pct_falso, true, 'Falso positivo'),
     },
     {
+      id: 'naoclass',
       icon: 'ti-help-circle',
       label: 'Sem classificação',
       value: d ? pct(k.pct_naoclass) : '—',
@@ -96,6 +100,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.pct_naoclass, prevD?.kpis?.pct_naoclass, true, 'Sem classificação'),
     },
     {
+      id: 'velocidade',
       icon: 'ti-gauge',
       label: 'Velocidade mediana',
       value: d && k.vel_mediana != null ? k.vel_mediana + ' km/h' : '—',
@@ -104,6 +109,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.vel_mediana, prevD?.kpis?.vel_mediana, false, 'Velocidade mediana'),
     },
     {
+      id: 'evidencia',
       icon: 'ti-video',
       label: 'Com evidência',
       value: d && k.pct_evidencia != null ? pct(k.pct_evidencia) : '—',
@@ -112,6 +118,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.pct_evidencia, prevD?.kpis?.pct_evidencia, true, 'Com evidência'),
     },
     {
+      id: 'tempo_tratar',
       icon: 'ti-clock-play',
       label: 'Tempo até tratar',
       value: d && k.t_ini_mediana != null ? k.t_ini_mediana + ' min' : '—',
@@ -120,6 +127,7 @@ export default function FadigaKPIs({ d, prevD }) {
       trend: renderTrend(k.t_ini_mediana, prevD?.kpis?.t_ini_mediana, false, 'Tempo até tratar'),
     },
     {
+      id: 'tempo_finalizar',
       icon: 'ti-clock-check',
       label: 'Tempo até finalizar',
       value: d && k.t_fin_mediana != null ? k.t_fin_mediana + ' min' : '—',
@@ -129,29 +137,59 @@ export default function FadigaKPIs({ d, prevD }) {
     },
   ];
 
+  const handleCardClick = (id) => {
+    if (setActiveKpi) {
+      setActiveKpi(activeKpi === id ? null : id);
+    }
+  };
+
   return (
     <div className="kpi-grid">
-      {kpis.map((k, idx) => (
-        <div key={idx} data-card className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={k.iconStyle}>
-              <i className={`ti ${k.icon}`}></i>
+      {kpis.map((k, idx) => {
+        const isActive = activeKpi === k.id;
+        return (
+          <div
+            key={idx}
+            data-card
+            className={`card clickable${isActive ? ' active' : ''}`}
+            onClick={() => handleCardClick(k.id)}
+            style={{
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={k.iconStyle}>
+                <i className={`ti ${k.icon}`}></i>
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600, lineHeight: 1.3 }}>
+                {k.label}
+              </div>
+              <i
+                className="ti ti-chevron-right"
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                  transition: 'transform 0.2s ease',
+                  transform: isActive ? 'rotate(90deg)' : 'none',
+                }}
+              ></i>
             </div>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600, lineHeight: 1.3 }}>
-              {k.label}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap', margin: '12px 0 6px' }}>
+              <span style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, fontFeatureSettings: "'tnum'" }}>
+                {k.value}
+              </span>
+              {k.trend}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', minHeight: '15px' }}>
+              {k.sub}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap', margin: '12px 0 6px' }}>
-            <span style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, fontFeatureSettings: "'tnum'" }}>
-              {k.value}
-            </span>
-            {k.trend}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', minHeight: '15px' }}>
-            {k.sub}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

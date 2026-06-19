@@ -53,7 +53,7 @@ begin
       and (p_frotas is null
            or coalesce(nullif(e.frota, ''), nullif(e.transportadora, ''), '') = any (p_frotas))
       and (p_classification is null or p_classification = '' or p_classification = 'all'
-           or e.analise_ia_plataforma = p_classification)
+           or analytics_norm_clf(e.analise_ia_plataforma) = p_classification)
       and (p_event_type is null or p_event_type = ''
            or e.nome_evento = p_event_type)
       and (p_severity is null or p_severity = '' or p_severity = 'all'

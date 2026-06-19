@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { aggregate, PLATFORMS } from '../src/utils/fatigueParser.js';
+import { aggregate, PLATFORMS, normClf } from '../src/utils/fatigueParser.js';
 import { buildSingleAnalyticsViaRPC } from './analytics-rpc.js';
 
 // Load env variables from root and server directory
@@ -236,7 +236,7 @@ function filterRows(rows, { company, severity, month, startDate, endDate, classi
 
   // Filter by classification
   if (classification && classification !== 'all') {
-    filtered = filtered.filter(row => row[5] === classification);
+    filtered = filtered.filter(row => normClf(row[5]) === classification);
   }
 
   // Filter by event type

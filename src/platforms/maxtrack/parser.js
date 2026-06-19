@@ -17,6 +17,7 @@ import { normalize } from '../shared/normalize.js';
 import { parseSpeed, parseEventDate, parseTurno, maxSeveridade } from '../shared/parsers.js';
 import { buildClearMap, isAfterClear } from '../shared/history.js';
 import { emptyDriver, emptyStats } from '../base.js';
+import { normClf } from '../../utils/fatigueParser.js';
 import {
   COLUMNS,
   FINALIZADO_STATUS,
@@ -94,6 +95,7 @@ export async function parse(file, { history = [] } = {}) {
   const iAnalise  = findCol(headers, COLUMNS.analise_ia);
   const iIdEvento = findCol(headers, COLUMNS.id_evento);
   const iStatus   = findCol(headers, COLUMNS.status);
+  const iTipoClf  = findCol(headers, COLUMNS.tipo_classificacao);
 
   const findColByAliases = (headers, aliases) => {
     return headers.findIndex(h => {
@@ -150,9 +152,20 @@ export async function parse(file, { history = [] } = {}) {
       const sevRaw     = iSev     >= 0 ? String(row[iSev]     || '').trim() : '';
       const descricao  = iDescricao >= 0 ? String(row[iDescricao] || '').trim() : '';
       const localidade = iLocal   >= 0 ? String(row[iLocal]   || '').trim() : '';
-      const analise    = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
+      let analise      = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
       const idEvento   = iIdEvento >= 0 ? String(row[iIdEvento] || '').trim() : '';
       const duracao    = iDuracao >= 0 ? parseDuracao(row[iDuracao]) : null;
+
+      const clfNorm = normClf(analise);
+      if (clfNorm === 'Não classificado') {
+        const statusVal = iStatus >= 0 ? String(row[iStatus] || '').trim() : '';
+        const tipoClfVal = iTipoClf >= 0 ? String(row[iTipoClf] || '').trim() : '';
+        if (statusVal.startsWith('Auto Finalizado')) {
+          analise = 'Não classificado - Auto Finalizado';
+        } else if (statusVal === 'Finalizado' && tipoClfVal === 'Imagem não visível') {
+          analise = 'Não classificado - Imagem não visível';
+        }
+      }
 
       const nomeNorm   = normalize(nomeEvento);
       const bucket     = INTERVENCAO_NORM.includes(nomeNorm) ? 'intervencao'
@@ -287,9 +300,20 @@ export async function parse(file, { history = [] } = {}) {
     const sevRaw     = iSev     >= 0 ? String(row[iSev]     || '').trim() : '';
     const descricao  = iDescricao >= 0 ? String(row[iDescricao] || '').trim() : '';
     const localidade = iLocal   >= 0 ? String(row[iLocal]   || '').trim() : '';
-    const analise    = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
+    let analise      = iAnalise >= 0 ? String(row[iAnalise] || '').trim() : '';
     const idEvento   = iIdEvento >= 0 ? String(row[iIdEvento] || '').trim() : '';
     const duracao    = iDuracao >= 0 ? parseDuracao(row[iDuracao]) : null;
+
+    const clfNorm = normClf(analise);
+    if (clfNorm === 'Não classificado') {
+      const statusVal = iStatus >= 0 ? String(row[iStatus] || '').trim() : '';
+      const tipoClfVal = iTipoClf >= 0 ? String(row[iTipoClf] || '').trim() : '';
+      if (statusVal.startsWith('Auto Finalizado')) {
+        analise = 'Não classificado - Auto Finalizado';
+      } else if (statusVal === 'Finalizado' && tipoClfVal === 'Imagem não visível') {
+        analise = 'Não classificado - Imagem não visível';
+      }
+    }
 
     entry.eventos.push({
       _nome:       nomeEvento,

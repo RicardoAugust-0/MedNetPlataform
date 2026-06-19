@@ -117,6 +117,78 @@
   border-bottom: none;
 }
 
+/* Interatividade dos cards de KPI */
+.kpi-grid .card.clickable {
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpi-grid .card.clickable:hover {
+  border-color: var(--border-strong, rgba(15, 25, 35, 0.20));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.kpi-grid .card.clickable.active {
+  border-color: var(--accent-500, #9E1A45);
+  background: var(--surface-1, #F4F5F8);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .kpi-grid .card.clickable.active {
+  border-color: var(--accent-400, #C24A6A);
+}
+
+/* Drilldowns */
+.dg-drill {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 14px 18px;
+  animation: drillIn 0.22s ease;
+}
+
+@keyframes drillIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.dg-drill-col h4 {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  margin-top: 0;
+}
+
+.dg-drill-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dg-drill-line:last-child {
+  border-bottom: none;
+}
+
+.dg-drill-line .v {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .dg-drill {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 /* Print Rules */
 @media print {
   .sidebar, .topbar, button, select, .btn, .no-print, [data-noprint] {

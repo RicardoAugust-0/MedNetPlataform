@@ -10,6 +10,7 @@ import FadigaKPIs from './analytics/FadigaKPIs.jsx';
 import ComparisonView from './analytics/ComparisonView.jsx';
 import FadigaCharts from './analytics/FadigaCharts.jsx';
 import ImportModal from './analytics/ImportModal.jsx';
+import FadigaKPIsDrill from './analytics/components/FadigaKPIsDrill.jsx';
 
 // Modular components
 import AnalyticsHeader from './analytics/components/AnalyticsHeader.jsx';
@@ -30,6 +31,7 @@ export default function Analytics() {
   const [availableTypes, setAvailableTypes] = useState([]);
 
   const [activeId, setActiveId] = useState(null);
+  const [activeKpi, setActiveKpi] = useState(null);
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     try {
@@ -143,6 +145,7 @@ export default function Analytics() {
     setSelectedCompany('');
     setSelectedClassification('all');
     setSelectedType('');
+    setActiveKpi(null);
   }, [activeId, compare]);
 
   // Tick clock
@@ -663,7 +666,31 @@ export default function Analytics() {
         )}
 
         {/* KPIs Row */}
-        {(activeId || compare) && <FadigaKPIs d={d} prevD={prevD} />}
+        {(activeId || compare) && (
+          <>
+            <FadigaKPIs
+              d={d}
+              prevD={prevD}
+              activeKpi={activeKpi}
+              setActiveKpi={setActiveKpi}
+            />
+            <FadigaKPIsDrill
+              activeKpi={activeKpi}
+              d={d}
+              prevD={prevD}
+              selectedMonth={selectedMonth}
+              startDate={startDate}
+              endDate={endDate}
+              selectedCompany={selectedCompany}
+              selectedSeverity={selectedSeverity}
+              selectedType={selectedType}
+              activeId={activeId}
+              compare={compare}
+              comparePlatformIds={comparePlatformIds}
+              compareCompanies={compareCompanies}
+            />
+          </>
+        )}
 
         {/* Comparação */}
         {compare && sources.length >= 2 && (
