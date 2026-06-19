@@ -66,8 +66,8 @@ function formatDataRows(events, aliases) {
     resolveMonitorName(ev.frota || ev.transportadora || '', aliases) || 'Não informado',
     ev.descricao || '',
     ev.evidencia || '',
-    ev.inicio_tratativa || '',
-    ev.fim_tratativa || ''
+    toSpWallclock(ev.inicio_tratativa),
+    toSpWallclock(ev.fim_tratativa)
   ]);
 }
 
