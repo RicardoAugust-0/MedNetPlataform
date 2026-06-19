@@ -552,7 +552,7 @@ export default function Analytics() {
       <div style={{ width: '100%', minHeight: '60vh', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
           <i className="ti ti-loader-2 fz-spin" style={{ fontSize: '38px', color: '#9E1A45' }}></i>
-          <span style={{ fontSize: '13.5px', fontWeight: 500 }}>Carregando dados da plataforma...</span>
+          <span style={{ fontSize: '13.5px', fontWeight: 500 }}>Agregando dados...</span>
         </div>
       </div>
     );

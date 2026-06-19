@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { aggregate, PLATFORMS } from '../src/utils/fatigueParser.js';
+import { buildSingleAnalyticsViaRPC } from './analytics-rpc.js';
 
 // Load env variables from root and server directory
 dotenv.config({ path: '../.env' });
@@ -28,6 +29,8 @@ console.log(`[MedNet Backend] Conectado ao Supabase: ${supabaseUrl}`);
 // In-memory caches
 const rawEventsCache = {};
 let carrierAliasesCache = null;
+const resultCache = new Map();            // chave: engine|originalUrl -> { data, ts }
+const RESULT_TTL = 5 * 60 * 1000;
 
 // Fetch and cache carrier aliases
 async function getCarrierAliases() {
@@ -147,10 +150,23 @@ function excludeLeve(events) {
   return events.filter((ev) => ev.severidade !== 'Leve');
 }
 
+// ocorrido_em (instante UTC) -> wall-clock de São Paulo 'YYYY-MM-DD HH:mm:ss'.
+// SP é UTC-3 fixo (Brasil sem horário de verão desde 2019); bate com o
+// `at time zone 'America/Sao_Paulo'` da RPC para os dados do hot tier.
+function toSpWallclock(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const sp = new Date(d.getTime() - 3 * 3600 * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${sp.getUTCFullYear()}-${p(sp.getUTCMonth() + 1)}-${p(sp.getUTCDate())} `
+       + `${p(sp.getUTCHours())}:${p(sp.getUTCMinutes())}:${p(sp.getUTCSeconds())}`;
+}
+
 // Convert events array to raw dataRows format used by aggregate function
 function formatDataRows(events, aliases) {
   return events.map((ev) => [
-    ev.ocorrido_em,
+    toSpWallclock(ev.ocorrido_em),
     ev.nome || '',
     ev.placa || '',
     ev.severidade || '',
@@ -221,8 +237,8 @@ function filterRows(rows, { company, severity, month, startDate, endDate, classi
 
   // Filter by date range (for custom or month)
   if (month === 'custom' && startDate && endDate) {
-    const start = new Date(startDate + 'T00:00:00.000Z').getTime();
-    const end = new Date(endDate + 'T23:59:59.999Z').getTime();
+    const start = new Date(startDate + 'T00:00:00.000').getTime();
+    const end = new Date(endDate + 'T23:59:59.999').getTime();
     filtered = filtered.filter(row => {
       const t = row[0] ? new Date(row[0]).getTime() : 0;
       return t >= start && t <= end;
@@ -286,6 +302,32 @@ app.get('/api/analytics', async (req, res) => {
 
     if (targetPlatformIds.length === 0) {
       return res.status(400).json({ error: 'Nenhuma plataforma especificada.' });
+    }
+
+    const engine = (process.env.ANALYTICS_ENGINE || 'js').toLowerCase();
+    const cacheKey = `${engine}|${req.originalUrl}`;
+    const cached = resultCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts < RESULT_TTL)) {
+      return res.json(cached.data);
+    }
+    const sendPayload = (payload) => {
+      resultCache.set(cacheKey, { data: payload, ts: Date.now() });
+      return res.json(payload);
+    };
+
+    // Caminho RPC: só uma plataforma. Compare e qualquer erro caem no caminho JS.
+    if (engine === 'rpc' && !isCompare && targetPlatformIds.length === 1) {
+      try {
+        const payload = await buildSingleAnalyticsViaRPC(
+          supabase,
+          { platformId: targetPlatformIds[0], month, startDate, endDate,
+            company, severity, classification, eventType },
+          { resolveMonitorName, aliases }
+        );
+        return sendPayload(payload);
+      } catch (rpcErr) {
+        console.error('[MedNet Backend] RPC falhou, fallback JS:', rpcErr.message || rpcErr);
+      }
     }
 
     // Load raw events for all target platforms (eventos "Leve" ficam fora da análise)
@@ -395,7 +437,7 @@ app.get('/api/analytics', async (req, res) => {
         combinedPrevD = aggregate(HEADERS, combinedRawRowsPrev, MAPPING, prevMonthKey);
       }
 
-      return res.json({
+      return sendPayload({
         availableMonths,
         availableCompanies,
         availableTypes,
@@ -428,7 +470,7 @@ app.get('/api/analytics', async (req, res) => {
         prevD = aggregate(HEADERS, filteredPrev, MAPPING, prevMonthKey);
       }
 
-      return res.json({
+      return sendPayload({
         availableMonths,
         availableCompanies,
         availableTypes,
@@ -507,10 +549,12 @@ app.post('/api/clear-cache', (req, res) => {
 
   if (platformId) {
     delete rawEventsCache[platformId];
+    resultCache.clear();
     console.log(`[MedNet Backend] Cache limpo para a plataforma: ${platformId}`);
   } else {
     Object.keys(rawEventsCache).forEach(k => delete rawEventsCache[k]);
     carrierAliasesCache = null;
+    resultCache.clear();
     console.log('[MedNet Backend] Todo o cache em memória foi invalidado.');
   }
 
