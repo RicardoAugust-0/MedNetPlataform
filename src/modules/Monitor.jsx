@@ -269,8 +269,27 @@ export default function Monitor() {
         const updated = [{ hash, name: file.name, at: new Date().toISOString() }, ...recent.filter(r => r.hash !== hash)].slice(0, 10);
         try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch { /* storage não crítico */ }
       }
+      let operatorEmail = 'hevilyntfzero@gmail.com';
+      if (platform.id === 'omnilink') {
+        try {
+          const { data: configData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'omnilink_config')
+            .maybeSingle();
+          if (configData?.value?.operator_email) {
+            operatorEmail = configData.value.operator_email;
+          }
+        } catch (err) {
+          console.warn('[Monitor] Erro ao obter omnilink_config:', err);
+        }
+      }
+
       const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file, { history: filterHistory });
+      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file, { 
+        history: filterHistory,
+        operatorEmail: operatorEmail
+      });
       const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
       const postProcessed = platform.postProcess?.(histFiltered);
       const newDrivers    = postProcessed?.drivers    ?? histFiltered;

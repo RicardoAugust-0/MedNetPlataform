@@ -40,7 +40,7 @@ export const FIELD_DEFS = [
   { key: 'classification', label: 'Classificação (análise)', req: false,
     aliases: ['classificacao', 'analise', 'resultado da analise', 'validacao', 'tratativa', 'julgamento', 'parecer', 'resultado', 'status do alerta', 'status'] },
   { key: 'speed',          label: 'Velocidade', req: false,
-    aliases: ['velocidade no alerta', 'velocidade do veiculo', 'velocidade', 'vel', 'speed', 'km/h'] },
+    aliases: ['velocidade no alerta', 'velocidade do veiculo', 'velocidade', 'speed', 'km/h'] },
   { key: 'location',       label: 'Localização / UF', req: false,
     aliases: ['localizacao', 'local', 'uf', 'estado', 'cidade', 'municipio', 'endereco', 'posicao', 'localidade'] },
   { key: 'fleet',          label: 'Frota / base / cliente', req: false,
@@ -54,6 +54,116 @@ export const FIELD_DEFS = [
   { key: 'description',    label: 'Descrição / Categoria', req: false,
     aliases: ['descricao', 'categoria', 'description', 'category'] },
 ];
+
+// ── Mapas determinísticos de colunas por plataforma conhecida ──
+// Para plataformas reconhecidas, o layout é fixo e conhecido — então em vez de
+// confiar só na detecção por sinônimos (que pode escolher a coluna errada quando
+// há nomes parecidos, ex.: "Veículo" vs "Placa"), fixamos o cabeçalho exato.
+// Cada campo lista cabeçalhos candidatos em ordem de preferência; o primeiro que
+// existir na planilha (comparação sem acento/caixa) é fixado, sobrepondo a
+// detecção genérica. Campos ausentes mantêm o que a detecção genérica achou.
+// Listar vários candidatos cobre variações de export da MESMA plataforma
+// (ex.: Sascar bruto "Hora do evento" vs Sascar já normalizado "Data/Hora").
+export const PLATFORM_COLUMN_MAPS = {
+  sascar: {
+    datetime:       ['Hora do evento', 'Data/Hora', 'Data do evento'],
+    driver:         ['Motorista'],
+    plate:          ['Placa'],
+    criticality:    ['Severidade'],
+    type:           ['Evento'],
+    classification: ['Validação', 'Classificação', 'Status'],
+    speed:          ['Velocidade', 'Velocidade (km/h)'],
+    location:       ['Localidade'],
+    fleet:          ['Transportadora', 'Frota/Empresa', 'Cliente'],
+    description:    ['Categoria', 'Descrição'],
+  },
+  maxtrack: {
+    datetime:       ['Data'],
+    driver:         ['Motorista'],
+    plate:          ['Identificador/Placa'],
+    criticality:    ['Criticidade'],
+    type:           ['Nome'],
+    classification: ['Classificação'],
+    speed:          ['Velocidade Inicial', 'Velocidade Final'],
+    location:       ['Localidade'],
+    fleet:          ['Empresa', 'Cliente'],
+    evidence:       ['Possui evidência?'],
+    treatStart:     ['Início da Tratativa'],
+    description:    ['Categoria', 'Descrição'],
+  },
+  omnilink: {
+    datetime:       ['Data da ocorrência', 'Data de cadastro'],
+    driver:         ['Motorista'],
+    plate:          ['Placa'],
+    type:           ['Evento'],
+    classification: ['Método de processamento', 'Status'],
+    speed:          ['Velocidade'],
+    location:       ['Endereço'],
+    treatStart:     ['Data de tratamento'],
+  },
+  sighra: {
+    datetime:       ['Data Alerta', 'Primeiro Evento'],
+    driver:         ['Motorista'],
+    plate:          ['Placa'],
+    criticality:    ['Criticidade'],
+    type:           ['Evento'],
+    classification: ['Classificação', 'Status'],
+    fleet:          ['Cliente'],
+    treatStart:     ['Início Tratativa'],
+    description:    ['Motivo', 'Observações'],
+  },
+  horizon: {
+    datetime:       ['Data/Hora Evento'],
+    driver:         ['Motorista / Comandante'],
+    plate:          ['Placa / Empurrador'],
+    criticality:    ['Gravidade'],
+    type:           ['Evento'],
+    classification: ['Avaliação', 'Justificativa', 'Status'],
+    speed:          ['Velocidade'],
+    location:       ['Local'],
+    fleet:          ['Transportadora / Empresa de Navegação', 'Filial'],
+    evidence:       ['Data/Hora Disponibilidade Vídeo'],
+    treatStart:     ['Data/Hora Publicação'],
+    description:    ['Descrição'],
+  },
+};
+
+// ── Assinaturas por cabeçalho (fallback quando o nome do arquivo não denuncia) ──
+// Alguns exports não trazem o nome da plataforma no arquivo nem nas colunas
+// (ex.: MaxTrack "Relatório - Eventos", Horizon "historico ...xlsx"). Aqui
+// reconhecemos pela presença de colunas características (já normalizadas).
+const PLATFORM_HEADER_SIGS = [
+  { id: 'maxtrack', need: ['identificador/placa'], anyOf: ['criticidade original', 'tipo de operacao', 'matricula do motorista'] },
+  { id: 'sighra',   need: ['id alerta', 'quantidade eventos'] },
+  { id: 'horizon',  need: [], anyOf: ['placa / empurrador', 'transportadora / empresa de navegacao', 'abono motorista'] },
+  { id: 'omnilink', need: ['metodo de processamento', 'tratado por'] },
+];
+
+// Tenta reconhecer a plataforma só pelos cabeçalhos (recebe cabeçalhos já normalizados).
+export function detectByHeaders(normHeaders) {
+  for (const sig of PLATFORM_HEADER_SIGS) {
+    const hasNeed = sig.need.every((n) => normHeaders.includes(n));
+    const hasAny = !sig.anyOf || sig.anyOf.length === 0 || sig.anyOf.some((a) => normHeaders.includes(a));
+    if (hasNeed && hasAny) return sig.id;
+  }
+  return null;
+}
+
+// Aplica o mapa determinístico da plataforma sobre um mapeamento já calculado.
+// Só sobrepõe um campo quando algum cabeçalho candidato realmente existe na
+// planilha — caso contrário preserva o resultado da detecção genérica.
+export function applyPlatformMap(headers, platformId, mapping = {}) {
+  const map = PLATFORM_COLUMN_MAPS[platformId];
+  if (!map) return mapping;
+  const normHeaders = headers.map(norm);
+  for (const field of Object.keys(map)) {
+    for (const cand of map[field]) {
+      const idx = normHeaders.indexOf(norm(cand));
+      if (idx > -1) { mapping[field] = headers[idx]; break; }
+    }
+  }
+  return mapping;
+}
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -104,7 +214,8 @@ export function normCrit(v) {
 
 export function normClf(v) {
   const s = norm(v); if (!s) return 'Não classificado';
-  if (s.includes('falso')) return 'Falso positivo';
+  // "Improcedente" contém "procede" — precisa ser testado ANTES do bloco Positivo.
+  if (s.includes('falso') || s.includes('improced')) return 'Falso positivo';
   if (s.includes('positiv') || s.includes('confirmad') || s.includes('procede') || s.includes('verdadeir') || s.includes('real') || s.includes('valido')) return 'Positivo';
   return 'Não classificado';
 }
@@ -179,6 +290,13 @@ export function detect(headers, platformHint, fileName) {
       if (p.sig.some((s) => joined.includes(s))) { platform = p; break; }
     }
   }
+  // Fallback: reconhecer pela "impressão digital" das colunas quando o nome do
+  // arquivo/cabeçalho não denuncia a plataforma (ex.: MaxTrack "Relatório - Eventos",
+  // Horizon "historico ...").
+  if (!platform) {
+    const byHeaders = detectByHeaders(normHeaders);
+    if (byHeaders) platform = PLATFORMS.find((p) => p.id === byHeaders) || null;
+  }
 
   const used = new Set();
   const mapping = {};
@@ -200,15 +318,10 @@ export function detect(headers, platformHint, fileName) {
     else mapping[f.key] = null;
   }
 
-  // Force classification to "Método de processamento" for OmniLink if present
-  if (platform && platform.id === 'omnilink') {
-    const metodoProcHeader = headers.find((h) => {
-      const nh = norm(h);
-      return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
-    });
-    if (metodoProcHeader) {
-      mapping['classification'] = metodoProcHeader;
-    }
+  // Para plataformas conhecidas, fixa as colunas pelo mapa determinístico
+  // (sobrepõe a detecção genérica apenas quando a coluna existe na planilha).
+  if (platform) {
+    applyPlatformMap(headers, platform.id, mapping);
   }
 
   return { platform: platform ? platform.id : 'auto', platformName: platform ? platform.name : 'Detecção automática', mapping };

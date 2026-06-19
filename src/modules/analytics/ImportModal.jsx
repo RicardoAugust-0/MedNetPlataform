@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { supabase } from '../../supabase.js';
 import {
   PLATFORMS,
   FIELD_DEFS,
@@ -113,31 +114,41 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
 
   const handleStagePlatformChange = (e) => {
     const id = e.target.value;
-    const p = PLATFORMS.find((x) => x.id === id);
     setStage((prev) => {
       if (!prev) return null;
-      const updatedMapping = { ...prev.mapping };
-      if (id === 'omnilink') {
-        const metodoProcHeader = prev.headers.find(h => {
-          const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
-        });
-        if (metodoProcHeader) {
-          updatedMapping['classification'] = metodoProcHeader;
-        }
-      }
+      // Recalcula o mapeamento inteiro para a plataforma escolhida: detecção por
+      // sinônimos + mapa determinístico de colunas (fixa as colunas certas de cada
+      // plataforma, ex.: Sighra "Placa" em vez de "Veículo"; OmniLink usa
+      // "Método de processamento" como classificação).
+      const det = detect(prev.headers, id, prev.fileName);
       return {
         ...prev,
-        platformId: id,
-        platformName: p ? p.name : 'Detecção automática',
-        mapping: updatedMapping,
+        platformId: det.platform,
+        platformName: det.platformName,
+        mapping: det.mapping,
       };
     });
   };
 
-  const handleConfirmClick = () => {
+  const handleConfirmClick = async () => {
     if (!stage) return;
     setError(null);
+
+    let operatorEmail = 'hevilyntfzero@gmail.com';
+    if (stage.platformId === 'omnilink') {
+      try {
+        const { data: configData } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'omnilink_config')
+          .maybeSingle();
+        if (configData?.value?.operator_email) {
+          operatorEmail = configData.value.operator_email;
+        }
+      } catch (err) {
+        console.warn('[ImportModal] Erro ao obter omnilink_config:', err);
+      }
+    }
 
     const getVal = (row, k) => {
       const headerIdx = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
@@ -148,13 +159,13 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
 
     // Find index for 'Tratado por' column for OmniLink filter
     const tratadoPorIdx = stage.headers.findIndex(h => {
-      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       return nh === 'tratado por';
     });
 
     // Find index for 'Método de processamento' column
     const metodoProcIdx = stage.headers.findIndex(h => {
-      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
     });
 
@@ -167,7 +178,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
       // 1. Filter out by operator email if it is OmniLink
       if (isOmnilink && tratadoPorIdx > -1) {
         const tratadoPor = String(row[tratadoPorIdx] || '').trim().toLowerCase();
-        if (tratadoPor !== 'hevilyntfzero@gmail.com') {
+        if (tratadoPor !== operatorEmail.toLowerCase()) {
           continue; // skip
         }
       }
@@ -200,6 +211,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
         velocidade_kmh: speedVal,
         localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
         frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
+        descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
         ocorrido_em: dt.toISOString(),
       });
     }
@@ -227,7 +239,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
   return (
     <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '580px', maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
-        
+
         {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexShrink: 0 }}>
           <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -345,7 +357,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
             <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.6px', flexShrink: 0 }}>
               Mapeamento de colunas da planilha
             </div>
-            
+
             <div className="field-mapping-table" style={{ flex: 1, overflowY: 'auto' }}>
               {fieldRows.map((f) => (
                 <div key={f.key} className="field-mapping-row">

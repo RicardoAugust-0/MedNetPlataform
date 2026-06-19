@@ -55,7 +55,7 @@ export function detect({ fileName = '', headers = [] } = {}) {
   return Math.min(1, score);
 }
 
-export async function parse(file) {
+export async function parse(file, { history = [], operatorEmail = 'hevilyntfzero@gmail.com' } = {}) {
   const XLSX = await import('xlsx');
 
   return new Promise((resolve, reject) => {
@@ -79,9 +79,9 @@ export async function parse(file) {
         let filtradosPorVelocidade = 0;
 
         const valid = rows.filter((r) => {
-          // Filtrar por tratamento exclusivo pelo usuário hevilyntfzero@gmail.com
+          // Filtrar por tratamento exclusivo pelo operador configurado
           const tratadoPorRaw = String(r[COLUMNS.tratadoPor] || '').trim().toLowerCase();
-          if (tratadoPorRaw !== 'hevilyntfzero@gmail.com') {
+          if (tratadoPorRaw !== operatorEmail.toLowerCase()) {
             return false;
           }
           return true;

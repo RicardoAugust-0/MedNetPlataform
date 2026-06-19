@@ -16,6 +16,9 @@ export default function Admin() {
   const { aliases, setAliases } = useCarrierAliases();
   const { profile: me } = useAuth();
   const toast = useToast();
+  
+  const [activeTab, setActiveTab] = useState('equipe'); // 'equipe' | 'integracoes' | 'ia' | 'sistema'
+
   const [editing, setEditing] = useState(null);
   const [editNome,  setEditNome]  = useState('');
   const [editCargo, setEditCargo] = useState('');
@@ -158,286 +161,448 @@ export default function Admin() {
   if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      {/* Convidar novo operador */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title"><i className="ti ti-user-plus"></i> Convidar operador</div>
-        </div>
-        <form onSubmit={handleInvite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-            <label className="form-label" htmlFor="invite-email">E-mail do novo operador</label>
-            <input
-              id="invite-email"
-              className="form-control"
-              type="email"
-              placeholder="operador@exemplo.com"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              disabled={inviting}
-            />
-          </div>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={inviting || !inviteEmail}
-            style={{ flexShrink: 0 }}
-          >
-            {inviting
-              ? <><i className="ti ti-loader-2"></i> Enviando…</>
-              : <><i className="ti ti-send"></i> Convidar</>
-            }
-          </button>
-        </form>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          O operador receberá um e-mail com link para definir a senha e acessar a plataforma.
-        </div>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* Header */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Painel de Administração</h2>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Configure permissões da equipe, automações RPA, credenciais de IA e ferramentas do sistema.</p>
       </div>
 
-      {/* Modo manutenção */}
-      <div className="card" style={{ marginBottom: 16, borderColor: maintenance.enabled ? '#F26931' : undefined }}>
-        <div className="card-header">
-          <div className="card-title">
-            <i className="ti ti-tools"></i> Modo manutenção
-            {maintenance.enabled && (
-              <span style={{ fontSize: 10, background: '#F26931', color: '#fff', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700, letterSpacing: 0.4 }}>
-                ATIVO
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.55 }}>
-          Quando ativo, operadores veem uma página de manutenção e não conseguem acessar a plataforma. Admins continuam com acesso normal.
-        </div>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label" htmlFor="maintenance-msg">Mensagem opcional para os operadores</label>
-          <input
-            id="maintenance-msg"
-            className="form-control"
-            type="text"
-            placeholder="Ex: Estamos atualizando o sistema, voltamos em breve."
-            value={maintMsg}
-            onChange={e => setMaintMsg(e.target.value)}
-            disabled={savingMaint}
-          />
-          {msgDirty && (
-            <div style={{ fontSize: 11, color: 'var(--warning-600, #b45309)', marginTop: 4 }}>
-              <i className="ti ti-alert-circle" style={{ fontSize: 11, marginRight: 3 }}></i>
-              Mensagem ainda não salva.
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            className="btn"
-            onClick={toggleMaintenance}
-            disabled={savingMaint}
-            style={{
-              background: maintenance.enabled ? 'var(--success-500, #1a7a3a)' : '#F26931',
-              color: '#fff',
-              border: 'none',
-            }}
-          >
-            {savingMaint
-              ? <><i className="ti ti-loader-2"></i> Salvando…</>
-              : maintenance.enabled
-                ? <><i className="ti ti-lock-open"></i> Liberar plataforma</>
-                : <><i className="ti ti-lock"></i> Travar plataforma</>
-            }
-          </button>
-          {msgDirty && (
+      {/* Tabs Menu */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '4px', 
+        borderBottom: '1px solid var(--border)', 
+        paddingBottom: '2px',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }}>
+        {[
+          { id: 'equipe', label: 'Equipe & Acessos', icon: 'ti-users' },
+          { id: 'integracoes', label: 'Integrações & RPA', icon: 'ti-api' },
+          { id: 'ia', label: 'Chaves de IA', icon: 'ti-cpu' },
+          { id: 'sistema', label: 'Sistema & Limpeza', icon: 'ti-settings' }
+        ].map(tab => {
+          const active = activeTab === tab.id;
+          return (
             <button
-              type="button"
-              className="btn"
-              onClick={saveMessage}
-              disabled={savingMaint}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                border: 'none',
+                background: 'none',
+                fontSize: '13px',
+                fontWeight: active ? 600 : 500,
+                color: active ? '#9E1A45' : 'var(--text-muted, #8A94A6)',
+                borderBottom: active ? '2.5px solid #9E1A45' : '2.5px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontFamily: 'inherit',
+                outline: 'none'
+              }}
             >
-              <i className="ti ti-device-floppy"></i> Salvar mensagem
+              <i className={`ti ${tab.icon}`} style={{ fontSize: '15px' }}></i>
+              {tab.label}
             </button>
-          )}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Mapeamento de transportadoras */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title"><i className="ti ti-replace"></i> Mapeamento de transportadoras</div>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-          Quando o nome da transportadora no Monitor difere do nome na planilha de intervenções, cadastre o par aqui.
-          O sistema aplicará a tradução automaticamente ao registrar atendimentos.
-        </div>
-
-        {Object.keys(aliases).length > 0 && (
-          <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 0 }}>
-            <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, padding: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              <span style={{ flex: 1 }}>Nome no Monitor</span>
-              <span style={{ width: 20 }}></span>
-              <span style={{ flex: 1 }}>Nome na planilha</span>
-              <span style={{ width: 64 }}></span>
-            </div>
-            {Object.entries(aliases).map(([monitor, sheet]) => {
-              const isEditing = editingAliasKey === monitor;
-              return (
-                <div key={monitor} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)' }}>
-                  {isEditing ? (
-                    <>
-                      <input
-                        className="form-control"
-                        style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
-                        value={editAliasMonitor}
-                        onChange={e => setEditAliasMonitor(e.target.value)}
-                        placeholder="Nome no Monitor"
-                        onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
-                      />
-                      <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
-                      <input
-                        className="form-control"
-                        style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
-                        value={editAliasSheet}
-                        onChange={e => setEditAliasSheet(e.target.value)}
-                        placeholder="Nome na planilha"
-                        onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
-                      />
-                      <button className="btn-icon" onClick={saveEditAlias} title="Salvar alteração">
-                        <i className="ti ti-check" style={{ color: 'var(--success-500)' }}></i>
-                      </button>
-                      <button className="btn-icon" onClick={cancelEditAlias} title="Cancelar">
-                        <i className="ti ti-x" style={{ color: 'var(--text-muted)' }}></i>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ flex: 1, fontSize: 13 }}>{monitor}</span>
-                      <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
-                      <span style={{ flex: 1, fontSize: 13 }}>{sheet}</span>
-                      <button className="btn-icon" onClick={() => startEditAlias(monitor, sheet)} title="Editar mapeamento">
-                        <i className="ti ti-pencil" style={{ color: 'var(--accent-500)' }}></i>
-                      </button>
-                      <button className="btn-icon" onClick={() => removeAlias(monitor)} title="Remover mapeamento">
-                        <i className="ti ti-trash" style={{ color: 'var(--danger-500)' }}></i>
-                      </button>
-                    </>
-                  )}
+      {/* Tab Contents */}
+      <div style={{ maxWidth: 720, width: '100%', marginTop: '10px' }}>
+        
+        {activeTab === 'equipe' && (
+          <div className="fz-in">
+            {/* Convidar novo operador */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <div className="card-title"><i className="ti ti-user-plus"></i> Convidar operador</div>
+              </div>
+              <form onSubmit={handleInvite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="invite-email">E-mail do novo operador</label>
+                  <input
+                    id="invite-email"
+                    className="form-control"
+                    type="email"
+                    placeholder="operador@exemplo.com"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    disabled={inviting}
+                  />
                 </div>
-              );
-            })}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={inviting || !inviteEmail}
+                  style={{ flexShrink: 0 }}
+                >
+                  {inviting
+                    ? <><i className="ti ti-loader-2"></i> Enviando…</>
+                    : <><i className="ti ti-send"></i> Convidar</>
+                  }
+                </button>
+              </form>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                O operador receberá um e-mail com link para definir a senha e acessar a plataforma.
+              </div>
+            </div>
+
+            {/* Lista de operadores */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <div className="card-title"><i className="ti ti-users"></i> Equipe · {profiles.length} operador{profiles.length !== 1 ? 'es' : ''}</div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {profiles.map(p => (
+                  <div key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
+                    borderBottom: '1px solid var(--border)',
+                  }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                      background: p.avatar_url ? 'var(--surface-1, #2a2a2a)' : 'linear-gradient(135deg, var(--accent-500), var(--accent-700))',
+                      display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, color: '#fff',
+                    }}>
+                      {p.avatar_url
+                        ? <img src={p.avatar_url} alt={p.nome || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : iniciais(p.nome || p.id.slice(0, 4))}
+                    </div>
+
+                    {editing === p.id ? (
+                      <div style={{ flex: 1, display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input className="form-control" style={{ flex: 1 }} value={editNome}  onChange={e => setEditNome(e.target.value)}  placeholder="Nome" />
+                        <input className="form-control" style={{ flex: 1 }} value={editCargo} onChange={e => setEditCargo(e.target.value)} placeholder="Cargo" />
+                        <button className="btn btn-sm btn-primary" onClick={saveEdit}><i className="ti ti-check"></i></button>
+                        <button className="btn btn-sm" onClick={() => setEditing(null)}><i className="ti ti-x"></i></button>
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {p.nome || '(sem nome)'}
+                          {p.id === me?.id && <span style={{ fontSize: 10, background: 'var(--accent-100)', color: 'var(--accent-600)', borderRadius: 4, padding: '1px 5px', marginLeft: 6 }}>Você</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.cargo || 'Operador'}</div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fmtLastSeen(p.last_seen)}</span>
+
+                      <select
+                        className="form-control"
+                        style={{ width: 'auto', fontSize: 11, padding: '3px 8px' }}
+                        value={p.role || 'operador'}
+                        onChange={e => updateRole(p.id, e.target.value)}
+                        disabled={p.id === me?.id}
+                      >
+                        <option value="operador">Operador</option>
+                        <option value="lider">Líder</option>
+                        <option value="admin">Admin</option>
+                      </select>
+
+                      {editing !== p.id && (
+                        <button className="btn-icon" title="Editar" onClick={() => startEdit(p)}>
+                          <i className="ti ti-pencil"></i>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Gerenciar acesso */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title"><i className="ti ti-info-circle"></i> Gerenciar acesso</div>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                <p>Para <strong>remover acesso</strong>, acesse o Supabase → Authentication → Users → Delete.</p>
+                <p>Operadores com role <strong>Admin</strong> podem convidar usuários e editar perfis da equipe.</p>
+              </div>
+            </div>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-            <label className="form-label" htmlFor="alias-monitor">Nome no Monitor</label>
-            <input
-              id="alias-monitor"
-              className="form-control"
-              value={aliasMonitor}
-              onChange={e => setAliasMonitor(e.target.value)}
-              placeholder="Ex: LSL Transportes"
-              onKeyDown={e => e.key === 'Enter' && addAlias()}
-            />
-          </div>
-          <i className="ti ti-arrow-right" style={{ marginBottom: 10, color: 'var(--text-muted)', flexShrink: 0 }}></i>
-          <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-            <label className="form-label" htmlFor="alias-sheet">Nome na planilha</label>
-            <input
-              id="alias-sheet"
-              className="form-control"
-              value={aliasSheet}
-              onChange={e => setAliasSheet(e.target.value)}
-              placeholder="Ex: LSL 2W"
-              onKeyDown={e => e.key === 'Enter' && addAlias()}
-            />
-          </div>
-          <button
-            className="btn btn-primary"
-            onClick={addAlias}
-            disabled={!aliasMonitor.trim() || !aliasSheet.trim()}
-            style={{ flexShrink: 0 }}
-          >
-            <i className="ti ti-plus"></i> Adicionar
-          </button>
-        </div>
-      </div>
+        {activeTab === 'integracoes' && (
+          <div className="fz-in">
+            {/* Configuração da OmniLink */}
+            <OmnilinkConfigCard />
 
-      {/* Lista de operadores */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title"><i className="ti ti-users"></i> Equipe · {profiles.length} operador{profiles.length !== 1 ? 'es' : ''}</div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {profiles.map(p => (
-            <div key={p.id} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-                background: p.avatar_url ? 'var(--surface-1, #2a2a2a)' : 'linear-gradient(135deg, var(--accent-500), var(--accent-700))',
-                display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, color: '#fff',
-              }}>
-                {p.avatar_url
-                  ? <img src={p.avatar_url} alt={p.nome || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : iniciais(p.nome || p.id.slice(0, 4))}
+            {/* Mapeamento de transportadoras */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <div className="card-title"><i className="ti ti-replace"></i> Mapeamento de transportadoras</div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+                Quando o nome da transportadora no Monitor difere do nome na planilha de intervenções, cadastre o par aqui.
+                O sistema aplicará a tradução automaticamente ao registrar atendimentos.
               </div>
 
-              {editing === p.id ? (
-                <div style={{ flex: 1, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input className="form-control" style={{ flex: 1 }} value={editNome}  onChange={e => setEditNome(e.target.value)}  placeholder="Nome" />
-                  <input className="form-control" style={{ flex: 1 }} value={editCargo} onChange={e => setEditCargo(e.target.value)} placeholder="Cargo" />
-                  <button className="btn btn-sm btn-primary" onClick={saveEdit}><i className="ti ti-check"></i></button>
-                  <button className="btn btn-sm" onClick={() => setEditing(null)}><i className="ti ti-x"></i></button>
-                </div>
-              ) : (
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {p.nome || '(sem nome)'}
-                    {p.id === me?.id && <span style={{ fontSize: 10, background: 'var(--accent-100)', color: 'var(--accent-600)', borderRadius: 4, padding: '1px 5px', marginLeft: 6 }}>Você</span>}
+              {Object.keys(aliases).length > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, padding: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <span style={{ flex: 1 }}>Nome no Monitor</span>
+                    <span style={{ width: 20 }}></span>
+                    <span style={{ flex: 1 }}>Nome na planilha</span>
+                    <span style={{ width: 64 }}></span>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.cargo || 'Operador'}</div>
+                  {Object.entries(aliases).map(([monitor, sheet]) => {
+                    const isEditing = editingAliasKey === monitor;
+                    return (
+                      <div key={monitor} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)' }}>
+                        {isEditing ? (
+                          <>
+                            <input
+                              className="form-control"
+                              style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
+                              value={editAliasMonitor}
+                              onChange={e => setEditAliasMonitor(e.target.value)}
+                              placeholder="Nome no Monitor"
+                              onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
+                            />
+                            <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                            <input
+                              className="form-control"
+                              style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
+                              value={editAliasSheet}
+                              onChange={e => setEditAliasSheet(e.target.value)}
+                              placeholder="Nome na planilha"
+                              onKeyDown={e => e.key === 'Enter' && saveEditAlias()}
+                            />
+                            <button className="btn-icon" onClick={saveEditAlias} title="Salvar alteração">
+                              <i className="ti ti-check" style={{ color: 'var(--success-500)' }}></i>
+                            </button>
+                            <button className="btn-icon" onClick={cancelEditAlias} title="Cancelar">
+                              <i className="ti ti-x" style={{ color: 'var(--text-muted)' }}></i>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ flex: 1, fontSize: 13 }}>{monitor}</span>
+                            <i className="ti ti-arrow-right" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                            <span style={{ flex: 1, fontSize: 13 }}>{sheet}</span>
+                            <button className="btn-icon" onClick={() => startEditAlias(monitor, sheet)} title="Editar mapeamento">
+                              <i className="ti ti-pencil" style={{ color: 'var(--accent-500)' }}></i>
+                            </button>
+                            <button className="btn-icon" onClick={() => removeAlias(monitor)} title="Remover mapeamento">
+                              <i className="ti ti-trash" style={{ color: 'var(--danger-500)' }}></i>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fmtLastSeen(p.last_seen)}</span>
-
-                <select
-                  className="form-control"
-                  style={{ width: 'auto', fontSize: 11, padding: '3px 8px' }}
-                  value={p.role || 'operador'}
-                  onChange={e => updateRole(p.id, e.target.value)}
-                  disabled={p.id === me?.id}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="alias-monitor">Nome no Monitor</label>
+                  <input
+                    id="alias-monitor"
+                    className="form-control"
+                    value={aliasMonitor}
+                    onChange={e => setAliasMonitor(e.target.value)}
+                    placeholder="Ex: LSL Transportes"
+                    onKeyDown={e => e.key === 'Enter' && addAlias()}
+                  />
+                </div>
+                <i className="ti ti-arrow-right" style={{ marginBottom: 10, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="alias-sheet">Nome na planilha</label>
+                  <input
+                    id="alias-sheet"
+                    className="form-control"
+                    value={aliasSheet}
+                    onChange={e => setAliasSheet(e.target.value)}
+                    placeholder="Ex: LSL 2W"
+                    onKeyDown={e => e.key === 'Enter' && addAlias()}
+                  />
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={addAlias}
+                  disabled={!aliasMonitor.trim() || !aliasSheet.trim()}
+                  style={{ flexShrink: 0 }}
                 >
-                  <option value="operador">Operador</option>
-                  <option value="lider">Líder</option>
-                  <option value="admin">Admin</option>
-                </select>
+                  <i className="ti ti-plus"></i> Adicionar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-                {editing !== p.id && (
-                  <button className="btn-icon" title="Editar" onClick={() => startEdit(p)}>
-                    <i className="ti ti-pencil"></i>
+        {activeTab === 'ia' && (
+          <div className="fz-in">
+            <AiCredentialsCard />
+          </div>
+        )}
+
+        {activeTab === 'sistema' && (
+          <div className="fz-in">
+            {/* Modo manutenção */}
+            <div className="card" style={{ marginBottom: 16, borderColor: maintenance.enabled ? '#F26931' : undefined }}>
+              <div className="card-header">
+                <div className="card-title">
+                  <i className="ti ti-tools"></i> Modo manutenção
+                  {maintenance.enabled && (
+                    <span style={{ fontSize: 10, background: '#F26931', color: '#fff', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700, letterSpacing: 0.4 }}>
+                      ATIVO
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.55 }}>
+                Quando ativo, operadores veem uma página de manutenção e não conseguem acessar a plataforma. Admins continuam com acesso normal.
+              </div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label" htmlFor="maintenance-msg">Mensagem opcional para os operadores</label>
+                <input
+                  id="maintenance-msg"
+                  className="form-control"
+                  type="text"
+                  placeholder="Ex: Estamos atualizando o sistema, voltamos em breve."
+                  value={maintMsg}
+                  onChange={e => setMaintMsg(e.target.value)}
+                  disabled={savingMaint}
+                />
+                {msgDirty && (
+                  <div style={{ fontSize: 11, color: 'var(--warning-600, #b45309)', marginTop: 4 }}>
+                    <i className="ti ti-alert-circle" style={{ fontSize: 11, marginRight: 3 }}></i>
+                    Mensagem ainda não salva.
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={toggleMaintenance}
+                  disabled={savingMaint}
+                  style={{
+                    background: maintenance.enabled ? 'var(--success-500, #1a7a3a)' : '#F26931',
+                    color: '#fff',
+                    border: 'none',
+                  }}
+                >
+                  {savingMaint
+                    ? <><i className="ti ti-loader-2"></i> Salvando…</>
+                    : maintenance.enabled
+                      ? <><i className="ti ti-lock-open"></i> Liberar plataforma</>
+                      : <><i className="ti ti-lock"></i> Travar plataforma</>
+                  }
+                </button>
+                {msgDirty && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={saveMessage}
+                    disabled={savingMaint}
+                  >
+                    <i className="ti ti-device-floppy"></i> Salvar mensagem
                   </button>
                 )}
               </div>
             </div>
-          ))}
+
+            {/* Limpar histórico */}
+            <ClearHistoryCard />
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── Nova Configuração da OmniLink ───────────────────────────────────────────
+function OmnilinkConfigCard() {
+  const toast = useToast();
+  const [operatorEmail, setOperatorEmail] = useState('');
+  const [savedEmail, setSavedEmail] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'omnilink_config')
+      .maybeSingle()
+      .then(({ data }) => {
+        const email = data?.value?.operator_email || 'hevilyntfzero@gmail.com';
+        setOperatorEmail(email);
+        setSavedEmail(email);
+        setLoading(false);
+      });
+  }, []);
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'omnilink_config',
+          value: { operator_email: operatorEmail.trim().toLowerCase() },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+
+      if (error) throw error;
+      setSavedEmail(operatorEmail.trim().toLowerCase());
+      toast('Configuração da OmniLink salva com sucesso!', 'success');
+    } catch (err) {
+      toast('Erro ao salvar configuração: ' + err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = operatorEmail.trim().toLowerCase() !== savedEmail;
+
+  if (loading) return null;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-header">
+        <div className="card-title">
+          <i className="ti ti-settings"></i> Configuração da OmniLink
         </div>
       </div>
-
-      <AiCredentialsCard />
-      <RpaCard />
-      <ClearHistoryCard />
-
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title"><i className="ti ti-info-circle"></i> Gerenciar acesso</div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
+        E-mail do operador cadastrado no sistema OmniLink cujos eventos tratados devem ser mantidos. Todos os outros operadores serão ignorados durante o parsing da planilha.
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="form-group" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
+          <label className="form-label" htmlFor="omnilink-operator">E-mail do operador</label>
+          <input
+            id="omnilink-operator"
+            className="form-control"
+            type="email"
+            value={operatorEmail}
+            onChange={e => setOperatorEmail(e.target.value)}
+            placeholder="Ex: operador@exemplo.com.br"
+            disabled={saving}
+          />
         </div>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
-          <p>Para <strong>remover acesso</strong>, acesse o Supabase → Authentication → Users → Delete.</p>
-          <p>Operadores com role <strong>Admin</strong> podem convidar usuários e editar perfis da equipe.</p>
-        </div>
+        <button
+          className="btn btn-primary"
+          onClick={saveConfig}
+          disabled={saving || !operatorEmail.trim() || !isDirty}
+          style={{ flexShrink: 0 }}
+        >
+          {saving ? <><i className="ti ti-loader-2 fz-spin"></i> Salvando…</> : <><i className="ti ti-device-floppy"></i> Salvar</>}
+        </button>
       </div>
     </div>
   );
@@ -504,372 +669,145 @@ function AiCredentialsCard() {
     return () => { cancelled = true; };
   }, []);
 
-  const cfgDirty = cfg.provider !== savedCfg.provider
-    || cfg.anthropic_model !== savedCfg.anthropic_model
-    || cfg.google_model    !== savedCfg.google_model;
+  const cfgDirty = cfg.provider !== savedCfg.provider ||
+                   cfg.anthropic_model !== savedCfg.anthropic_model ||
+                   cfg.google_model !== savedCfg.google_model;
 
-  const saveCfg = async () => {
+  const saveAiConfig = async () => {
     setSavingCfg(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('app_settings')
-        .update({ value: cfg, updated_at: new Date().toISOString(), updated_by: user?.id })
-        .eq('key', 'ai_config');
+      const { error } = await supabase.from('app_settings').upsert({
+        key: 'ai_config',
+        value: cfg,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' });
       if (error) throw error;
-      setSavedCfg({ ...cfg });
-      toast('Configuração de IA salva', 'success');
+      setSavedCfg(cfg);
+      toast('Configuração do modelo salva', 'success');
     } catch (err) {
-      toast('Erro ao salvar: ' + err.message, 'error');
+      toast('Erro ao salvar configuração: ' + err.message, 'error');
     }
     setSavingCfg(false);
   };
 
-  const saveKey = async (provider) => {
+  const saveProviderKey = async (provider) => {
     const key = provState[provider].apiKey.trim();
     if (!key) return;
+
     setProvState(prev => ({ ...prev, [provider]: { ...prev[provider], saving: true } }));
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('ai_credentials').upsert(
-        { provider, api_key: key, updated_at: new Date().toISOString(), updated_by: user?.id },
-        { onConflict: 'provider' },
+        { provider, api_key: key, updated_at: new Date().toISOString() },
+        { onConflict: 'provider' }
       );
       if (error) throw error;
-      setProvState(prev => ({ ...prev, [provider]: { configured: true, apiKey: '', saving: false } }));
-      toast(`Chave ${provider === 'google' ? 'Google' : 'Anthropic'} salva`, 'success');
+      setProvState(prev => ({ ...prev, [provider]: { ...prev[provider], configured: true, apiKey: '', saving: false } }));
+      toast(`Chave do ${provider === 'anthropic' ? 'Anthropic' : 'Google'} salva`, 'success');
     } catch (err) {
       toast('Erro ao salvar chave: ' + err.message, 'error');
       setProvState(prev => ({ ...prev, [provider]: { ...prev[provider], saving: false } }));
     }
   };
 
-  const activeProvider = AI_PROVIDERS.find(p => p.id === cfg.provider) || AI_PROVIDERS[0];
-  const activeModels   = activeProvider.models;
-
   if (loadingCfg) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-header">
-        <div className="card-title"><i className="ti ti-sparkles"></i> Inteligência Artificial</div>
-      </div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
-        Configure as chaves de API e o modelo padrão para geração de relatórios.
+        <div className="card-title"><i className="ti ti-cpu"></i> Provedores de IA & Modelos</div>
       </div>
 
-      {/* Provedor e modelo padrão */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
+        Gerencie qual modelo de inteligência artificial (Anthropic Claude ou Google Gemini) é utilizado para a análise do histórico de eventos dos motoristas.
+      </div>
+
+      {/* Provedor Ativo + Modelos */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label" htmlFor="ai-provider">Provedor padrão</label>
-          <select id="ai-provider" className="form-control" style={{ width: 'auto' }} value={cfg.provider}
-            onChange={e => setCfg(prev => ({ ...prev, provider: e.target.value }))}>
-            {AI_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          <label className="form-label" htmlFor="ai-provider">Provedor ativo</label>
+          <select
+            id="ai-provider"
+            className="form-control"
+            value={cfg.provider}
+            onChange={e => setCfg(prev => ({ ...prev, provider: e.target.value }))}
+          >
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="google">Google (Gemini)</option>
           </select>
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label" htmlFor="ai-model">Modelo padrão</label>
-          <select id="ai-model" className="form-control" style={{ width: 'auto' }}
-            value={cfg.provider === 'google' ? cfg.google_model : cfg.anthropic_model}
-            onChange={e => {
-              const key = cfg.provider === 'google' ? 'google_model' : 'anthropic_model';
-              setCfg(prev => ({ ...prev, [key]: e.target.value }));
-            }}>
-            {activeModels.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
-        </div>
+
+        {cfg.provider === 'anthropic' ? (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" htmlFor="model-anthropic">Modelo Anthropic</label>
+            <select
+              id="model-anthropic"
+              className="form-control"
+              value={cfg.anthropic_model}
+              onChange={e => setCfg(prev => ({ ...prev, anthropic_model: e.target.value }))}
+            >
+              {AI_PROVIDERS[0].models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+        ) : (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" htmlFor="model-google">Modelo Google</label>
+            <select
+              id="model-google"
+              className="form-control"
+              value={cfg.google_model}
+              onChange={e => setCfg(prev => ({ ...prev, google_model: e.target.value }))}
+            >
+              {AI_PROVIDERS[1].models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+        )}
+
         {cfgDirty && (
-          <button type="button" className="btn btn-primary btn-sm" onClick={saveCfg} disabled={savingCfg}>
-            {savingCfg ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-device-floppy"></i> Salvar</>}
+          <button type="button" className="btn btn-primary btn-sm" onClick={saveAiConfig} disabled={savingCfg} style={{ flexShrink: 0 }}>
+            {savingCfg ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-device-floppy"></i> Salvar configuração</>}
           </button>
         )}
       </div>
 
-      {/* Chaves por provedor */}
-      {AI_PROVIDERS.map(prov => {
-        const ps = provState[prov.id];
-        return (
-          <div key={prov.id} style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-              {prov.label}
-              {ps.configured && (
-                <span style={{ fontSize: 10, background: 'var(--success-500, #1a7a3a)', color: '#fff', borderRadius: 4, padding: '1px 6px', marginLeft: 8, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
-                  Configurada
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div className="form-group" style={{ flex: 1, minWidth: 220, marginBottom: 0 }}>
-                <label className="form-label" htmlFor={`ai-key-${prov.id}`}>API Key</label>
+      {/* Inputs de Chaves API */}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Credenciais API (Chaves)
+        </div>
+        {AI_PROVIDERS.map(p => {
+          const ps = provState[p.id];
+          return (
+            <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 12 }}>
+              <div className="form-group" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
+                <label className="form-label" htmlFor={`api-key-${p.id}`}>{p.label}</label>
                 <input
-                  id={`ai-key-${prov.id}`}
+                  id={`api-key-${p.id}`}
                   className="form-control"
                   type="password"
-                  placeholder={ps.configured ? '••••••••  (nova chave para substituir)' : `Cole sua ${prov.id === 'google' ? 'Google AI API Key' : 'Anthropic API Key'} aqui`}
                   value={ps.apiKey}
-                  onChange={e => setProvState(prev => ({ ...prev, [prov.id]: { ...prev[prov.id], apiKey: e.target.value } }))}
+                  onChange={e => setProvState(prev => ({ ...prev, [p.id]: { ...prev[p.id], apiKey: e.target.value } }))}
+                  placeholder={ps.configured ? '••••••••  (chave configurada, digite nova para alterar)' : 'Chave de API do provedor'}
                   disabled={ps.saving}
                 />
               </div>
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => saveKey(prov.id)}
+                onClick={() => saveProviderKey(p.id)}
                 disabled={ps.saving || !ps.apiKey.trim()}
                 style={{ flexShrink: 0 }}
               >
                 {ps.saving ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-key"></i> {ps.configured ? 'Substituir' : 'Salvar'}</>}
               </button>
             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const RPA_CONFIG_DEFAULT = {
-  enabled: false,
-  interval_minutes: 30,
-  platforms: ['maxtrack'],
-  last_run_at: null,
-  last_run_status: null,
-  last_run_message: null,
-};
-
-function RpaCard() {
-  const toast = useToast();
-
-  const [config, setConfig]         = useState(RPA_CONFIG_DEFAULT);
-  const [savedConfig, setSavedConfig] = useState(RPA_CONFIG_DEFAULT);
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [savingConfig, setSavingConfig]   = useState(false);
-
-  const [credEmail, setCredEmail]             = useState('');
-  const [credEmailCurrent, setCredEmailCurrent] = useState('');
-  const [credPass, setCredPass]               = useState('');
-  const [credConfigured, setCredConfigured]   = useState(false);
-  const [savingCred, setSavingCred]           = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    supabase.from('app_settings').select('value').eq('key', 'rpa_config').maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        const v = { ...RPA_CONFIG_DEFAULT, ...(data?.value || {}) };
-        setConfig(v);
-        setSavedConfig(v);
-        setLoadingConfig(false);
-      });
-
-    supabase.from('rpa_credentials').select('email').eq('platform_id', 'maxtrack').maybeSingle()
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        setCredEmailCurrent(data.email);
-        setCredEmail(data.email);
-        setCredConfigured(true);
-      });
-
-    // Realtime: VPS atualiza last_run_at / last_run_status
-    const channel = supabase
-      .channel('rpa_config_watch-' + crypto.randomUUID())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings', filter: 'key=eq.rpa_config' }, (payload) => {
-        const v = { ...RPA_CONFIG_DEFAULT, ...(payload.new?.value || {}) };
-        setConfig(v);
-        setSavedConfig(v);
-      })
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const configDirty = config.enabled !== savedConfig.enabled || config.interval_minutes !== savedConfig.interval_minutes;
-
-  const saveConfig = async () => {
-    setSavingConfig(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const next = { ...savedConfig, enabled: config.enabled, interval_minutes: config.interval_minutes };
-      const { error } = await supabase.from('app_settings')
-        .update({ value: next, updated_at: new Date().toISOString(), updated_by: user?.id })
-        .eq('key', 'rpa_config');
-      if (error) throw error;
-      setSavedConfig(next);
-      toast(config.enabled ? 'Robô ativado' : 'Robô desativado', config.enabled ? 'success' : 'info');
-    } catch (err) {
-      toast('Erro ao salvar configuração: ' + err.message, 'error');
-    }
-    setSavingConfig(false);
-  };
-
-  const saveCred = async () => {
-    const email = credEmail.trim();
-    if (!email || !credPass) return;
-    setSavingCred(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('rpa_credentials').upsert(
-        { platform_id: 'maxtrack', email, password: credPass, updated_at: new Date().toISOString(), updated_by: user?.id },
-        { onConflict: 'platform_id' },
-      );
-      if (error) throw error;
-      setCredEmailCurrent(email);
-      setCredConfigured(true);
-      setCredPass('');
-      toast('Credenciais Maxtrack salvas', 'success');
-    } catch (err) {
-      toast('Erro ao salvar credenciais: ' + err.message, 'error');
-    }
-    setSavingCred(false);
-  };
-
-  const fmtLastRun = (iso) => {
-    if (!iso) return null;
-    const d = new Date(iso), now = new Date();
-    const diff = Math.floor((now - d) / 60000);
-    if (diff < 2)    return 'agora mesmo';
-    if (diff < 60)   return `há ${diff} min`;
-    if (diff < 1440) return `há ${Math.floor(diff / 60)}h`;
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  };
-
-  const STATUS_COLOR = { success: 'var(--success-500, #1a7a3a)', error: 'var(--danger-500)', running: '#b45309' };
-  const STATUS_LABEL = { success: 'OK', error: 'Erro', running: 'Rodando' };
-
-  if (loadingConfig) return null;
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-header">
-        <div className="card-title">
-          <i className="ti ti-robot"></i> Automação RPA
-          {config.enabled && (
-            <span style={{ fontSize: 10, background: 'var(--success-500, #1a7a3a)', color: '#fff', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700, letterSpacing: 0.4 }}>
-              ATIVO
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
-        Robô Playwright na VPS que baixa o relatório Maxtrack automaticamente e alimenta o Monitor.
-      </div>
-
-      {/* Status da última execução */}
-      {config.last_run_at && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--surface-1, rgba(255,255,255,0.04))', borderRadius: 6, flexWrap: 'wrap' }}>
-          <i className="ti ti-clock" style={{ fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}></i>
-          <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            Última execução: <strong style={{ color: 'var(--text-primary)' }}>{fmtLastRun(config.last_run_at)}</strong>
-          </span>
-          {config.last_run_status && (
-            <span style={{ fontSize: 10, background: STATUS_COLOR[config.last_run_status] || 'var(--text-muted)', color: '#fff', borderRadius: 4, padding: '2px 6px', fontWeight: 700 }}>
-              {STATUS_LABEL[config.last_run_status] || config.last_run_status}
-            </span>
-          )}
-          {config.last_run_status === 'error' && config.last_run_message && (
-            <span style={{ fontSize: 11, color: 'var(--danger-500)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={config.last_run_message}>
-              {config.last_run_message}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Configuração: ativo + intervalo */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label className="form-label" style={{ marginBottom: 0 }}>Estado do robô</label>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => setConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-            style={{ background: config.enabled ? 'var(--success-500, #1a7a3a)' : 'var(--surface-2, #3a3a3a)', color: '#fff', border: 'none', minWidth: 80 }}
-          >
-            {config.enabled ? <><i className="ti ti-player-play"></i> Ligado</> : <><i className="ti ti-player-pause"></i> Desligado</>}
-          </button>
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label" htmlFor="sync-interval">Intervalo de atualização</label>
-          <select
-            id="sync-interval"
-            className="form-control"
-            style={{ width: 'auto' }}
-            value={config.interval_minutes}
-            onChange={e => setConfig(prev => ({ ...prev, interval_minutes: Number(e.target.value) }))}
-          >
-            <option value={15}>15 minutos</option>
-            <option value={30}>30 minutos</option>
-            <option value={60}>1 hora</option>
-            <option value={120}>2 horas</option>
-          </select>
-        </div>
-
-        {configDirty && (
-          <button type="button" className="btn btn-primary btn-sm" onClick={saveConfig} disabled={savingConfig} style={{ flexShrink: 0 }}>
-            {savingConfig ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-device-floppy"></i> Salvar</>}
-          </button>
-        )}
-      </div>
-
-      {/* Credenciais da conta RPA */}
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Credenciais Maxtrack
-        </div>
-
-        {credConfigured && credEmailCurrent && (
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 10 }}>
-            <i className="ti ti-check" style={{ color: 'var(--success-500, #1a7a3a)', marginRight: 4 }}></i>
-            Conta configurada: <strong style={{ color: 'var(--text-primary)' }}>{credEmailCurrent}</strong>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>
-            <label className="form-label" htmlFor="rpa-email">E-mail</label>
-            <input
-              id="rpa-email"
-              className="form-control"
-              type="email"
-              placeholder="rpa@empresa.com.br"
-              value={credEmail}
-              onChange={e => setCredEmail(e.target.value)}
-              disabled={savingCred}
-            />
-          </div>
-          <div className="form-group" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>
-            <label className="form-label" htmlFor="rpa-password">Senha</label>
-            <input
-              id="rpa-password"
-              className="form-control"
-              type="password"
-              placeholder={credConfigured ? '••••••••  (nova senha para alterar)' : 'Senha da conta RPA'}
-              value={credPass}
-              onChange={e => setCredPass(e.target.value)}
-              disabled={savingCred}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={saveCred}
-            disabled={savingCred || !credEmail.trim() || !credPass}
-            style={{ flexShrink: 0 }}
-          >
-            {savingCred ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-key"></i> {credConfigured ? 'Atualizar' : 'Salvar'}</>}
-          </button>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
-          Use uma conta dedicada ao robô — não a conta pessoal. Lida apenas pelo serviço na VPS via chave de serviço.
-        </div>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+
 
 const TIPO_OPTS = [
   { value: 'intervencao', label: 'Intervenção' },
@@ -1084,3 +1022,5 @@ function ClearHistoryCard() {
     </div>
   );
 }
+
+
