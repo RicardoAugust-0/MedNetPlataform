@@ -141,6 +141,12 @@ async function getRawEvents(platformId) {
   return events;
 }
 
+// Eventos de criticidade "Leve" são preservados no banco, mas ficam FORA da
+// análise (não entram em totais, gráficos, comparação nem export do relatório).
+function excludeLeve(events) {
+  return events.filter((ev) => ev.severidade !== 'Leve');
+}
+
 // Convert events array to raw dataRows format used by aggregate function
 function formatDataRows(events, aliases) {
   return events.map((ev) => [
@@ -238,10 +244,12 @@ app.get('/api/platforms', async (req, res) => {
   try {
     const counts = {};
     const promises = PLATFORMS.map(async (p) => {
+      // Conta apenas eventos que entram na análise (exclui criticidade "Leve").
       const { count, error } = await supabase
         .from('driver_events')
         .select('*', { count: 'exact', head: true })
-        .eq('platform_id', p.id);
+        .eq('platform_id', p.id)
+        .neq('severidade', 'Leve');
       if (!error && count !== null) {
         counts[p.id] = count;
       }
@@ -280,10 +288,10 @@ app.get('/api/analytics', async (req, res) => {
       return res.status(400).json({ error: 'Nenhuma plataforma especificada.' });
     }
 
-    // Load raw events for all target platforms
+    // Load raw events for all target platforms (eventos "Leve" ficam fora da análise)
     const allEventsByPlatform = {};
     for (const pid of targetPlatformIds) {
-      allEventsByPlatform[pid] = await getRawEvents(pid);
+      allEventsByPlatform[pid] = excludeLeve(await getRawEvents(pid));
     }
 
     // Extract available months, companies, and event types from the loaded raw events
@@ -453,9 +461,9 @@ app.get('/api/analytics/csv', async (req, res) => {
 
   try {
     const aliases = await getCarrierAliases();
-    const events = await getRawEvents(platformId);
+    const events = excludeLeve(await getRawEvents(platformId));
     const rawRows = formatDataRows(events, aliases);
-    
+
     // Filter rows by date, month, company, severity, classification, eventType
     let rowsToExport = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
 

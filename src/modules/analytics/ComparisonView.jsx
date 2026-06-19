@@ -11,6 +11,8 @@ export default function ComparisonView({
 }) {
   const canvasCmpRef = useRef(null);
   const chartRef = useRef(null);
+  const canvasCritRef = useRef(null);
+  const chartCritRef = useRef(null);
 
   // Derived calculations for compare rows
   const compareRows = useMemo(() => {
@@ -48,6 +50,10 @@ export default function ComparisonView({
     if (chartRef.current) {
       chartRef.current.destroy();
       chartRef.current = null;
+    }
+    if (chartCritRef.current) {
+      chartCritRef.current.destroy();
+      chartCritRef.current = null;
     }
 
     const C = {
@@ -125,10 +131,57 @@ export default function ComparisonView({
       });
     }
 
+    // Criticidade por plataforma (barras empilhadas). Soma as séries mensais que o
+    // aggregate já devolve em `mensal_crit.series`.
+    if (sources.length >= 2 && canvasCritRef.current) {
+      const labels = sources.map((s) => s.platformName);
+      const sumSeries = (agg, key) => ((agg?.mensal_crit?.series?.[key]) || []).reduce((a, b) => a + b, 0);
+      const critDefs = [
+        { key: 'Gravíssimo', color: '#C62F2F' },
+        { key: 'Grave', color: '#E8A020' },
+        { key: 'Médio', color: '#2A8DD9' },
+      ];
+
+      chartCritRef.current = new Chart(canvasCritRef.current, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: critDefs.map((cd) => ({
+            label: cd.key,
+            data: sources.map((s) => sumSeries(s.data, cd.key)),
+            backgroundColor: cd.color,
+            borderWidth: 0,
+            borderRadius: 4,
+            maxBarThickness: 34,
+          })),
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' },
+            },
+            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } },
+          },
+          scales: {
+            x: _ax({ stacked: true }),
+            y: _ax({ stacked: true, beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
+          },
+        },
+      });
+    }
+
     return () => {
       if (chartRef.current) {
         chartRef.current.destroy();
         chartRef.current = null;
+      }
+      if (chartCritRef.current) {
+        chartCritRef.current.destroy();
+        chartCritRef.current = null;
       }
     };
   }, [sources, selectedMonth, compareCompanies, selectedSeverity]);
@@ -239,6 +292,15 @@ export default function ComparisonView({
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+      <div data-card className="card" style={{ padding: '16px 18px', marginTop: '20px' }}>
+        <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Criticidade por plataforma</h4>
+        <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
+          Distribuição de Gravíssimo / Grave / Médio em cada fonte (eventos Leve ficam fora da análise).
+        </p>
+        <div style={{ position: 'relative', width: '100%', height: '280px' }}>
+          <canvas ref={canvasCritRef}></canvas>
         </div>
       </div>
     </div>

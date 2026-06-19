@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../supabase.js';
 import {
@@ -13,6 +13,85 @@ import {
   normClf
 } from '../../utils/fatigueParser.js';
 
+const DEFAULT_OPERATOR_EMAIL = 'hevilyntfzero@gmail.com';
+
+// Normaliza um cabeçalho para comparação sem acento/caixa.
+function normHeaderName(h) {
+  return String(h || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Constrói as linhas a inserir + estatísticas de descarte. Função pura: usada
+// tanto pelo resumo ao vivo (passo de revisão) quanto pela confirmação, para que
+// a contagem mostrada seja exatamente o que será salvo.
+function buildImportRows(stage, operatorEmail) {
+  const getVal = (row, k) => {
+    const headerIdx = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
+    return headerIdx > -1 ? row[headerIdx] : null;
+  };
+
+  const isOmnilink = stage.platformId === 'omnilink';
+  const tratadoPorIdx = stage.headers.findIndex((h) => normHeaderName(h) === 'tratado por');
+  const metodoProcIdx = stage.headers.findIndex((h) => {
+    const nh = normHeaderName(h);
+    return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
+  });
+
+  const rows = [];
+  const stats = { lidas: stage.dataRows.length, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 };
+
+  for (const row of stage.dataRows) {
+    const dt = toDate(getVal(row, 'datetime'));
+    if (!dt) { stats.semData++; continue; }
+
+    // Filtro OmniLink: só eventos tratados pelo operador configurado.
+    if (isOmnilink && tratadoPorIdx > -1) {
+      const tratadoPor = String(row[tratadoPorIdx] || '').trim().toLowerCase();
+      if (tratadoPor !== operatorEmail.toLowerCase()) { stats.operador++; continue; }
+    }
+
+    // Filtro de velocidade < 10 km/h (mínimo de veículo em movimento).
+    const speedVal = toNum(getVal(row, 'speed'));
+    if (speedVal !== null && speedVal < 10) { stats.velocidade++; continue; }
+
+    const classificationRaw = getVal(row, 'classification');
+    const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
+    const plateVal = String(getVal(row, 'plate') || '').trim();
+    const typeVal = String(getVal(row, 'type') || '').trim();
+
+    // Para OmniLink, "Método de processamento" tem prioridade sobre "Status".
+    const resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
+      ? normClf(row[metodoProcIdx])
+      : classificationNorm;
+
+    const severidade = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
+    // "Leve" é salvo (entra em rows) mas não entra na análise (excluído no servidor).
+    if (severidade === 'Leve') stats.leves++;
+
+    rows.push({
+      platform_id: stage.platformId,
+      placa: plateVal || 'SEM_PLACA',
+      nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
+      nome_evento: typeVal || 'Fadiga',
+      severidade,
+      analise_ia_plataforma: resolvedClassification,
+      velocidade_kmh: speedVal,
+      localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
+      frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
+      descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
+      ocorrido_em: dt.toISOString(),
+    });
+  }
+
+  stats.importadas = rows.length;
+  return { rows, stats };
+}
+
+function fmtDateTimeShort(dt) {
+  if (!dt) return '—';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(dt.getDate())}/${p(dt.getMonth() + 1)} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+}
+
 export default function ImportModal({ modalOpen, setModalOpen, saving, onImportConfirm }) {
   const [step, setStep] = useState('drop'); // 'drop' | 'review'
   const [dragOver, setDragOver] = useState(false);
@@ -20,8 +99,31 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
   const [error, setError] = useState(null);
   const [platformHint, setPlatformHint] = useState('auto');
   const [stage, setStage] = useState(null); // { fileName, headers, dataRows, platformId, platformName, mapping }
+  const [operatorEmail, setOperatorEmail] = useState(DEFAULT_OPERATOR_EMAIL);
 
   const fileInputRef = useRef(null);
+
+  // Para OmniLink, busca o operador configurado (usado no resumo e no filtro).
+  useEffect(() => {
+    let active = true;
+    if (stage?.platformId === 'omnilink') {
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'omnilink_config')
+            .maybeSingle();
+          if (active && data?.value?.operator_email) setOperatorEmail(data.value.operator_email);
+        } catch (err) {
+          console.warn('[ImportModal] Erro ao obter omnilink_config:', err);
+        }
+      })();
+    } else {
+      setOperatorEmail(DEFAULT_OPERATOR_EMAIL);
+    }
+    return () => { active = false; };
+  }, [stage?.platformId]);
 
   const handleFiles = (files) => {
     const f = files && files[0];
@@ -130,11 +232,44 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     });
   };
 
+  // Resumo ao vivo (recalcula conforme o mapeamento/plataforma mudam).
+  const summary = useMemo(() => (stage ? buildImportRows(stage, operatorEmail).stats : null), [stage, operatorEmail]);
+
+  // Amostra das 3 primeiras linhas já resolvidas com o mapeamento atual.
+  const preview = useMemo(() => {
+    if (!stage) return [];
+    const getVal = (row, k) => {
+      const i = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
+      return i > -1 ? row[i] : null;
+    };
+    return stage.dataRows.slice(0, 3).map((row) => {
+      const sev = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
+      const clfRaw = getVal(row, 'classification');
+      return {
+        data: fmtDateTimeShort(toDate(getVal(row, 'datetime'))),
+        placa: String(getVal(row, 'plate') || '—').trim() || '—',
+        tipo: String(getVal(row, 'type') || '—').trim() || '—',
+        sev,
+        clf: clfRaw ? normClf(clfRaw) : 'Não classificado',
+        vel: toNum(getVal(row, 'speed')),
+        frota: String(getVal(row, 'fleet') || '—').trim() || '—',
+        isLeve: sev === 'Leve',
+      };
+    });
+  }, [stage]);
+
+  const datetimeMapped = !!stage?.mapping?.datetime;
+
   const handleConfirmClick = async () => {
     if (!stage) return;
     setError(null);
 
-    let operatorEmail = 'hevilyntfzero@gmail.com';
+    if (!datetimeMapped) {
+      setError('Mapeie a coluna obrigatória "Data / hora do alerta" antes de continuar.');
+      return;
+    }
+
+    let opEmail = operatorEmail;
     if (stage.platformId === 'omnilink') {
       try {
         const { data: configData } = await supabase
@@ -142,86 +277,25 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
           .select('value')
           .eq('key', 'omnilink_config')
           .maybeSingle();
-        if (configData?.value?.operator_email) {
-          operatorEmail = configData.value.operator_email;
-        }
+        if (configData?.value?.operator_email) opEmail = configData.value.operator_email;
       } catch (err) {
         console.warn('[ImportModal] Erro ao obter omnilink_config:', err);
       }
     }
 
-    const getVal = (row, k) => {
-      const headerIdx = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
-      return headerIdx > -1 ? row[headerIdx] : null;
-    };
+    const { rows, stats } = buildImportRows(stage, opEmail);
 
-    const isOmnilink = stage.platformId === 'omnilink';
-
-    // Find index for 'Tratado por' column for OmniLink filter
-    const tratadoPorIdx = stage.headers.findIndex(h => {
-      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-      return nh === 'tratado por';
-    });
-
-    // Find index for 'Método de processamento' column
-    const metodoProcIdx = stage.headers.findIndex(h => {
-      const nh = String(h || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-      return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
-    });
-
-    const rowsToInsert = [];
-    for (const row of stage.dataRows) {
-      const dtRaw = getVal(row, 'datetime');
-      const dt = toDate(dtRaw);
-      if (!dt) continue;
-
-      // 1. Filter out by operator email if it is OmniLink
-      if (isOmnilink && tratadoPorIdx > -1) {
-        const tratadoPor = String(row[tratadoPorIdx] || '').trim().toLowerCase();
-        if (tratadoPor !== operatorEmail.toLowerCase()) {
-          continue; // skip
-        }
-      }
-
-      // 2. Filter by speed < 10 km/h (minimum moving speed limit)
-      const speedVal = toNum(getVal(row, 'speed'));
-      if (speedVal !== null && speedVal < 10) {
-        continue; // skip
-      }
-
-      // 3. Keep false positives and discarded events for analytics, but still normalize classification
-      const classificationRaw = getVal(row, 'classification');
-      const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
-
-      const plateVal = String(getVal(row, 'plate') || '').trim();
-      const typeVal = String(getVal(row, 'type') || '').trim();
-
-      // For OmniLink, we prioritize 'Método de processamento' over 'Status' (classification)
-      const resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
-        ? normClf(row[metodoProcIdx])
-        : classificationNorm;
-
-      rowsToInsert.push({
-        platform_id: stage.platformId,
-        placa: plateVal || 'SEM_PLACA',
-        nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
-        nome_evento: typeVal || 'Fadiga',
-        severidade: getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio',
-        analise_ia_plataforma: resolvedClassification,
-        velocidade_kmh: speedVal,
-        localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
-        frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
-        descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
-        ocorrido_em: dt.toISOString(),
-      });
-    }
-
-    if (rowsToInsert.length === 0) {
-      setError('Nenhuma linha com data/hora válida e filtros correspondentes foi encontrada.');
+    if (rows.length === 0) {
+      const partes = [];
+      if (stats.semData) partes.push(`${stats.semData} sem data/hora válida`);
+      if (stats.operador) partes.push(`${stats.operador} de outro operador`);
+      if (stats.velocidade) partes.push(`${stats.velocidade} com velocidade < 10 km/h`);
+      const detalhe = partes.length ? ` De ${stats.lidas} linhas: ${partes.join(', ')}.` : '';
+      setError('Nenhuma linha entrou na importação.' + detalhe);
       return;
     }
 
-    onImportConfirm(rowsToInsert, stage.platformId, stage.platformName);
+    onImportConfirm(rows, stage.platformId, stage.platformName);
   };
 
   const fieldRows = stage
@@ -235,6 +309,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     : [];
 
   if (!modalOpen) return null;
+
+  const sevColor = (sev) =>
+    sev === 'Gravíssimo' ? '#C62F2F' : sev === 'Grave' ? '#E8A020' : sev === 'Leve' ? '#8A94A6' : '#2A8DD9';
 
   return (
     <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -358,7 +435,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
               Mapeamento de colunas da planilha
             </div>
 
-            <div className="field-mapping-table" style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="field-mapping-table" style={{ flex: 1, overflowY: 'auto', minHeight: '120px' }}>
               {fieldRows.map((f) => (
                 <div key={f.key} className="field-mapping-row">
                   <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>
@@ -368,7 +445,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                   <select
                     value={f.value}
                     onChange={f.onChange}
-                    style={{ width: '100%', padding: '6px 9px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-primary)', background: 'var(--surface-0)', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+                    style={{ width: '100%', padding: '6px 9px', border: `1px solid ${f.req && !f.value ? '#E24B4A' : 'var(--border)'}`, borderRadius: '6px', fontSize: '12px', color: 'var(--text-primary)', background: 'var(--surface-0)', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
                   >
                     <option value="">— ignorar coluna —</option>
                     {stage.headers.map((h, idx) => (
@@ -380,6 +457,67 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                 </div>
               ))}
             </div>
+
+            {/* Pré-visualização do mapeamento */}
+            <div style={{ marginTop: '14px', flexShrink: 0 }}>
+              <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                Pré-visualização (3 primeiras linhas)
+              </div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', fontSize: '9.5px', background: 'var(--surface-2)' }}>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Data</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Placa</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Tipo</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Crit.</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Classif.</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>Vel.</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600 }}>Frota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((r, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border)', color: r.isLeve ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                        <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{r.data}</td>
+                        <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{r.placa}</td>
+                        <td style={{ padding: '6px 8px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.tipo}>{r.tipo}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, color: sevColor(r.sev) }}>
+                          {r.sev}{r.isLeve && <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}> · fora</span>}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{r.clf}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace" }}>{r.vel != null ? r.vel : '—'}</td>
+                        <td style={{ padding: '6px 8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.frota}>{r.frota}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Resumo de importação */}
+            {summary && (
+              <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', background: 'rgba(45,167,90,0.1)', border: '1px solid rgba(45,167,90,0.3)', padding: '3px 9px', borderRadius: '99px' }}>
+                  {summary.importadas.toLocaleString('pt-BR')} importadas
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>de {summary.lidas.toLocaleString('pt-BR')} lidas</span>
+                {summary.leves > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 9px', borderRadius: '99px' }}>
+                    {summary.leves.toLocaleString('pt-BR')} leves (salvas, fora da análise)
+                  </span>
+                )}
+                {summary.semData > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>· {summary.semData} sem data</span>
+                )}
+                {summary.operador > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }} title={`Operador: ${operatorEmail}`}>· {summary.operador} de outro operador</span>
+                )}
+                {summary.velocidade > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>· {summary.velocidade} vel &lt; 10</span>
+                )}
+              </div>
+            )}
 
             {error && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', fontSize: '12.5px', color: '#C62F2F', background: '#FCEBEB', border: '1px solid #E24B4A', borderRadius: '8px', padding: '9px 12px', flexShrink: 0 }}>
@@ -420,7 +558,8 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
               <button
                 onClick={handleConfirmClick}
                 className="btn btn-primary"
-                disabled={saving}
+                disabled={saving || !datetimeMapped}
+                title={!datetimeMapped ? 'Mapeie a coluna de Data / hora do alerta' : undefined}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -430,11 +569,11 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                   fontWeight: 600,
                   borderRadius: '8px',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: (saving || !datetimeMapped) ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
                   backgroundColor: '#F26931',
                   color: '#fff',
-                  opacity: saving ? 0.7 : 1,
+                  opacity: (saving || !datetimeMapped) ? 0.6 : 1,
                   pointerEvents: saving ? 'none' : 'auto',
                 }}
               >

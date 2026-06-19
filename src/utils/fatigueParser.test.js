@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normClf, normCrit, toUF, detect } from './fatigueParser.js';
+import { normClf, normCrit, toUF, detect, aggregate } from './fatigueParser.js';
 
 describe('fatigueParser · normClf', () => {
   it('identifica falso positivo', () => {
@@ -41,8 +41,13 @@ describe('fatigueParser · normCrit', () => {
   });
 
   it('normaliza para médio em casos desconhecidos', () => {
-    expect(normCrit('Baixo')).toBe('Médio');
     expect(normCrit(null)).toBe('Médio');
+    expect(normCrit('Sei lá')).toBe('Médio');
+  });
+
+  it('reconhece o nível "Leve" (eventos que ficam fora da análise)', () => {
+    expect(normCrit('Leve')).toBe('Leve');
+    expect(normCrit('Baixo')).toBe('Leve');
   });
 });
 
@@ -86,5 +91,25 @@ describe('fatigueParser · detect (mapas por plataforma)', () => {
     const headers = ['Evento', 'Placa / Empurrador', 'Data/Hora Evento', 'Possível Falha'];
     const det = detect(headers, 'auto', 'historico.xlsx');
     expect(det.mapping.speed).toBeFalsy();
+  });
+});
+
+describe('fatigueParser · aggregate (exclusão de "Leve")', () => {
+  const H = ['datetime', 'driver', 'plate', 'criticality', 'type', 'classification', 'speed', 'location', 'fleet', 'description'];
+  const M = Object.fromEntries(H.map((k) => [k, k]));
+
+  it('eventos "Leve" não entram em totais nem nas criticidades', () => {
+    const rows = [
+      ['2026-06-01 10:00', 'A', 'PL1', 'Grave', 'Bocejo', 'Positivo', '50', 'SP', 'X', ''],
+      ['2026-06-01 11:00', 'B', 'PL2', 'Leve', 'Bocejo', 'Positivo', '50', 'SP', 'X', ''],
+      ['2026-06-01 12:00', 'C', 'PL3', 'Gravíssimo', 'Bocejo', 'Falso positivo', '50', 'SP', 'X', ''],
+    ];
+    const agg = aggregate(H, rows, M, null);
+    expect(agg.kpis.total).toBe(2); // a linha "Leve" foi ignorada
+    const totalCrit = agg.mensal_crit.series['Gravíssimo'].concat(
+      agg.mensal_crit.series['Grave'],
+      agg.mensal_crit.series['Médio']
+    ).reduce((a, b) => a + b, 0);
+    expect(totalCrit).toBe(2);
   });
 });

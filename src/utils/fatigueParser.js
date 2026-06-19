@@ -209,6 +209,9 @@ export function normCrit(v) {
   const s = norm(v); if (!s) return 'Médio';
   if (s.includes('gravi') || s.includes('critic') || s.includes(' n2') || s.endsWith('n2') || s.includes('altiss') || s.includes('alta') || s.includes('alto')) return 'Gravíssimo';
   if (s.includes('grave') || s.includes('moder')) return 'Grave';
+  // "Leve" é um nível próprio: os eventos são preservados no banco, mas ficam
+  // FORA da análise (ver aggregate() e o filtro do servidor).
+  if (s.includes('leve') || s === 'baixo' || s === 'baixa') return 'Leve';
   return 'Médio';
 }
 
@@ -402,6 +405,9 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
   let minD = null, maxD = null, total = 0;
 
   for (const row of rowsToProcess) {
+    // Eventos de criticidade "Leve" ficam fora da análise (preservados no banco,
+    // mas não contam em totais, criticidades, classificação, etc.).
+    if (normCrit(get(row, 'criticality')) === 'Leve') continue;
     const d = toDate(get(row, 'datetime'));
     total++;
     const clfV = normClf(get(row, 'classification'));

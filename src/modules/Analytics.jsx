@@ -24,8 +24,6 @@ export default function Analytics() {
   const [prevD, setPrevD] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [loadProgress, setLoadProgress] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [platformCounts, setPlatformCounts] = useState({});
   const [availableMonths, setAvailableMonths] = useState([]);
   const [availableCompanies, setAvailableCompanies] = useState([]);
@@ -169,8 +167,6 @@ export default function Analytics() {
     if (!isSilent) {
       setLoading(true);
     }
-    setLoadProgress(0);
-    setTotalCount(0);
     try {
       // 1. Fetch platform counts from backend
       let counts = {};
@@ -188,7 +184,8 @@ export default function Analytics() {
           const { count, error } = await supabase
             .from('driver_events')
             .select('*', { count: 'exact', head: true })
-            .eq('platform_id', p.id);
+            .eq('platform_id', p.id)
+            .neq('severidade', 'Leve');
           if (!error && count !== null) {
             counts[p.id] = count;
           }
@@ -196,6 +193,19 @@ export default function Analytics() {
         await Promise.all(promises);
       }
       setPlatformCounts(counts);
+
+      // Mantém apenas plataformas de comparação que realmente têm dados — evita
+      // ids "órfãos" salvos no localStorage (ex.: fonte excluída) que deixariam a
+      // comparação em branco. Só sanitiza quando as contagens vieram de fato
+      // (se a contagem falhou, preserva a seleção do usuário em vez de zerá-la).
+      const haveCounts = Object.keys(counts).length > 0;
+      const savedCompareIds = comparePlatformIds || [];
+      const validCompareIds = haveCounts
+        ? savedCompareIds.filter((pid) => counts[pid] > 0)
+        : savedCompareIds;
+      if (compare && haveCounts && validCompareIds.length !== savedCompareIds.length) {
+        setComparePlatformIds(validCompareIds);
+      }
 
       // Determine active platform ID to load
       let targetPlatformId = preferredPlatformId;
@@ -218,7 +228,8 @@ export default function Analytics() {
 
       let activeMonth = selectedMonth;
 
-      if (compare && (!comparePlatformIds || comparePlatformIds.length === 0)) {
+      // Precisa de pelo menos duas fontes válidas para comparar.
+      if (compare && validCompareIds.length < 2) {
         setSources([]);
         setD(null);
         setPrevD(null);
@@ -229,8 +240,8 @@ export default function Analytics() {
       // Load analytics from backend Express server
       let url = `${API_URL}/api/analytics?`;
       if (compare) {
-        url += `compare=true&platformIds=${comparePlatformIds.join(',')}`;
-        for (const pid of comparePlatformIds) {
+        url += `compare=true&platformIds=${validCompareIds.join(',')}`;
+        for (const pid of validCompareIds) {
           const comp = compareCompanies[pid] || '';
           if (comp) {
             url += `&company_${pid}=${encodeURIComponent(comp)}`;
@@ -542,11 +553,6 @@ export default function Analytics() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
           <i className="ti ti-loader-2 fz-spin" style={{ fontSize: '38px', color: '#9E1A45' }}></i>
           <span style={{ fontSize: '13.5px', fontWeight: 500 }}>Carregando dados da plataforma...</span>
-          {totalCount > 0 && (
-            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              {loadProgress.toLocaleString('pt-BR')} de {totalCount.toLocaleString('pt-BR')} registros carregados
-            </span>
-          )}
         </div>
       </div>
     );
@@ -694,7 +700,7 @@ export default function Analytics() {
         {/* Nota explicativa de rodapé */}
         <div style={{ marginTop: '24px', fontSize: '11.5px', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px 18px', background: 'var(--surface-0)', lineHeight: '1.7' }}>
           <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Como ler. </b>
-          Os indicadores são recalculados a cada importação e filtragem. Criticidades com grafias divergentes são unificadas em Gravíssimo / Grave / Médio; a classificação é normalizada em Positivo / Falso positivo / Não classificado. A UF é extraída do texto da localidade. Use <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Comparar plataformas</b> para confrontar duas ou mais fontes e <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Exportar PDF</b> para gerar o relatório completo para impressão.
+          Os indicadores são recalculados a cada importação e filtragem. Criticidades com grafias divergentes são unificadas em Gravíssimo / Grave / Médio; a classificação é normalizada em Positivo / Falso positivo / Não classificado. Eventos de criticidade <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Leve</b> são preservados no banco, mas ficam fora da análise. A UF é extraída do texto da localidade. Use <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Comparar plataformas</b> para confrontar duas ou mais fontes e <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Exportar PDF</b> para gerar o relatório completo para impressão.
         </div>
 
       </div>
