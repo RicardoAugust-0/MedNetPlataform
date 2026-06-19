@@ -64,18 +64,23 @@ function formatDataRows(events, aliases) {
     ev.velocidade_kmh != null ? String(ev.velocidade_kmh) : '',
     ev.localidade || '',
     resolveMonitorName(ev.frota || ev.transportadora || '', aliases) || 'Não informado',
-    ev.descricao || ''
+    ev.descricao || '',
+    ev.evidencia || '',
+    ev.inicio_tratativa || '',
+    ev.fim_tratativa || ''
   ]);
 }
 
 const HEADERS = [
   'datetime', 'driver', 'plate', 'criticality', 'type',
-  'classification', 'speed', 'location', 'fleet', 'description'
+  'classification', 'speed', 'location', 'fleet', 'description',
+  'evidence', 'treatStart', 'treatEnd'
 ];
 
 const MAPPING = {
   datetime: 'datetime', driver: 'driver', plate: 'plate', criticality: 'criticality', type: 'type',
-  classification: 'classification', speed: 'speed', location: 'location', fleet: 'fleet', description: 'description'
+  classification: 'classification', speed: 'speed', location: 'location', fleet: 'fleet', description: 'description',
+  evidence: 'evidence', treatStart: 'treatStart', treatEnd: 'treatEnd'
 };
 
 function filterRows(rows, { company, severity, month, startDate, endDate, classification, eventType }) {
@@ -366,7 +371,7 @@ async function runParityTests() {
     
     const { data: dbEvents, error: fetchErr } = await supabase
       .from('driver_events')
-      .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao')
+      .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao,evidencia,inicio_tratativa,fim_tratativa')
       .eq('platform_id', platformId);
     if (fetchErr) throw fetchErr;
 

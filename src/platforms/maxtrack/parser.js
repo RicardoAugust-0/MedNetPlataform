@@ -95,6 +95,17 @@ export async function parse(file, { history = [] } = {}) {
   const iIdEvento = findCol(headers, COLUMNS.id_evento);
   const iStatus   = findCol(headers, COLUMNS.status);
 
+  const findColByAliases = (headers, aliases) => {
+    return headers.findIndex(h => {
+      const nh = normalize(h);
+      return aliases.some(a => nh === normalize(a) || nh.includes(normalize(a)));
+    });
+  };
+
+  const iEvidence = findColByAliases(headers, ['video', 'evidencia', 'anexo', 'imagem', 'midia', 'link']);
+  const iTreatStart = findColByAliases(headers, ['inicio da tratativa', 'inicio tratativa', 'inicio do atendimento', 'atendido em']);
+  const iTreatEnd = findColByAliases(headers, ['fim da tratativa', 'fim tratativa', 'finalizado em', 'conclusao', 'encerramento']);
+
   const clearMap = buildClearMap(history);
 
   let filtradosPorVelocidade = 0;
@@ -173,6 +184,9 @@ export async function parse(file, { history = [] } = {}) {
         analise_ia_plataforma: analise || null,
         raw_event_type_id:    idEvento || null,
         ocorrido_em:          eventDate ? eventDate.toISOString() : null,
+        evidencia:            iEvidence >= 0 && row[iEvidence] ? String(row[iEvidence]).trim() : null,
+        inicio_tratativa:     iTreatStart >= 0 && row[iTreatStart] ? parseEventDate(row[iTreatStart])?.toISOString() : null,
+        fim_tratativa:        iTreatEnd >= 0 && row[iTreatEnd] ? parseEventDate(row[iTreatEnd])?.toISOString() : null,
       };
 
       const hasIntervention = (history || []).some(h => h.placa === placa && h.tipo === 'intervencao');
@@ -306,6 +320,9 @@ export async function parse(file, { history = [] } = {}) {
       analise_ia_plataforma: analise || null,
       raw_event_type_id:    idEvento || null,
       ocorrido_em:          eventDate ? eventDate.toISOString() : null,
+      evidencia:            iEvidence >= 0 && row[iEvidence] ? String(row[iEvidence]).trim() : null,
+      inicio_tratativa:     iTreatStart >= 0 && row[iTreatStart] ? parseEventDate(row[iTreatStart])?.toISOString() : null,
+      fim_tratativa:        iTreatEnd >= 0 && row[iTreatEnd] ? parseEventDate(row[iTreatEnd])?.toISOString() : null,
     });
   }
 

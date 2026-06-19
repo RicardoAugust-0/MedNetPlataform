@@ -112,7 +112,7 @@ async function getRawEvents(platformId) {
       promises.push(
         supabase
           .from('driver_events')
-          .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao')
+          .select('platform_id,placa,nome,severidade,nome_evento,analise_ia_plataforma,velocidade_kmh,localidade,frota,transportadora,ocorrido_em,descricao,evidencia,inicio_tratativa,fim_tratativa')
           .eq('platform_id', platformId)
           .order('id')
           .range(from, to)
@@ -175,7 +175,10 @@ function formatDataRows(events, aliases) {
     ev.velocidade_kmh != null ? String(ev.velocidade_kmh) : '',
     ev.localidade || '',
     resolveMonitorName(ev.frota || ev.transportadora || '', aliases) || 'Não informado',
-    ev.descricao || ''
+    ev.descricao || '',
+    ev.evidencia || '',
+    ev.inicio_tratativa || '',
+    ev.fim_tratativa || ''
   ]);
 }
 
@@ -189,7 +192,10 @@ const HEADERS = [
   'speed',
   'location',
   'fleet',
-  'description'
+  'description',
+  'evidence',
+  'treatStart',
+  'treatEnd'
 ];
 
 const MAPPING = {
@@ -202,7 +208,10 @@ const MAPPING = {
   speed: 'speed',
   location: 'location',
   fleet: 'fleet',
-  description: 'description'
+  description: 'description',
+  evidence: 'evidence',
+  treatStart: 'treatStart',
+  treatEnd: 'treatEnd'
 };
 
 // Filter rows by company, severity, classification, eventType, and date range in memory

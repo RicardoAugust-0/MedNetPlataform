@@ -192,6 +192,20 @@ export async function parse(file, { history = [], operatorEmail = 'hevilyntfzero
           };
         });
 
+        const keys = Object.keys(valid[0] || {});
+        const evidenceKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('video') || nk.includes('evidencia') || nk.includes('anexo') || nk.includes('imagem') || nk.includes('midia') || nk.includes('link');
+        });
+        const treatStartKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('inicio') && (nk.includes('tratativa') || nk.includes('atendimento'));
+        });
+        const treatEndKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('fim') && (nk.includes('tratativa') || nk.includes('conclusao') || nk.includes('encerramento'));
+        });
+
         const rawEventRows = [];
         valid.forEach((r) => {
           const placa = String(r[COLUMNS.placa] || '').trim();
@@ -208,6 +222,10 @@ export async function parse(file, { history = [], operatorEmail = 'hevilyntfzero
           const nomeEvento = r[COLUMNS.evento] || '';
           const bucket = getEventBucket(nomeEvento);
           const severidade = getEventSeverity(nomeEvento);
+
+          const evidenciaVal = evidenceKey ? String(r[evidenceKey] || '').trim() : null;
+          const treatStartVal = treatStartKey ? parseEventDate(r[treatStartKey]) : null;
+          const treatEndVal = treatEndKey ? parseEventDate(r[treatEndKey]) : null;
 
           rawEventRows.push({
             platform_id:          'omnilink',
@@ -230,6 +248,9 @@ export async function parse(file, { history = [], operatorEmail = 'hevilyntfzero
               : (r[COLUMNS.status] ? normClf(r[COLUMNS.status]) : 'Não classificado'),
             raw_event_type_id:    null,
             ocorrido_em,
+            evidencia:            evidenciaVal || null,
+            inicio_tratativa:     treatStartVal ? treatStartVal.toISOString() : null,
+            fim_tratativa:        treatEndVal ? treatEndVal.toISOString() : null,
           });
         });
 

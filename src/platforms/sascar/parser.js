@@ -191,6 +191,20 @@ export async function parse(file) {
           };
         });
 
+        const keys = Object.keys(valid[0] || {});
+        const evidenceKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('video') || nk.includes('evidencia') || nk.includes('anexo') || nk.includes('imagem') || nk.includes('midia') || nk.includes('link');
+        });
+        const treatStartKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('inicio') && (nk.includes('tratativa') || nk.includes('atendimento'));
+        });
+        const treatEndKey = keys.find(k => {
+          const nk = normalize(k);
+          return nk.includes('fim') && (nk.includes('tratativa') || nk.includes('conclusao') || nk.includes('encerramento'));
+        });
+
         const rawEventRows = [];
         valid.forEach((r) => {
           const placa = r[COLUMNS.placa];
@@ -211,6 +225,10 @@ export async function parse(file) {
           const isTecnico = TECNICO_CATS_NORM.includes(normalize(categoria)) || TECNICO_EVENTOS_NORM.includes(normalize(nomeEvento));
           const bucket = isIntervencao ? 'intervencao' : isTecnico ? 'tecnico' : 'reportar';
 
+          const evidenciaVal = evidenceKey ? String(r[evidenceKey] || '').trim() : null;
+          const treatStartVal = treatStartKey ? parseEventDate(r[treatStartKey]) : null;
+          const treatEndVal = treatEndKey ? parseEventDate(r[treatEndKey]) : null;
+
           rawEventRows.push({
             platform_id:          'sascar',
             placa,
@@ -229,6 +247,9 @@ export async function parse(file) {
             analise_ia_plataforma: r[COLUMNS.status] ? normClf(r[COLUMNS.status]) : 'Não classificado',
             raw_event_type_id:    null,
             ocorrido_em,
+            evidencia:            evidenciaVal || null,
+            inicio_tratativa:     treatStartVal ? treatStartVal.toISOString() : null,
+            fim_tratativa:        treatEndVal ? treatEndVal.toISOString() : null,
           });
         });
 

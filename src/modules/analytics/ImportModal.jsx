@@ -79,6 +79,9 @@ function buildImportRows(stage, operatorEmail) {
       frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
       descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
       ocorrido_em: dt.toISOString(),
+      evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
+      inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
+      fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
     });
   }
 
