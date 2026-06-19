@@ -100,8 +100,9 @@ describe('OmniLink parser · parse() integration', () => {
     const { drivers, stats, rawEventRows } = await parse(file);
     expect(drivers).toHaveLength(1);
     expect(stats.falsosPositivos).toBe(1);
-    expect(rawEventRows).toHaveLength(1);
+    expect(rawEventRows).toHaveLength(2);
     expect(rawEventRows[0].analise_ia_plataforma).toBe('Positivo');
+    expect(rawEventRows[1].analise_ia_plataforma).toBe('Falso positivo');
   });
 
   it('filtra eventos que nao foram tratados por hevilyntfzero@gmail.com', async () => {

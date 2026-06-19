@@ -178,20 +178,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
         continue; // skip
       }
 
-      // 3. Filter out false positives and discarded events
+      // 3. Keep false positives and discarded events for analytics, but still normalize classification
       const classificationRaw = getVal(row, 'classification');
       const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
-      
-      const hasMetodoFalso = isOmnilink && metodoProcIdx > -1 && 
-        (String(row[metodoProcIdx] || '').toLowerCase().includes('falso') || 
-         String(row[metodoProcIdx] || '').toLowerCase().includes('descartado'));
-
-      const hasClassificationFalso = classificationNorm === 'Falso positivo' || 
-        String(classificationRaw || '').toLowerCase().includes('descartado');
-
-      if (hasMetodoFalso || hasClassificationFalso) {
-        continue; // skip
-      }
 
       const plateVal = String(getVal(row, 'plate') || '').trim();
       const typeVal = String(getVal(row, 'type') || '').trim();

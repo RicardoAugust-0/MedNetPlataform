@@ -79,6 +79,17 @@ export async function parse(file) {
         let filtradosPorVelocidade = 0;
 
         const valid = rows.filter((r) => {
+          // Filtrar por tratamento exclusivo pelo usuário hevilyntfzero@gmail.com
+          const tratadoPorRaw = String(r[COLUMNS.tratadoPor] || '').trim().toLowerCase();
+          if (tratadoPorRaw !== 'hevilyntfzero@gmail.com') {
+            return false;
+          }
+          return true;
+        });
+
+        // Agrupa eventos por placa
+        const byPlaca = {};
+        valid.forEach((r) => {
           // Descartar falsos positivos ou descartados com base no status ou método de processamento do OmniLink
           const statusRaw = String(r[COLUMNS.status] || '').toLowerCase();
           const metodoRaw = String(r[COLUMNS.metodoProcessamento] || '').toLowerCase();
@@ -89,27 +100,18 @@ export async function parse(file) {
             metodoRaw.includes('descartado')
           ) {
             falsosPositivos += 1;
-            return false;
+            return; // pular agrupamento (monitoramento ativo)
           }
-          // Filtrar por tratamento exclusivo pelo usuário hevilyntfzero@gmail.com
-          const tratadoPorRaw = String(r[COLUMNS.tratadoPor] || '').trim().toLowerCase();
-          if (tratadoPorRaw !== 'hevilyntfzero@gmail.com') {
-            return false;
-          }
+
           // Filtrar por velocidade mínima em movimento
           if (speedColumn) {
             const velocidade = parseSpeed(r[speedColumn]);
             if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
               filtradosPorVelocidade += 1;
-              return false;
+              return; // pular agrupamento (monitoramento ativo)
             }
           }
-          return true;
-        });
 
-        // Agrupa eventos por placa
-        const byPlaca = {};
-        valid.forEach((r) => {
           const placa = String(r[COLUMNS.placa] || '').trim();
           if (!placa) return;
 

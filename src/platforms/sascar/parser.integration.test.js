@@ -80,9 +80,13 @@ describe('Sascar parser · parse() integration', () => {
       row({ Status: 'Falso positivo' }),
       row({ Status: 'Falso positivo' }),
     ]);
-    const { drivers, stats } = await parse(file);
+    const { drivers, stats, rawEventRows } = await parse(file);
     expect(drivers[0].alertas).toBe(1);
     expect(stats.falsosPositivos).toBe(2);
+    expect(rawEventRows).toHaveLength(3);
+    expect(rawEventRows[0].analise_ia_plataforma).toBe('Não classificado');
+    expect(rawEventRows[1].analise_ia_plataforma).toBe('Falso positivo');
+    expect(rawEventRows[2].analise_ia_plataforma).toBe('Falso positivo');
   });
 
   it('filtra eventos com velocidade < 10 km/h', async () => {

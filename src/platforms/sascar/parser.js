@@ -22,6 +22,7 @@
 
 import { normalize, containsAll } from '../shared/normalize.js';
 import { parseSpeed, parseEventDate, parseTurno, maxSeveridade } from '../shared/parsers.js';
+import { normClf } from '../../utils/fatigueParser.js';
 import {
   COLUMNS,
   INTERVENCAO_EVENTOS,
@@ -82,23 +83,24 @@ export async function parse(file) {
         let filtradosPorVelocidade = 0;
 
         const valid = rows.filter((r) => {
-          if (r[COLUMNS.status] === STATUS_FALSO_POSITIVO) {
-            falsosPositivos += 1;
-            return false;
-          }
-          if (speedColumn) {
-            const velocidade = parseSpeed(r[speedColumn]);
-            if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
-              filtradosPorVelocidade += 1;
-              return false;
-            }
-          }
-          return true;
+          return !!r[COLUMNS.placa];
         });
 
         // Agrupa por placa
         const byPlaca = {};
         valid.forEach((r) => {
+          if (r[COLUMNS.status] === STATUS_FALSO_POSITIVO) {
+            falsosPositivos += 1;
+            return; // pular agrupamento (monitoramento ativo)
+          }
+          if (speedColumn) {
+            const velocidade = parseSpeed(r[speedColumn]);
+            if (velocidade !== null && velocidade < MIN_MOVING_SPEED_KMH) {
+              filtradosPorVelocidade += 1;
+              return; // pular agrupamento (monitoramento ativo)
+            }
+          }
+
           const placa = r[COLUMNS.placa];
           if (!placa) return;
           if (!byPlaca[placa]) {
@@ -224,8 +226,7 @@ export async function parse(file) {
             turno:                parseTurno(r[COLUMNS.hora]) || 'diurno',
             localidade:           null,
             velocidade_kmh:       speed,
-            duracao_seg:          null,
-            analise_ia_plataforma: null,
+            analise_ia_plataforma: r[COLUMNS.status] ? normClf(r[COLUMNS.status]) : 'Não classificado',
             raw_event_type_id:    null,
             ocorrido_em,
           });
