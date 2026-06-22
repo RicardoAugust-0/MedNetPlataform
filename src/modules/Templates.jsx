@@ -91,6 +91,26 @@ export default function Templates() {
     }
   };
 
+  const getTemplateVariables = (template) => {
+    if (!template) return [];
+    const bodyComponent = template.components?.find(c => c.type === 'BODY');
+    if (!bodyComponent || !bodyComponent.text) return [];
+    
+    const regex = /\{\{([^}]+)\}\}/g;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(bodyComponent.text)) !== null) {
+      matches.push(match[1]);
+    }
+    const unique = [];
+    for (const m of matches) {
+      if (!unique.includes(m)) {
+        unique.push(m);
+      }
+    }
+    return unique;
+  };
+
   const handleSendTest = async () => {
     if (!testPhone) {
       toast('Insira o número de telefone de teste.', 'error');
@@ -101,15 +121,13 @@ export default function Templates() {
       return;
     }
     
-    const bodyComponent = selectedTemplate.components?.find(c => c.type === 'BODY');
-    const matches = bodyComponent?.text?.match(/\{\{\d+\}\}/g) || [];
-    const varCount = matches.length;
+    const variables = getTemplateVariables(selectedTemplate);
     
     const varsArray = [];
-    for (let i = 1; i <= varCount; i++) {
-      const val = testVariables[i];
+    for (const placeholder of variables) {
+      const val = testVariables[placeholder];
       if (val === undefined || val === '') {
-        toast(`Por favor, preencha a variável {{${i}}}.`, 'error');
+        toast(`Por favor, preencha a variável {{${placeholder}}}.`, 'error');
         return;
       }
       varsArray.push(val);
@@ -427,7 +445,7 @@ export default function Templates() {
                           style={{ fontSize: '12.5px', color: '#1f2c34', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-sans)' }}
                           dangerouslySetInnerHTML={{ 
                             __html: formatWhatsAppText(
-                              (selectedTemplate.components?.find(c => c.type === 'BODY')?.text || '').replace(/\{\{(\d+)\}\}/g, (match, g1) => {
+                              (selectedTemplate.components?.find(c => c.type === 'BODY')?.text || '').replace(/\{\{([^}]+)\}\}/g, (match, g1) => {
                                 return testVariables[g1] ? `*${testVariables[g1]}*` : `[${g1}]`;
                               })
                             ) 
@@ -468,24 +486,21 @@ export default function Templates() {
 
                 {/* Dynamic Variables Inputs */}
                 {(() => {
-                  const bodyComponent = selectedTemplate.components?.find(c => c.type === 'BODY');
-                  const matches = bodyComponent?.text?.match(/\{\{(\d+)\}\}/g) || [];
-                  const varCount = matches.length;
-                  if (varCount === 0) return null;
+                  const variables = getTemplateVariables(selectedTemplate);
+                  if (variables.length === 0) return null;
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                       <span className="form-label" style={{ marginBottom: '4px' }}>Variáveis do Modelo</span>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
-                        {Array.from({ length: varCount }).map((_, i) => {
-                          const varIndex = i + 1;
+                        {variables.map((placeholder) => {
                           return (
-                            <div key={varIndex} className="form-group" style={{ marginBottom: 0 }}>
-                              <label className="form-label" style={{ fontSize: '11px' }}>Variável {"{{" + varIndex + "}}"}</label>
+                            <div key={placeholder} className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '11px' }}>Variável {"{{" + placeholder + "}}"}</label>
                               <input 
                                 className="form-control"
-                                value={testVariables[varIndex] || ''}
-                                onChange={e => setTestVariables(prev => ({ ...prev, [varIndex]: e.target.value }))}
-                                placeholder={`Ex: valor para {{${varIndex}}}`}
+                                value={testVariables[placeholder] || ''}
+                                onChange={e => setTestVariables(prev => ({ ...prev, [placeholder]: e.target.value }))}
+                                placeholder={`Ex: valor para {{${placeholder}}}`}
                                 style={{ fontSize: '12.5px' }}
                               />
                             </div>

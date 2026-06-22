@@ -29,6 +29,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateVars, setTemplateVars] = useState({});
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const messagesEndRef = useRef(null);
   const chatListRef = useRef(chats);
