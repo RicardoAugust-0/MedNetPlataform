@@ -14,6 +14,7 @@ export default function AnalyticsHeader({
   handleCompareClick,
   activeSource,
   exportToCSV,
+  exportToHTML,
   setModalOpen,
   selectedCompany,
   setSelectedCompany,
@@ -181,6 +182,27 @@ export default function AnalyticsHeader({
             }}
           >
             <i className="ti ti-download" style={{ fontSize: '14px' }}></i> Exportar CSV
+          </button>
+        )}
+
+        {d && (activeSource || compare) && (
+          <button
+            onClick={exportToHTML}
+            className="btn btn-sm btn-ghost"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 12px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-0)',
+              color: 'var(--text-primary)',
+              fontWeight: 500,
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
+          >
+            <i className="ti ti-file-code" style={{ fontSize: '14px' }}></i> Exportar HTML
           </button>
         )}
 

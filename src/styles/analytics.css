@@ -129,6 +129,12 @@
   box-shadow: var(--shadow-md);
 }
 
+.card.clickable:focus-visible {
+  outline: 2px solid #9E1A45;
+  outline-offset: 2px;
+  box-shadow: 0 2px 12px rgba(158, 26, 69, 0.15);
+}
+
 .kpi-grid .card.clickable.active {
   border-color: var(--accent-500, #9E1A45);
   background: var(--surface-1, #F4F5F8);
@@ -191,8 +197,11 @@
 
 /* Print Rules */
 @media print {
-  .sidebar, .topbar, button, select, .btn, .no-print, [data-noprint] {
+  .sidebar, .topbar, button, .analytics-container select, .btn, .no-print, [data-noprint] {
     display: none !important;
+  }
+  .static-filter-val {
+    display: inline-block !important;
   }
   body, #app, .main-area, .content-area, .analytics-container {
     background: #fff !important;

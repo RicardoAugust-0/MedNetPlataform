@@ -16,10 +16,13 @@ export default function SourceChips({
       {sourcesList.map((src) => (
         <div
           key={src.id}
+          role="button"
+          tabIndex={0}
           onClick={() => {
             setCompare(false);
             setActiveId(src.id);
           }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCompare(false); setActiveId(src.id); } }}
           style={{
             display: 'flex',
             alignItems: 'center',

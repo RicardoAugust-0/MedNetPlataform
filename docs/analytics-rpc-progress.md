@@ -10,6 +10,81 @@ Data da sessão: 2026-06-19.
 
 ---
 
+## ATUALIZAÇÃO 2026-06-22 — Fases 5 e 6 (com dados reais: 277k linhas)
+
+A `driver_events` agora tem **277.670 linhas** (tudo `maxtrack`, Jan–Jun/2026).
+Com dados reais ficou claro que **mesmo o caminho RPC original estava lento**:
+`get_analytics` levava **~44s** ("todos os meses") e **~13s** (um mês). Causa
+medida: cada um dos ~15 sub-agregados re-chamava as funções `plpgsql` de
+normalização **por linha** (um único passe dessas funções já custa ~4,5s sobre a
+tabela inteira). Gargalo é **CPU** (cache hit 100%, mesmo assim lento).
+
+**Feito nesta sessão:**
+- **Migration `20260622150000_analytics_generated_columns.sql`** — colunas STORED
+  `sev_norm`, `clf_norm`, `uf`, `fleet_raw` (geradas pelas MESMAS funções
+  immutable). Normalização passa a acontecer na ESCRITA. + índice parcial
+  `driver_events_fleet_raw_active`.
+- **Migration `20260622150100_get_analytics_fast.sql`** — `get_analytics` reescrita
+  para ler as colunas geradas (zero `plpgsql` por linha), CTEs `base_all/base/bkt`
+  marcadas `MATERIALIZED` (scan único), e `SET work_mem='64MB'` durante a função.
+  **Mesma assinatura e shape.** Paridade validada **byte-a-byte** contra a versão
+  anterior (diff chave-a-chave = 0 diferenças) nos cenários: mês diário, mês+frota
+  +severidade. O mismatch de md5 vs. baseline pré-rewrite é só ordem física de
+  linhas (já normalizada pelo harness JS×RPC).
+- **`server/analytics-routes.js`** — default do engine trocado de `js` → **`rpc`**
+  (fallback automático p/ JS em erro/compare permanece).
+- Texto de loading do front já estava como "Agregando dados…".
+
+**Resultado:** mês único ~13s → ~2,4s (medido logo após deploy). PORÉM a instância
+é **Micro burstable** (`shared_buffers=224MB`, `effective_cache_size=384MB`): os
+testes pesados **esgotaram os créditos de CPU** e a MESMA query subiu p/ ~9,9s
+quando estrangulada. **A instância é o gargalo dominante agora.**
+
+**Próximos passos (ordem):**
+1. **Subir o compute da Supabase** (sair do burstable Micro). Constraint real.
+2. **Tabela de rollup diário** mantida incrementalmente no import → dashboard lê
+   pré-agregado (sub-segundo, e para de queimar crédito de CPU). É o que escala
+   p/ milhões. Caminho "todos os meses"/multi-mês ainda varre 277k×15 — é o que
+   o rollup elimina.
+3. Caminho **compare** ainda é 100% JS (baixa tudo de N plataformas).
+
+---
+
+## ATUALIZAÇÃO 2026-06-22 — Fases 7 e 8 (rollup diário) — FEITO
+
+Cardinalidades medidas (maxtrack): fleet_raw=2, nome_evento=4, descricao=1, uf=23;
+só motorista (1395) e placa (1061) são altos. O grão escolhido tem **5.334 linhas**
+(277k → 52x). Velocidade é sempre inteira (máx 94) ⇒ mediana exata via histograma.
+
+**Migration `20260622160000_analytics_daily_rollup.sql`** — tabela `analytics_daily`
+(PK platform/dia/fleet_raw/sev_norm/clf_norm/nome_evento; tudo é jsonb
+{chave:contagem} exceto `cnt`: uf/hora/vel/desc/driver/plate). 7,7 MB no total.
+`refresh_analytics_daily(platform, dias[])` recomputa (incremental por dia ou full).
+Triggers statement-level (ins/upd/del, transition tables) mantêm o rollup
+consistente com driver_events — cobre TODOS os caminhos de escrita (RPA, import,
+edge). Validado: insert cria a linha do grão, delete remove. dow deriva de `dia`;
+hora_pos deriva de clf_norm (no grão).
+
+**Migration `20260622160100_get_analytics_rollup.sql`** — `get_analytics_rollup`
+(mesma assinatura/shape de get_analytics, lê o rollup), `analytics_metadata_rollup`
+(dropdowns) e `analytics_platform_counts` (badges). Helper
+`analytics_median_from_counts(jsonb)` reproduz round(percentile_cont(0.5))::int do
+histograma (validado: 68 = 68 vs cru). **Paridade byte-a-byte** vs get_analytics:
+diff chave-a-chave = 0 em jun_daily, braspress+high, custom_mensal, clf+evt.
+
+**Servidor religado** (`server/analytics-rpc.js`: get_analytics_rollup +
+analytics_metadata_rollup; `server/analytics-routes.js`: /api/platforms via
+analytics_platform_counts; engine default já era `rpc`). get_analytics (cru) e
+analytics_metadata continuam como referência/fallback.
+
+**Resultado medido (instância estrangulada):** "todos os meses" **44s→1,5s**;
+mês único **13s→0,13s**. E não varre dados crus, então não esgota crédito de CPU.
+
+**Ainda pendente:** modo `compare` (multi-plataforma) segue no caminho JS; subir o
+compute deixou de ser urgente. Deploy do servidor necessário p/ a fiação valer.
+
+---
+
 ## 0. Decisões tomadas (confirmadas com o usuário)
 
 1. **`driver_events` está VAZIA (0 linhas) em produção.** Não há problema de

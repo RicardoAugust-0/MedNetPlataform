@@ -1,3 +1,24 @@
+import Chart from 'chart.js/auto';
+
+let _initialized = false;
+
+export function initChartDefaults() {
+  if (_initialized) return;
+  _initialized = true;
+  Chart.defaults.font.family = "'Poppins', sans-serif";
+  Chart.defaults.font.size = 11.5;
+  Chart.defaults.color = 'var(--text-muted, #8A94A6)';
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.plugins.tooltip.backgroundColor = '#0F1923';
+  Chart.defaults.plugins.tooltip.borderColor = 'var(--border, rgba(255,255,255,0.1))';
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.titleColor = '#fff';
+  Chart.defaults.plugins.tooltip.bodyColor = '#fff';
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+  Chart.defaults.plugins.tooltip.titleFont = { family: "'Poppins', sans-serif", weight: '600' };
+}
+
 export const C = {
   vinho: '#9E1A45',
   vinho2: '#C24A6A',

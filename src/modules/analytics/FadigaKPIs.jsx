@@ -1,5 +1,5 @@
 export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
-  const k = d ? d.kpis : {};
+  const kpiData = d ? d.kpis : {};
   const pct = (v) => (v == null ? '—' : v + '%');
 
   const iconStyle = (accent, soft) => ({
@@ -65,75 +65,75 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'total',
       icon: 'ti-alert-triangle',
       label: 'Total de alertas',
-      value: d ? k.total.toLocaleString('pt-BR') : '—',
+      value: d ? kpiData?.total?.toLocaleString('pt-BR') : '—',
       sub: d
         ? `${d.meta.motoristas.toLocaleString('pt-BR')} motoristas · ${d.meta.veiculos.toLocaleString('pt-BR')} veículos`
         : 'aguardando importação',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
-      trend: renderTrend(k.total, prevD?.kpis?.total, false, 'Total de alertas'),
+      trend: renderTrend(kpiData?.total, prevD?.kpis?.total, false, 'Total de alertas'),
     },
     {
       id: 'positivo',
       icon: 'ti-eye-check',
       label: 'Alertas positivos',
-      value: d ? pct(k.pct_positivo) : '—',
+      value: d ? pct(kpiData?.pct_positivo) : '—',
       sub: 'fadiga / desatenção confirmada',
       iconStyle: iconStyle('#E24B4A', '#FCEBEB'),
-      trend: renderTrend(k.pct_positivo, prevD?.kpis?.pct_positivo, true, 'Alertas positivos'),
+      trend: renderTrend(kpiData?.pct_positivo, prevD?.kpis?.pct_positivo, true, 'Alertas positivos'),
     },
     {
       id: 'falso',
       icon: 'ti-shield-x',
       label: 'Falso positivo',
-      value: d ? pct(k.pct_falso) : '—',
-      sub: d ? `${k.pct_naoclass}% sem classificação` : ' ',
+      value: d ? pct(kpiData?.pct_falso) : '—',
+      sub: d ? `${kpiData?.pct_naoclass}% sem classificação` : ' ',
       iconStyle: iconStyle('#E8A020', '#FAEEDA'),
-      trend: renderTrend(k.pct_falso, prevD?.kpis?.pct_falso, true, 'Falso positivo'),
+      trend: renderTrend(kpiData?.pct_falso, prevD?.kpis?.pct_falso, true, 'Falso positivo'),
     },
     {
       id: 'naoclass',
       icon: 'ti-help-circle',
       label: 'Sem classificação',
-      value: d ? pct(k.pct_naoclass) : '—',
+      value: d ? pct(kpiData?.pct_naoclass) : '—',
       sub: 'aguardando análise da operação',
       iconStyle: iconStyle('var(--text-secondary, #8A94A6)', 'var(--surface-2, #EAECF1)'),
-      trend: renderTrend(k.pct_naoclass, prevD?.kpis?.pct_naoclass, true, 'Sem classificação'),
+      trend: renderTrend(kpiData?.pct_naoclass, prevD?.kpis?.pct_naoclass, true, 'Sem classificação'),
     },
     {
       id: 'velocidade',
       icon: 'ti-gauge',
       label: 'Velocidade mediana',
-      value: d && k.vel_mediana != null ? k.vel_mediana + ' km/h' : '—',
-      sub: d && k.pct_vel_alta != null ? `${k.pct_vel_alta}% acima de 60 km/h` : 'sem dados de velocidade',
+      value: d && kpiData?.vel_mediana != null ? kpiData.vel_mediana + ' km/h' : '—',
+      sub: d && kpiData?.pct_vel_alta != null ? `${kpiData.pct_vel_alta}% acima de 60 km/h` : 'sem dados de velocidade',
       iconStyle: iconStyle('#2A8DD9', '#E6F1FB'),
-      trend: renderTrend(k.vel_mediana, prevD?.kpis?.vel_mediana, false, 'Velocidade mediana'),
+      trend: renderTrend(kpiData?.vel_mediana, prevD?.kpis?.vel_mediana, false, 'Velocidade mediana'),
     },
     {
       id: 'evidencia',
       icon: 'ti-video',
       label: 'Com evidência',
-      value: d && k.pct_evidencia != null ? pct(k.pct_evidencia) : '—',
+      value: d && kpiData?.pct_evidencia != null ? pct(kpiData.pct_evidencia) : '—',
       sub: 'vídeo disponível p/ auditoria',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
-      trend: renderTrend(k.pct_evidencia, prevD?.kpis?.pct_evidencia, true, 'Com evidência'),
+      trend: renderTrend(kpiData?.pct_evidencia, prevD?.kpis?.pct_evidencia, true, 'Com evidência'),
     },
     {
       id: 'tempo_tratar',
       icon: 'ti-clock-play',
       label: 'Tempo até tratar',
-      value: d && k.t_ini_mediana != null ? k.t_ini_mediana + ' min' : '—',
+      value: d && kpiData?.t_ini_mediana != null ? kpiData.t_ini_mediana + ' min' : '—',
       sub: 'mediana do início da tratativa',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
-      trend: renderTrend(k.t_ini_mediana, prevD?.kpis?.t_ini_mediana, false, 'Tempo até tratar'),
+      trend: renderTrend(kpiData?.t_ini_mediana, prevD?.kpis?.t_ini_mediana, false, 'Tempo até tratar'),
     },
     {
       id: 'tempo_finalizar',
       icon: 'ti-clock-check',
       label: 'Tempo até finalizar',
-      value: d && k.t_fin_mediana != null ? k.t_fin_mediana + ' min' : '—',
+      value: d && kpiData?.t_fin_mediana != null ? kpiData.t_fin_mediana + ' min' : '—',
       sub: 'mediana até finalização',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
-      trend: renderTrend(k.t_fin_mediana, prevD?.kpis?.t_fin_mediana, false, 'Tempo até finalizar'),
+      trend: renderTrend(kpiData?.t_fin_mediana, prevD?.kpis?.t_fin_mediana, false, 'Tempo até finalizar'),
     },
   ];
 
@@ -149,10 +149,13 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
         const isActive = activeKpi === k.id;
         return (
           <div
-            key={idx}
+            key={k.id}
             data-card
             className={`card clickable${isActive ? ' active' : ''}`}
+            role="button"
+            tabIndex={0}
             onClick={() => handleCardClick(k.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCardClick(k.id); } }}
             style={{
               padding: '14px 16px',
               display: 'flex',

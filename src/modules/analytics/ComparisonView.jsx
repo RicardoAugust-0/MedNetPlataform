@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react';
 import Chart from 'chart.js/auto';
+import { C, fmt, kf, _ax, initChartDefaults } from './components/ChartUtils.js';
 
 export default function ComparisonView({
   sources,
@@ -9,6 +10,8 @@ export default function ComparisonView({
   setCompareCompanies,
   selectedSeverity
 }) {
+  initChartDefaults();
+
   const canvasCmpRef = useRef(null);
   const chartRef = useRef(null);
   const canvasCritRef = useRef(null);
@@ -33,20 +36,6 @@ export default function ComparisonView({
   }, [sources]);
 
   useEffect(() => {
-    // Config Chart.js defaults
-    Chart.defaults.font.family = "'Poppins', sans-serif";
-    Chart.defaults.font.size = 11.5;
-    Chart.defaults.color = 'var(--text-muted, #8A94A6)';
-    Chart.defaults.plugins.legend.display = false;
-    Chart.defaults.plugins.tooltip.backgroundColor = '#0F1923';
-    Chart.defaults.plugins.tooltip.borderColor = 'var(--border, rgba(255,255,255,0.1))';
-    Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.plugins.tooltip.titleColor = '#fff';
-    Chart.defaults.plugins.tooltip.bodyColor = '#fff';
-    Chart.defaults.plugins.tooltip.padding = 10;
-    Chart.defaults.plugins.tooltip.cornerRadius = 8;
-    Chart.defaults.plugins.tooltip.titleFont = { family: "'Poppins', sans-serif", weight: '600' };
-
     if (chartRef.current) {
       chartRef.current.destroy();
       chartRef.current = null;
@@ -55,22 +44,6 @@ export default function ComparisonView({
       chartCritRef.current.destroy();
       chartCritRef.current = null;
     }
-
-    const C = {
-      vinho: '#9E1A45',
-      info: '#2A8DD9',
-    };
-    const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR'));
-    const kf = (v) => (v >= 1000 ? v / 1000 + 'k' : v);
-    const _ax = (extra) =>
-      Object.assign(
-        {
-          grid: { color: 'var(--chart-grid, rgba(15,25,35,0.025))', drawTicks: false },
-          border: { display: false },
-          ticks: { padding: 8, color: 'var(--text-muted, #8A94A6)' },
-        },
-        extra || {}
-      );
 
     if (sources.length >= 2 && canvasCmpRef.current) {
       const labels = sources.map((s) => s.platformName);
@@ -290,6 +263,13 @@ export default function ComparisonView({
                   <td style={{ padding: '8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace" }}>{r.evid}</td>
                 </tr>
               ))}
+              {compareRows.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    Sem dados para comparação no período selecionado.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

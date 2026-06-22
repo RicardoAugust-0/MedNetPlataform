@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 export default function ComparisonModal({
   sourcesList = [],
   tempSelected = [],
@@ -5,8 +7,17 @@ export default function ComparisonModal({
   handleConfirmCompare,
   setCompareModalOpen,
 }) {
+  // Close modal on Escape key.
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setCompareModalOpen(false);
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [setCompareModalOpen]);
+
   return (
-    <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div data-noprint onClick={(e) => { if (e.target === e.currentTarget) setCompareModalOpen(false); }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '450px', maxWidth: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
         
         {/* Modal Header */}

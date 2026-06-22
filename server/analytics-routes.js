@@ -201,6 +201,13 @@ export function registerAnalyticsRoutes(app, supabase) {
   // 1. Get platform counts from the database
   app.get('/api/platforms', async (req, res) => {
     try {
+      // Contagens (eventos ativos por plataforma) servidas pelo rollup —
+      // uma RPC, sem varrer driver_events. Fallback: head count por plataforma.
+      const { data: rollupCounts, error: rcErr } = await supabase.rpc('analytics_platform_counts');
+      if (!rcErr && rollupCounts && typeof rollupCounts === 'object') {
+        return res.json(rollupCounts);
+      }
+
       const counts = {};
       const promises = PLATFORMS.map(async (p) => {
         const { count, error } = await supabase
@@ -238,7 +245,7 @@ export function registerAnalyticsRoutes(app, supabase) {
         return res.status(400).json({ error: 'Nenhuma plataforma especificada.' });
       }
 
-      const engine = (process.env.ANALYTICS_ENGINE || 'js').toLowerCase();
+      const engine = (process.env.ANALYTICS_ENGINE || 'rpc').toLowerCase();
       const cacheKey = `${engine}|${req.originalUrl}`;
       const cached = resultCache.get(cacheKey);
       if (cached && (Date.now() - cached.ts < RESULT_TTL)) {

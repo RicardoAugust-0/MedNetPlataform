@@ -100,7 +100,10 @@ export function deriveDateParams(month, startDate, endDate) {
 }
 
 async function callGetAnalytics(supabase, params) {
-  const { data, error } = await supabase.rpc('get_analytics', params);
+  // Lê o rollup pré-agregado (analytics_daily) via get_analytics_rollup — mesma
+  // saída que get_analytics (paridade validada), mas em ~5k linhas em vez de
+  // varrer driver_events. get_analytics (cru) segue como referência/fallback.
+  const { data, error } = await supabase.rpc('get_analytics_rollup', params);
   if (error) throw error;
   return data;
 }
@@ -113,8 +116,8 @@ async function callGetAnalytics(supabase, params) {
 export async function buildSingleAnalyticsViaRPC(supabase, {
   platformId, month, startDate, endDate, company, severity, classification, eventType,
 }, { resolveMonitorName, aliases }) {
-  // 1. Metadados (dropdowns) — sem baixar linhas.
-  const { data: meta, error: metaErr } = await supabase.rpc('analytics_metadata', {
+  // 1. Metadados (dropdowns) — do rollup, sem varrer driver_events.
+  const { data: meta, error: metaErr } = await supabase.rpc('analytics_metadata_rollup', {
     p_platform_ids: [platformId],
   });
   if (metaErr) throw metaErr;

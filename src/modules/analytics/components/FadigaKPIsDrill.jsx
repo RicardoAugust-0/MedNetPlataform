@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+const SLA_TRATATIVA_MIN = 5;
+const SLA_FINALIZACAO_MIN = 15;
+
 const sumSeries = (series) => (series || []).reduce((a, b) => a + b, 0);
 
 const getTopCategories = (categorias, limit = 4) => {
@@ -407,6 +410,9 @@ export default function FadigaKPIsDrill({
                   <span className="v">{drillData.frota.valores[i].toLocaleString('pt-BR')}</span>
                 </div>
               ))}
+              {(!drillData.frota?.labels || drillData.frota.labels.length === 0) && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingTop: 6 }}>Nenhuma transportadora</div>
+              )}
             </div>
           </>
         );
@@ -433,12 +439,12 @@ export default function FadigaKPIsDrill({
               <h4>Metas Operacionais</h4>
               <div className="dg-drill-line">
                 <span>Meta de Atendimento</span>
-                <span className="v">&lt; 5.0 min</span>
+                <span className="v">&lt; {SLA_TRATATIVA_MIN}.0 min</span>
               </div>
               <div className="dg-drill-line">
                 <span>Desempenho</span>
-                <span className="v" style={{ color: tIni != null && tIni <= 5 ? 'var(--success-500, #2DA75A)' : 'var(--danger-500, #E24B4A)' }}>
-                  {tIni == null ? 'Sem dados' : tIni <= 5 ? 'Dentro do SLA' : 'Fora do SLA'}
+                <span className="v" style={{ color: tIni != null && tIni <= SLA_TRATATIVA_MIN ? 'var(--success-500, #2DA75A)' : 'var(--danger-500, #E24B4A)' }}>
+                  {tIni == null ? 'Sem dados' : tIni <= SLA_TRATATIVA_MIN ? 'Dentro do SLA' : 'Fora do SLA'}
                 </span>
               </div>
             </div>
@@ -473,12 +479,12 @@ export default function FadigaKPIsDrill({
               <h4>Metas Operacionais</h4>
               <div className="dg-drill-line">
                 <span>Meta de Conclusão</span>
-                <span className="v">&lt; 15.0 min</span>
+                <span className="v">&lt; {SLA_FINALIZACAO_MIN}.0 min</span>
               </div>
               <div className="dg-drill-line">
                 <span>Desempenho</span>
-                <span className="v" style={{ color: tFin != null && tFin <= 15 ? 'var(--success-500, #2DA75A)' : 'var(--danger-500, #E24B4A)' }}>
-                  {tFin == null ? 'Sem dados' : tFin <= 15 ? 'Dentro do SLA' : 'Fora do SLA'}
+                <span className="v" style={{ color: tFin != null && tFin <= SLA_FINALIZACAO_MIN ? 'var(--success-500, #2DA75A)' : 'var(--danger-500, #E24B4A)' }}>
+                  {tFin == null ? 'Sem dados' : tFin <= SLA_FINALIZACAO_MIN ? 'Dentro do SLA' : 'Fora do SLA'}
                 </span>
               </div>
             </div>

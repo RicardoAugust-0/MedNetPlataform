@@ -121,6 +121,29 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
 
   const fileInputRef = useRef(null);
 
+  // Reset all internal state when modal opens.
+  useEffect(() => {
+    if (modalOpen) {
+      setStep('drop');
+      setDragOver(false);
+      setParsing(false);
+      setError(null);
+      setPlatformHint('auto');
+      setStage(null);
+      setOperatorEmail(DEFAULT_OPERATOR_EMAIL);
+    }
+  }, [modalOpen]);
+
+  // Close modal on Escape key.
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setModalOpen(false);
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [modalOpen, setModalOpen]);
+
   // Para OmniLink, busca o operador configurado (usado no resumo e no filtro).
   useEffect(() => {
     let active = true;
@@ -337,7 +360,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     sev === 'Gravíssimo' ? '#C62F2F' : sev === 'Grave' ? '#E8A020' : sev === 'Leve' ? '#8A94A6' : '#2A8DD9';
 
   return (
-    <div data-noprint style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div data-noprint onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false); }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '580px', maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
 
         {/* Modal Header */}

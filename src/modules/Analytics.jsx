@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { PLATFORMS } from '../utils/fatigueParser.js';
 import { supabase } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
-import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
+
 import '../styles/analytics.css';
 
 // Subcomponents
@@ -92,7 +92,6 @@ export default function Analytics() {
   });
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [clock, setClock] = useState('');
   const toast = useToast();
   const lastLoadedRef = useRef({
     activeId: null,
@@ -102,7 +101,7 @@ export default function Analytics() {
     startDate: '',
     endDate: ''
   });
-  const { resolveMonitorName } = useCarrierAliases();
+
   const [selectedCompany, setSelectedCompany] = useState('');
   const [compareCompanies, setCompareCompanies] = useState(() => {
     try {
@@ -118,12 +117,36 @@ export default function Analytics() {
       localStorage.setItem('mednet_analytics_compare_companies', JSON.stringify(compareCompanies));
     } catch (e) {}
   }, [compareCompanies]);
-  const [selectedClassification, setSelectedClassification] = useState('all');
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedClassification, setSelectedClassification] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_classification') || 'all';
+    } catch (e) {
+      return 'all';
+    }
+  });
+  const [selectedType, setSelectedType] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_type') || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem('mednet_analytics_severity', selectedSeverity);
   }, [selectedSeverity]);
+
+  useEffect(() => {
+    localStorage.setItem('mednet_analytics_classification', selectedClassification);
+  }, [selectedClassification]);
+
+  useEffect(() => {
+    if (selectedType) {
+      localStorage.setItem('mednet_analytics_type', selectedType);
+    } else {
+      localStorage.removeItem('mednet_analytics_type');
+    }
+  }, [selectedType]);
 
   useEffect(() => {
     if (startDate) {
@@ -148,23 +171,7 @@ export default function Analytics() {
     setActiveKpi(null);
   }, [activeId, compare]);
 
-  // Tick clock
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setClock(
-        now.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      );
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
+
 
   const loadFromDatabase = async (preferredPlatformId = null, isSilent = false) => {
     if (!isSilent) {
@@ -324,14 +331,23 @@ export default function Analytics() {
   useEffect(() => {
     if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom') {
       const [year, month] = selectedMonth.split('-').map(Number);
-      const start = `${year}-${String(month).padStart(2, '0')}-01`;
+      const newStart = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const pad = (n) => String(n).padStart(2, '0');
-      const end = `${year}-${pad(month)}-${pad(lastDay)}`;
-      setStartDate(start);
-      setEndDate(end);
+      const newEnd = `${year}-${pad(month)}-${pad(lastDay)}`;
+      if (newStart !== startDate) setStartDate(newStart);
+      if (newEnd !== endDate) setEndDate(newEnd);
     }
-  }, [selectedMonth, availableMonths, startDate, endDate]);
+  }, [selectedMonth]);
+
+  // Swap dates if custom range has start after end
+  useEffect(() => {
+    if (selectedMonth === 'custom' && startDate && endDate && startDate > endDate) {
+      const tmp = startDate;
+      setStartDate(endDate);
+      setEndDate(tmp);
+    }
+  }, [selectedMonth, startDate, endDate]);
 
   useEffect(() => {
     const last = lastLoadedRef.current;
@@ -403,6 +419,140 @@ export default function Analytics() {
     if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
 
     window.location.href = url;
+  };
+
+  const exportToHTML = () => {
+    const container = document.querySelector('.analytics-container');
+    if (!container) return;
+
+    // Clone the container to manipulate it offline
+    const clone = container.cloneNode(true);
+
+    // Convert canvases to base64 images
+    const originalCanvases = container.querySelectorAll('canvas');
+    const clonedCanvases = clone.querySelectorAll('canvas');
+    originalCanvases.forEach((origCanvas, idx) => {
+      const clonedCanvas = clonedCanvases[idx];
+      if (clonedCanvas) {
+        try {
+          const img = document.createElement('img');
+          img.src = origCanvas.toDataURL('image/png');
+          img.style.cssText = clonedCanvas.style.cssText;
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          img.className = clonedCanvas.className;
+          clonedCanvas.replaceWith(img);
+        } catch (e) {
+          console.error('[MedNet] Erro ao converter canvas para imagem:', e);
+        }
+      }
+    });
+
+    // Replace selects with static span values showing selected option text
+    const originalSelects = container.querySelectorAll('select');
+    const clonedSelects = clone.querySelectorAll('select');
+    originalSelects.forEach((origSelect, idx) => {
+      const clonedSelect = clonedSelects[idx];
+      if (clonedSelect) {
+        const text = origSelect.options[origSelect.selectedIndex]?.text || '';
+        const span = document.createElement('span');
+        span.className = 'static-filter-val';
+        span.textContent = text;
+        span.style.cssText = 'padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-primary); background: var(--surface-1); display: inline-block;';
+        clonedSelect.replaceWith(span);
+      }
+    });
+
+    // Replace date inputs with static span values
+    const originalDates = container.querySelectorAll('input[type="date"]');
+    const clonedDates = clone.querySelectorAll('input[type="date"]');
+    originalDates.forEach((origDate, idx) => {
+      const clonedDate = clonedDates[idx];
+      if (clonedDate) {
+        const span = document.createElement('span');
+        span.className = 'static-filter-val';
+        span.textContent = origDate.value || 'Não definido';
+        span.style.cssText = 'padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-primary); background: var(--surface-1); display: inline-block;';
+        clonedDate.replaceWith(span);
+      }
+    });
+
+    // Remove buttons (action buttons and trash/delete buttons on source chips)
+    clone.querySelectorAll('button').forEach((btn) => btn.remove());
+
+    // Gather stylesheet contents to make it self-contained
+    let stylesHtml = '';
+    for (const sheet of document.styleSheets) {
+      try {
+        let rules = [];
+        for (const rule of sheet.cssRules) {
+          rules.push(rule.cssText);
+        }
+        stylesHtml += `<style>${rules.join('\\n')}</style>\n`;
+      } catch (e) {
+        // Ignore cross-origin stylesheet errors
+      }
+    }
+
+    // Capture active theme
+    const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+
+    // Assemble the complete HTML document
+    const fullHtml = `<!DOCTYPE html>
+<html lang="pt-BR" data-theme="${activeTheme}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relatório de Analytics - MedNet Fadiga Zero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/tabler-icons.min.css" rel="stylesheet" />
+  ${stylesHtml}
+  <style>
+    body {
+      background-color: var(--background, #0b0f14);
+      color: var(--text-primary, #ffffff);
+      font-family: 'DM Sans', 'Poppins', sans-serif;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .exported-wrapper {
+      width: 100%;
+      max-width: 1200px;
+    }
+    .card {
+      break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  <div class="exported-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted);">
+      <div>
+        <span>Relatório gerado em: <strong>${new Date().toLocaleString('pt-BR')}</strong></span>
+      </div>
+      <div>
+        <span>Plataforma MedNet · Fadiga Zero</span>
+      </div>
+    </div>
+    ${clone.outerHTML}
+  </div>
+</body>
+</html>`;
+
+    // Trigger download
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_analytics_fadiga_${new Date().toISOString().slice(0, 10)}.html`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
@@ -581,6 +731,7 @@ export default function Analytics() {
           handleCompareClick={handleCompareClick}
           activeSource={activeSource}
           exportToCSV={exportToCSV}
+          exportToHTML={exportToHTML}
           setModalOpen={setModalOpen}
           selectedCompany={selectedCompany}
           setSelectedCompany={setSelectedCompany}
