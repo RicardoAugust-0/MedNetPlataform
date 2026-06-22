@@ -112,6 +112,45 @@ export default function Analytics() {
     }
   });
 
+  // Modo de comparação: 'platforms' (plataformas entre si) ou 'companies'
+  // (empresas de UMA plataforma entre si).
+  const [compareMode, setCompareMode] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_compare_mode') || 'platforms';
+    } catch (e) {
+      return 'platforms';
+    }
+  });
+  const [companyComparePlatform, setCompanyComparePlatform] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_company_cmp_platform') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [companyCompareList, setCompanyCompareList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mednet_analytics_company_cmp_list');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  // Opções para o modal (plataformas + suas empresas), carregadas sob demanda.
+  const [compareOptions, setCompareOptions] = useState([]);
+  // Estado temporário do modal.
+  const [tempMode, setTempMode] = useState('platforms');
+  const [tempCompanyPlatform, setTempCompanyPlatform] = useState('');
+  const [tempCompanyList, setTempCompanyList] = useState([]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mednet_analytics_compare_mode', compareMode);
+      localStorage.setItem('mednet_analytics_company_cmp_platform', companyComparePlatform);
+      localStorage.setItem('mednet_analytics_company_cmp_list', JSON.stringify(companyCompareList));
+    } catch (e) {}
+  }, [compareMode, companyComparePlatform, companyCompareList]);
+
   useEffect(() => {
     try {
       localStorage.setItem('mednet_analytics_compare_companies', JSON.stringify(compareCompanies));
@@ -238,8 +277,23 @@ export default function Analytics() {
 
       let activeMonth = selectedMonth;
 
+      // Monta a lista de fontes a comparar conforme o modo.
+      // - 'platforms': uma fonte por plataforma (com filtro de empresa opcional).
+      // - 'companies': uma fonte por empresa de UMA mesma plataforma.
+      let compareSources = [];
+      if (compare) {
+        if (compareMode === 'companies') {
+          const pid = companyComparePlatform;
+          if (pid && counts[pid] > 0) {
+            compareSources = (companyCompareList || []).map((c) => ({ platformId: pid, company: c }));
+          }
+        } else {
+          compareSources = validCompareIds.map((pid) => ({ platformId: pid, company: compareCompanies[pid] || '' }));
+        }
+      }
+
       // Precisa de pelo menos duas fontes válidas para comparar.
-      if (compare && validCompareIds.length < 2) {
+      if (compare && compareSources.length < 2) {
         setSources([]);
         setD(null);
         setPrevD(null);
@@ -250,13 +304,9 @@ export default function Analytics() {
       // Load analytics from backend Express server
       let url = `${API_URL}/api/analytics?`;
       if (compare) {
-        url += `compare=true&platformIds=${validCompareIds.join(',')}`;
-        for (const pid of validCompareIds) {
-          const comp = compareCompanies[pid] || '';
-          if (comp) {
-            url += `&company_${pid}=${encodeURIComponent(comp)}`;
-          }
-        }
+        const platformIds = [...new Set(compareSources.map((s) => s.platformId))];
+        url += `compare=true&platformIds=${platformIds.join(',')}`;
+        url += `&sources=${encodeURIComponent(JSON.stringify(compareSources))}`;
       } else {
         url += `platformId=${targetPlatformId}`;
         if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
@@ -351,14 +401,17 @@ export default function Analytics() {
 
   useEffect(() => {
     const last = lastLoadedRef.current;
-    const platformChanged = last.activeId !== activeId || 
-                           last.compare !== compare || 
+    const platformChanged = last.activeId !== activeId ||
+                           last.compare !== compare ||
                            JSON.stringify(last.comparePlatformIds) !== JSON.stringify(comparePlatformIds) ||
+                           last.compareMode !== compareMode ||
+                           last.companyComparePlatform !== companyComparePlatform ||
+                           JSON.stringify(last.companyCompareList) !== JSON.stringify(companyCompareList) ||
                            last.selectedMonth !== selectedMonth ||
                            last.startDate !== startDate ||
                            last.endDate !== endDate;
-    
-    lastLoadedRef.current = { activeId, compare, comparePlatformIds, selectedMonth, startDate, endDate };
+
+    lastLoadedRef.current = { activeId, compare, comparePlatformIds, compareMode, companyComparePlatform, companyCompareList, selectedMonth, startDate, endDate };
 
     if (selectedMonth === 'custom') {
       if (startDate && endDate) {
@@ -371,6 +424,9 @@ export default function Analytics() {
     activeId,
     compare,
     comparePlatformIds,
+    compareMode,
+    companyComparePlatform,
+    companyCompareList,
     selectedMonth,
     startDate,
     endDate,
@@ -598,17 +654,30 @@ export default function Analytics() {
     }
   };
 
-  const handleCompareClick = () => {
+  const handleCompareClick = async () => {
     if (compare) {
       setCompare(false);
       setComparePlatformIds([]);
       const firstAvailable = sourcesList[0]?.id || null;
       setActiveId(firstAvailable);
-    } else {
-      const initialSelected = activeId ? [activeId.replace('src-', '')] : [];
-      setTempSelected(initialSelected);
-      setCompareModalOpen(true);
+      return;
     }
+    // Carrega opções (plataformas + suas empresas) para o modal.
+    try {
+      const res = await fetch(`${API_URL}/api/compare-options`);
+      if (res.ok) {
+        const opts = await res.json();
+        setCompareOptions(Array.isArray(opts) ? opts : []);
+      }
+    } catch (e) {
+      console.warn('[MedNet] Falha ao carregar opções de comparação:', e);
+    }
+    // Inicializa o estado temporário do modal a partir da seleção atual.
+    setTempMode(compareMode);
+    setTempSelected(comparePlatformIds.length ? comparePlatformIds : (activeId ? [activeId.replace('src-', '')] : []));
+    setTempCompanyPlatform(companyComparePlatform || (activeId ? activeId.replace('src-', '') : ''));
+    setTempCompanyList(companyCompareList);
+    setCompareModalOpen(true);
   };
 
   const handleToggleTempCompare = (pid) => {
@@ -621,14 +690,38 @@ export default function Analytics() {
     });
   };
 
+  const handleSelectTempCompanyPlatform = (pid) => {
+    setTempCompanyPlatform(pid);
+    setTempCompanyList([]);
+  };
+
+  const handleToggleTempCompany = (companyName) => {
+    setTempCompanyList((prev) =>
+      prev.includes(companyName) ? prev.filter((x) => x !== companyName) : [...prev, companyName]
+    );
+  };
+
   const handleConfirmCompare = () => {
-    if (tempSelected.length < 2) {
-      toast('Por favor, selecione pelo menos duas plataformas para comparar.', 'warning');
-      return;
+    if (tempMode === 'companies') {
+      if (!tempCompanyPlatform || tempCompanyList.length < 2) {
+        toast('Selecione uma plataforma e pelo menos duas empresas para comparar.', 'warning');
+        return;
+      }
+      setCompareMode('companies');
+      setCompanyComparePlatform(tempCompanyPlatform);
+      setCompanyCompareList(tempCompanyList);
+      setCompare(true);
+      setCompareModalOpen(false);
+    } else {
+      if (tempSelected.length < 2) {
+        toast('Por favor, selecione pelo menos duas plataformas para comparar.', 'warning');
+        return;
+      }
+      setCompareMode('platforms');
+      setComparePlatformIds(tempSelected);
+      setCompare(true);
+      setCompareModalOpen(false);
     }
-    setComparePlatformIds(tempSelected);
-    setCompare(true);
-    setCompareModalOpen(false);
   };
 
   const removeSource = async (id, event) => {
@@ -855,6 +948,7 @@ export default function Analytics() {
             compareCompanies={compareCompanies}
             setCompareCompanies={setCompareCompanies}
             selectedSeverity={selectedSeverity}
+            compareMode={compareMode}
           />
         )}
 
@@ -896,8 +990,15 @@ export default function Analytics() {
       {compareModalOpen && (
         <ComparisonModal
           sourcesList={sourcesList}
+          compareOptions={compareOptions}
+          tempMode={tempMode}
+          setTempMode={setTempMode}
           tempSelected={tempSelected}
           handleToggleTempCompare={handleToggleTempCompare}
+          tempCompanyPlatform={tempCompanyPlatform}
+          handleSelectTempCompanyPlatform={handleSelectTempCompanyPlatform}
+          tempCompanyList={tempCompanyList}
+          handleToggleTempCompany={handleToggleTempCompany}
           handleConfirmCompare={handleConfirmCompare}
           setCompareModalOpen={setCompareModalOpen}
         />

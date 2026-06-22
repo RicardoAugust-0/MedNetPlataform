@@ -165,3 +165,118 @@ export async function buildSingleAnalyticsViaRPC(supabase, {
 
   return { availableMonths, availableCompanies, availableTypes, d, prevD };
 }
+
+async function callRollupMulti(supabase, params) {
+  const { data, error } = await supabase.rpc('get_analytics_rollup_multi', params);
+  if (error) throw error;
+  return data;
+}
+
+function platformLabel(pid) {
+  return pid === 'omnilink' ? 'OmniLink'
+    : pid === 'maxtrack' ? 'MaxTrack'
+    : pid.toUpperCase();
+}
+
+/**
+ * Monta a resposta de /api/analytics em modo COMPARAÇÃO via rollup.
+ * `sources` é uma lista de fontes { platformId, company } — cada uma vira uma
+ * coluna (agregada por get_analytics_rollup), e o painel combinado é a UNIÃO
+ * delas (get_analytics_rollup_multi). Serve tanto "comparar plataformas" quanto
+ * "comparar empresas da mesma plataforma" — o servidor não distingue o modo,
+ * apenas recebe a lista de fontes.
+ */
+export async function buildCompareViaRPC(supabase, {
+  sources, month, startDate, endDate, severity, classification, eventType,
+}, { resolveMonitorName, aliases }) {
+  const platformIds = [...new Set(sources.map((s) => s.platformId))];
+
+  // Metadados (frotas/meses/tipos) por plataforma envolvida — do rollup.
+  const metaByPlatform = {};
+  for (const pid of platformIds) {
+    const { data: meta, error } = await supabase.rpc('analytics_metadata_rollup', { p_platform_ids: [pid] });
+    if (error) throw error;
+    metaByPlatform[pid] = meta || { months: [], types: [], fleets: {} };
+  }
+
+  // Dropdowns globais = união entre as plataformas.
+  const monthsSet = new Set();
+  const typesSet = new Set();
+  const companiesSet = new Set();
+  for (const pid of platformIds) {
+    const m = metaByPlatform[pid];
+    (m.months || []).forEach((x) => monthsSet.add(x));
+    (m.types || []).forEach((x) => typesSet.add(x));
+    companiesFromFleets(m.fleets || {}, resolveMonitorName, aliases).forEach((x) => companiesSet.add(x));
+  }
+  const availableMonths = Array.from(monthsSet).sort().reverse().slice(0, 12);
+  const availableTypes = Array.from(typesSet).sort();
+  const availableCompanies = Array.from(companiesSet).sort();
+
+  const { from, to, daily, windowMonths } = deriveDateParams(month, startDate, endDate);
+
+  // Cada fonte: agregação individual + filtro resolvido p/ o combinado.
+  const outSources = [];
+  const resolvedForCombined = [];
+  for (let i = 0; i < sources.length; i++) {
+    const s = sources[i];
+    const fleets = metaByPlatform[s.platformId].fleets || {};
+    const pFrotas = frotasForCompany(s.company, fleets, resolveMonitorName, aliases); // null = todas
+    resolvedForCombined.push({ platform_id: s.platformId, frotas: pFrotas });
+
+    const d = await callGetAnalytics(supabase, {
+      p_platform_ids: [s.platformId],
+      p_frotas: pFrotas,
+      p_date_from: from, p_date_to: to,
+      p_severity: severity || null,
+      p_classification: classification || null,
+      p_event_type: eventType || null,
+      p_daily: daily, p_window_months: windowMonths,
+      p_tz: 'America/Sao_Paulo',
+    });
+    resolveFrotaChart(d, resolveMonitorName, aliases);
+
+    const platformName = platformLabel(s.platformId);
+    outSources.push({
+      id: `src-${i}-${s.platformId}`,
+      platformId: s.platformId,
+      platformName,
+      company: s.company || '',
+      label: s.company ? s.company : platformName,
+      rows: (d.meta && d.meta.total) || 0,
+      availableCompanies: companiesFromFleets(fleets, resolveMonitorName, aliases),
+      data: d,
+    });
+  }
+
+  // Painel combinado = união das fontes.
+  const d = await callRollupMulti(supabase, {
+    p_sources: resolvedForCombined,
+    p_date_from: from, p_date_to: to,
+    p_severity: severity || null,
+    p_classification: classification || null,
+    p_event_type: eventType || null,
+    p_daily: daily, p_window_months: windowMonths,
+    p_tz: 'America/Sao_Paulo',
+  });
+  resolveFrotaChart(d, resolveMonitorName, aliases);
+
+  // Mês anterior (só quando há um mês específico selecionado).
+  let prevD = null;
+  if (month && month !== 'all' && month !== 'custom' && month.includes('-')) {
+    const pk = prevMonthKey(month);
+    const pb = spMonthBounds(pk);
+    prevD = await callRollupMulti(supabase, {
+      p_sources: resolvedForCombined,
+      p_date_from: pb.from, p_date_to: pb.to,
+      p_severity: severity || null,
+      p_classification: classification || null,
+      p_event_type: eventType || null,
+      p_daily: true, p_window_months: false,
+      p_tz: 'America/Sao_Paulo',
+    });
+    resolveFrotaChart(prevD, resolveMonitorName, aliases);
+  }
+
+  return { availableMonths, availableCompanies, availableTypes, sources: outSources, d, prevD };
+}

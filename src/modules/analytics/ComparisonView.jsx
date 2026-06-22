@@ -8,7 +8,8 @@ export default function ComparisonView({
   formatMonthKey,
   compareCompanies = {},
   setCompareCompanies,
-  selectedSeverity
+  selectedSeverity,
+  compareMode = 'platforms'
 }) {
   initChartDefaults();
 
@@ -24,7 +25,7 @@ export default function ComparisonView({
       const agg = x.data;
       if (!agg) return null;
       return {
-        platformName: x.platformName,
+        platformName: x.label || x.platformName,
         color: cmpCols[i % cmpCols.length],
         total: agg.kpis.total != null ? agg.kpis.total.toLocaleString('pt-BR') : '0',
         pos: agg.kpis.pct_positivo != null ? agg.kpis.pct_positivo + '%' : '—',
@@ -46,7 +47,7 @@ export default function ComparisonView({
     }
 
     if (sources.length >= 2 && canvasCmpRef.current) {
-      const labels = sources.map((s) => s.platformName);
+      const labels = sources.map((s) => s.label || s.platformName);
       const datasetsTotal = sources.map((s) => (s.data?.kpis?.total || 0));
       const datasetsPos = sources.map((s) => {
         const total = s.data?.kpis?.total || 0;
@@ -107,7 +108,7 @@ export default function ComparisonView({
     // Criticidade por plataforma (barras empilhadas). Soma as séries mensais que o
     // aggregate já devolve em `mensal_crit.series`.
     if (sources.length >= 2 && canvasCritRef.current) {
-      const labels = sources.map((s) => s.platformName);
+      const labels = sources.map((s) => s.label || s.platformName);
       const sumSeries = (agg, key) => ((agg?.mensal_crit?.series?.[key]) || []).reduce((a, b) => a + b, 0);
       const critDefs = [
         { key: 'Gravíssimo', color: '#C62F2F' },
@@ -164,14 +165,28 @@ export default function ComparisonView({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '28px 2px 14px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ fontSize: '10px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ width: '16px', height: '2px', background: '#9E1A45', borderRadius: '2px', display: 'inline-block' }}></span>
-          Comparação entre plataformas {selectedMonth && `(${formatMonthKey(selectedMonth)})`}
+          Comparação entre {compareMode === 'companies' ? 'empresas' : 'plataformas'} {selectedMonth && `(${formatMonthKey(selectedMonth)})`}
         </div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {sources.map((src) => {
+            // Modo empresas: a coluna já É uma empresa — rótulo estático
+            // (para trocar as empresas, reabra o modal de comparação).
+            if (compareMode === 'companies') {
+              return (
+                <div
+                  key={src.id}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--surface-1)', padding: '4px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                >
+                  <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {src.label}
+                  </span>
+                </div>
+              );
+            }
             const pCompanies = src.availableCompanies || [];
             return (
               <div
-                key={src.platformId}
+                key={src.id}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',

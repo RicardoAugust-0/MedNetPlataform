@@ -1,5 +1,5 @@
 import { aggregate, PLATFORMS, normClf } from '../src/utils/fatigueParser.js';
-import { buildSingleAnalyticsViaRPC } from './analytics-rpc.js';
+import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets } from './analytics-rpc.js';
 
 // In-memory caches
 const rawEventsCache = {};
@@ -227,6 +227,29 @@ export function registerAnalyticsRoutes(app, supabase) {
     }
   });
 
+  // 1b. Opções de comparação: plataformas (com contagem) e suas empresas.
+  // Alimenta o modal de comparação (modo "empresas" precisa das empresas por plataforma).
+  app.get('/api/compare-options', async (req, res) => {
+    try {
+      const aliases = await getCarrierAliases(supabase);
+      const { data: counts, error: cErr } = await supabase.rpc('analytics_platform_counts');
+      if (cErr) throw cErr;
+
+      const platformIds = Object.keys(counts || {});
+      const options = [];
+      for (const pid of platformIds) {
+        const { data: meta } = await supabase.rpc('analytics_metadata_rollup', { p_platform_ids: [pid] });
+        const companies = companiesFromFleets((meta && meta.fleets) || {}, resolveMonitorName, aliases);
+        const platformName = pid === 'omnilink' ? 'OmniLink' : pid === 'maxtrack' ? 'MaxTrack' : pid.toUpperCase();
+        options.push({ platformId: pid, platformName, rows: counts[pid], companies });
+      }
+      res.json(options);
+    } catch (err) {
+      console.error('[MedNet Backend] Erro no /api/compare-options:', err);
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
   // 2. Fetch aggregated analytics
   app.get('/api/analytics', async (req, res) => {
     const {
@@ -267,6 +290,34 @@ export function registerAnalyticsRoutes(app, supabase) {
           return sendPayload(payload);
         } catch (rpcErr) {
           console.error('[MedNet Backend] RPC falhou, fallback JS:', rpcErr.message || rpcErr);
+        }
+      }
+
+      // Comparação via rollup. Aceita `sources` (JSON de [{platformId, company}])
+      // — cobre tanto comparar plataformas quanto empresas da mesma plataforma.
+      // Compat: sem `sources`, monta a partir de platformIds + company_<pid>.
+      if (engine === 'rpc' && isCompare) {
+        try {
+          let sources;
+          if (req.query.sources) {
+            sources = JSON.parse(req.query.sources);
+          } else {
+            sources = targetPlatformIds.map((pid) => ({
+              platformId: pid,
+              company: req.query[`company_${pid}`] !== undefined ? req.query[`company_${pid}`] : (company || ''),
+            }));
+          }
+          sources = (Array.isArray(sources) ? sources : []).filter((s) => s && s.platformId);
+          if (sources.length >= 2) {
+            const payload = await buildCompareViaRPC(
+              supabase,
+              { sources, month, startDate, endDate, severity, classification, eventType },
+              { resolveMonitorName, aliases }
+            );
+            return sendPayload(payload);
+          }
+        } catch (rpcErr) {
+          console.error('[MedNet Backend] RPC compare falhou, fallback JS:', rpcErr.message || rpcErr);
         }
       }
 

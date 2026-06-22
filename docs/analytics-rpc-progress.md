@@ -85,6 +85,35 @@ compute deixou de ser urgente. Deploy do servidor necessário p/ a fiação vale
 
 ---
 
+## ATUALIZAÇÃO 2026-06-22 — Fase 9 (comparação via rollup) — FEITO
+
+Comparação com **dois modos** (escolha do usuário): "plataformas" (entre si) e
+"empresas" (de UMA plataforma entre si). O servidor não distingue modo — recebe
+uma lista de fontes `[{platformId, company}]`.
+
+**Migration `20260622170000_get_analytics_rollup_multi.sql`** —
+`get_analytics_rollup_multi(p_sources jsonb, ...)`: igual a get_analytics_rollup,
+mas o conjunto base é a UNIÃO das fontes (`exists` sobre p_sources, sem dupla
+contagem). Usado p/ o painel COMBINADO. Validado: união de BRASPRESS+Transmasut =
+get_analytics_rollup(todas) (0 diffs); fonte única = filtro de frota (0 diffs);
+totais batem (33.529 + 14.821 = 48.350).
+
+**Servidor** (`server/analytics-rpc.js`): `buildCompareViaRPC` — cada fonte via
+`get_analytics_rollup` (1 plataforma), combinado/prevD via
+`get_analytics_rollup_multi`. Rota `/api/analytics` aceita `sources` (JSON) no
+modo compare (compat: cai p/ platformIds+company_<pid>). Novo `/api/compare-options`
+(plataformas + empresas) p/ o modal.
+
+**Front**: `compareMode` ('platforms'|'companies') + estado do modo empresas
+(`companyComparePlatform`, `companyCompareList`), persistidos. `ComparisonModal`
+ganhou toggle de modo + UI de empresas; `ComparisonView` rotula por fonte
+(`src.label`) e mostra o seletor de empresa só no modo plataformas;
+`loadFromDatabase` monta `sources` conforme o modo. `npm run build` OK.
+
+**Pendente:** deploy do servidor (banco já está pronto).
+
+---
+
 ## 0. Decisões tomadas (confirmadas com o usuário)
 
 1. **`driver_events` está VAZIA (0 linhas) em produção.** Não há problema de
