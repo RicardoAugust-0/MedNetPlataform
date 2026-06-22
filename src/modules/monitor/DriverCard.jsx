@@ -116,6 +116,8 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
         {type === 'intervencao' && (
           <>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
+            <button className="btn btn-sm" style={{ background: '#1FA855', color: '#fff', borderColor: 'transparent', display: 'inline-flex', alignItems: 'center', gap: '4px' }} onClick={() => handlers.openWhatsappChat?.(d)} title="Conversar com o Motorista"><i className="ti ti-brand-whatsapp"></i> Motorista</button>
+            <button className="btn btn-sm" style={{ background: 'var(--accent-500)', color: '#fff', borderColor: 'transparent', display: 'inline-flex', alignItems: 'center', gap: '4px' }} onClick={() => handlers.openWhatsappCarrier?.(d)} title="Conversar com a Transportadora"><i className="ti ti-building"></i> Transp.</button>
             <button className="btn btn-sm btn-primary" onClick={() => handlers.attend(d)}><i className="ti ti-phone-call"></i> Inserir na planilha</button>
             <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'intervencao')}><i className="ti ti-trash"></i></button>
           </>
@@ -124,6 +126,8 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
         {type === 'reportar' && (
           <>
             <button className="btn btn-sm" onClick={() => handlers.openTemplate(d)}><i className="ti ti-message-2"></i> Template</button>
+            <button className="btn btn-sm" style={{ background: '#1FA855', color: '#fff', borderColor: 'transparent', display: 'inline-flex', alignItems: 'center', gap: '4px' }} onClick={() => handlers.openWhatsappChat?.(d)} title="Conversar com o Motorista"><i className="ti ti-brand-whatsapp"></i> Motorista</button>
+            <button className="btn btn-sm" style={{ background: 'var(--accent-500)', color: '#fff', borderColor: 'transparent', display: 'inline-flex', alignItems: 'center', gap: '4px' }} onClick={() => handlers.openWhatsappCarrier?.(d)} title="Conversar com a Transportadora"><i className="ti ti-building"></i> Transp.</button>
             <button className="btn btn-sm btn-warning" onClick={() => handlers.reportar(d)}><i className="ti ti-building"></i> Reportar e Remover</button>
             <button className="btn btn-sm btn-danger btn-icon-only" title="Descartar alerta" onClick={() => handlers.deleteAlert(d, 'reportar')}><i className="ti ti-trash"></i></button>
           </>

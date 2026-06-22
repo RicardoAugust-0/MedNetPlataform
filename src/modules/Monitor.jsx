@@ -651,12 +651,20 @@ export default function Monitor() {
     setTemplateModal({ driver: d, templateId: defaultTemplate.id, text });
   };
 
+  const openWhatsappChat = (d) => {
+    navigate(`/automacoes?name=${encodeURIComponent(d.nome)}`);
+  };
+
+  const openWhatsappCarrier = (d) => {
+    navigate(`/automacoes?name=${encodeURIComponent(d.transportadora)}`);
+  };
+
   // Mantém ref sincronizado com a versão atual de handleScrape
   useEffect(() => { handleScrapeRef.current = handleScrape; });
 
   const handlers = useMemo(
-    () => ({ openDossie, openTemplate, attend, deleteAlert, reportar }),
-    [openDossie, openTemplate, attend, deleteAlert, reportar],
+    () => ({ openDossie, openTemplate, attend, deleteAlert, reportar, openWhatsappChat, openWhatsappCarrier }),
+    [openDossie, openTemplate, attend, deleteAlert, reportar, navigate],
   );
 
   const sheetAgeColor = sheetAgeMin === null ? null

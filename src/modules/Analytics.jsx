@@ -582,6 +582,9 @@ export default function Analytics() {
           activeSource={activeSource}
           exportToCSV={exportToCSV}
           setModalOpen={setModalOpen}
+          selectedCompany={selectedCompany}
+          setSelectedCompany={setSelectedCompany}
+          availableCompanies={availableCompanies}
         />
 
         <SourceChips

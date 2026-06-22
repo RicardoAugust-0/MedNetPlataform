@@ -15,14 +15,23 @@ export default function AnalyticsHeader({
   activeSource,
   exportToCSV,
   setModalOpen,
+  selectedCompany,
+  setSelectedCompany,
+  availableCompanies = [],
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '20px' }}>
-      <div>
-        <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Análise de Fadiga</h2>
-        <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          Consolidação multi-plataforma de alertas de fadiga e desatenção
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Análise de Fadiga</h2>
+          <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Consolidação multi-plataforma de alertas de fadiga e desatenção
+          </p>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px', marginTop: '6px' }}>
+          <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
+          {d && d.meta?.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
+        </span>
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         
@@ -100,11 +109,38 @@ export default function AnalyticsHeader({
           </div>
         )}
 
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
-          <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
-          {d && d.meta?.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
-        </span>
-        
+        {/* Seletor de Empresa */}
+        {activeId && !compare && availableCompanies.length > 0 && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Empresa:</span>
+            <select
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                background: 'var(--surface-0)',
+                cursor: 'pointer',
+                outline: 'none',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <option value="">Todas as empresas</option>
+              {availableCompanies.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+
         {sourcesList.length >= 2 && (
           <button
             onClick={handleCompareClick}

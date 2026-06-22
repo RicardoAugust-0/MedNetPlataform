@@ -311,3 +311,65 @@ textarea.form-control { resize: vertical; min-height: 64px; line-height: 1.5; fo
     width: 100%;
   }
 }
+
+/* Layouts split-screen para Disparos sem dependência de Tailwind */
+.disparos-split-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+  width: 100%;
+}
+
+.templates-split-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .disparos-split-layout {
+    grid-template-columns: 3fr 1fr; /* 75% e 25% */
+  }
+  .templates-split-layout {
+    grid-template-columns: 4fr 6fr; /* 40% e 60% */
+  }
+}
+
+/* ── Explainer card for onboarding/descriptions ── */
+.explainer-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.explainer-card i {
+  font-size: 22px;
+  color: var(--accent-500);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.explainer-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.explainer-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.explainer-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+
