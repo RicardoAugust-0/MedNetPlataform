@@ -382,6 +382,16 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
   const { profile } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+  const getWebhookUrl = () => {
+    if (API_URL.startsWith('http://') || API_URL.startsWith('https://')) {
+      return `${API_URL.replace(/\/$/, '')}/api/whatsapp/webhook`;
+    }
+    const origin = window.location.origin;
+    const cleanApiUrl = API_URL.trim() === '' ? '' : (API_URL.startsWith('/') ? API_URL : `/${API_URL}`);
+    return `${origin.replace(/\/$/, '')}${cleanApiUrl.replace(/\/$/, '')}/api/whatsapp/webhook`;
+  };
+  const webhookUrl = getWebhookUrl();
+
   // WhatsApp credentials state
   const [credentials, setCredentials] = useState({
     token: '',
@@ -647,8 +657,8 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label" style={{ fontSize: '9px' }}>URL de Callback</label>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <input className="form-control mono" readOnly value={`${window.location.origin}/api/whatsapp/webhook`} style={{ fontSize: '10.5px', padding: '6px 8px', flex: 1 }} />
-                          <button className="btn btn-icon-only btn-sm" style={{ height: '30px', width: '30px' }} onClick={() => copyText(`${window.location.origin}/api/whatsapp/webhook`, 'URL de Callback copiada!')} title="Copiar URL"><i className="ti ti-copy" style={{ fontSize: '12px' }}></i></button>
+                          <input className="form-control mono" readOnly value={webhookUrl} style={{ fontSize: '10.5px', padding: '6px 8px', flex: 1 }} />
+                          <button className="btn btn-icon-only btn-sm" style={{ height: '30px', width: '30px' }} onClick={() => copyText(webhookUrl, 'URL de Callback copiada!')} title="Copiar URL"><i className="ti ti-copy" style={{ fontSize: '12px' }}></i></button>
                         </div>
                       </div>
 
