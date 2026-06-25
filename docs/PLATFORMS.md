@@ -1,8 +1,18 @@
 # Guia · Adicionar uma nova plataforma de monitoramento
 
-Este guia explica como integrar uma nova plataforma (Maxtrack, Autotrack,
-Trimble, etc.) ao Monitor da MedNet. Para o panorama geral do projeto, veja
-[PROJECT.md](./PROJECT.md).
+Este guia explica como integrar uma nova plataforma (Maxtrack, OmniLink,
+Autotrack, Trimble, etc.) ao **Monitor** da MedNet. Para o panorama geral do
+projeto, veja [PROJECT.md](./PROJECT.md).
+
+> ⚠️ **Dois sistemas de plataforma — não confundir.** Este guia é sobre os
+> **adapters do Monitor** (`src/platforms/`), que alimentam a fila realtime do
+> dia (`drivers_queue`). O **Analytics** usa um sistema separado de import
+> histórico (`src/utils/fatigueParser.js`), com seu próprio registry de 8
+> plataformas e detecção por assinatura de cabeçalho, gravando em
+> `driver_events`. Adicionar uma plataforma a um sistema **não** a adiciona ao
+> outro. Ver §11.
+
+Plataformas ativas no Monitor hoje: **Sascar**, **Maxtrack**, **OmniLink**.
 
 ---
 
@@ -203,8 +213,9 @@ export async function parse(file, { history = [] } = {}) {
 ```js
 import sascar   from './sascar/index.js';
 import maxtrack from './maxtrack/index.js';
+import omnilink from './omnilink/index.js';
 
-export const PLATFORMS = [sascar, maxtrack];
+export const PLATFORMS = [sascar, maxtrack, omnilink];
 ```
 
 Pronto. O Monitor passa a exibir o seletor de plataforma automaticamente.
@@ -406,8 +417,48 @@ src/platforms/
 │   ├── index.js            # Metadata + bloco spreadsheet (detect + parse xlsx/csv)
 │   ├── columns.js          # COLUMNS, SEV_MAP, taxonomia Maxtrack
 │   └── parser.js           # detect + parse — mesmo padrão da Sascar
+├── omnilink/               # Adapter spreadsheet
+│   ├── index.js            # Metadata + bloco spreadsheet
+│   ├── columns.js          # COLUMNS + taxonomia OmniLink
+│   └── parser.js           # detect + parse
 └── _template/              # Esqueleto para copiar
     └── index.js
 ```
+
+---
+
+## 11. O outro sistema: import do Analytics (`fatigueParser.js`)
+
+O **Analytics** (`/admin/analytics`) não usa o registry acima. Ele tem seu
+próprio parser universal em `src/utils/fatigueParser.js`, com um registry de
+**8 plataformas** detectadas por assinatura de cabeçalho:
+
+```js
+export const PLATFORMS = [
+  { id: 'maxtrack', name: 'MaxTrack',  sig: ['maxtrack', 'max track'] },
+  { id: 'sascar',   name: 'Sascar',    sig: ['sascar'] },
+  { id: 'sascar_jd',name: 'Sascar JD', sig: ['sascar jd', 'jornada digital'] },
+  { id: 'sighra',   name: 'Sighra',    sig: ['sighra'] },
+  { id: 'horizon',  name: 'Horizon',   sig: ['horizon'] },
+  { id: 'autotrac', name: 'AutoTrac',  sig: ['autotrac', 'auto trac'] },
+  { id: 'omnilink', name: 'OmniLink',  sig: ['omnilink', 'omni link'] },
+  { id: 'trimble',  name: 'Trimble',   sig: ['trimble'] },
+];
+```
+
+Diferenças em relação ao Monitor:
+
+- **Saída diferente:** grava em `driver_events` (histórico permanente), não em
+  `drivers_queue` (fila do dia).
+- **Detecção:** por `sig` (assinatura) + regras de colunas obrigatórias
+  (`need`/`anyOf`), não pelo `detect()` do adapter.
+- **Agregação:** feita no backend Express + RPC/rollup (ver
+  [PROJECT.md §8](./PROJECT.md)).
+
+Para adicionar uma plataforma **ao Analytics**, edite `fatigueParser.js`
+(assinatura + mapeamento de colunas), não `src/platforms/`. Se a plataforma deve
+existir nos dois fluxos, são duas implementações separadas.
+
+---
 
 Boas integrações.

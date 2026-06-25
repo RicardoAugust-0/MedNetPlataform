@@ -1,12 +1,15 @@
 # Aceleração do Analytics via RPC no Postgres — Status / Handoff
 
-> Documento de continuidade. O trabalho **não foi finalizado nesta sessão**.
-> A camada de banco (migrations + RPCs) está **pronta, aplicada em produção e
-> validada numericamente**. Falta a fiação no servidor Express, o ajuste de
-> fuso no caminho JS, o texto de loading no front e o script de paridade.
+> **Status atual (consolidado):** o trabalho descrito aqui **foi concluído** nas
+> sessões seguintes (ver as atualizações de 2026-06-22, fases 5–9, mais abaixo).
+> Banco (migrations + RPCs + rollup `analytics_daily`), servidor Express e front
+> estão fiados; o engine RPC é o padrão com fallback JS. O panorama final está em
+> [PROJECT.md §8](./PROJECT.md). Este documento permanece como **histórico do
+> esforço** — as seções "O que FALTA" abaixo refletem o estado da 1ª sessão
+> (2026-06-19) e foram superadas pelas atualizações datadas que vêm depois.
 
 Projeto Supabase: **MedNet** — `jvqlxrixzqlbwmmdwcob` (região `sa-east-1`).
-Data da sessão: 2026-06-19.
+Data da 1ª sessão: 2026-06-19.
 
 ---
 

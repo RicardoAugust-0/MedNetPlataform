@@ -1,41 +1,57 @@
 # MedNet · Fadiga Zero — Documentação do Projeto
 
 Plataforma operacional da equipe **Fadiga Zero** do GRUPO MedNet. Centraliza o
-monitoramento de motoristas, a fila de intervenções, scripts de contato,
-agenda, base de conhecimento e administração da equipe.
+monitoramento de motoristas, a fila de intervenções, a planilha de tratativas,
+o prontuário clínico, analytics histórico, relatórios por IA, automações
+(WhatsApp + VPS), scripts de contato, agenda, base de conhecimento e
+administração da equipe.
+
+> **Última revisão geral:** 2026-06-25. Ver o [Changelog](#22-changelog) para o
+> que mudou desde a revisão anterior (2026-05-29).
 
 ---
 
 ## 1. Visão geral
 
-| Item                                | Valor                                                               |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| Empresa                             | GRUPO MedNet (Medicina e Seg. do Trabalho)                          |
-| Setor                               | Fadiga Zero                                                         |
-| Produto                             | SPA React/Vite com PWA                                              |
-| Backend                             | Supabase (Auth + Postgres + Storage + Edge Functions)               |
-| Integração externa                  | Google Sheets (compliance/audit trail)                              |
-| Plataformas de monitoramento ativas | **Sascar** (Michelin Smart Camera) · **Maxtrack** (Telemetria + IA) |
-| Plataformas futuras (planejadas)    | Autotrack, Trimble, Cobli, Horizon                                  |
+| Item                              | Valor                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| Empresa                           | GRUPO MedNet (Medicina e Seg. do Trabalho)                                           |
+| Setor                             | Fadiga Zero                                                                          |
+| Produto                           | SPA React/Vite com PWA + **roteamento por URL (React Router)**                       |
+| Backend de dados                  | Supabase (Auth + Postgres + Storage + Edge Functions)                               |
+| Backend de aplicação              | **Servidor Express** (`server/`) — agregação de Analytics + proxy WhatsApp Cloud API |
+| Integrações externas              | Google Sheets, WhatsApp Cloud API (Meta), IA (Anthropic Claude / Google Gemini)      |
+| Plataformas no Monitor (realtime) | **Sascar** · **Maxtrack** · **OmniLink**                                             |
+| Plataformas no Analytics (import) | MaxTrack, Sascar, Sascar JD, Sighra, Horizon, AutoTrac, OmniLink, Trimble            |
 
-A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
-`activePanel` no contexto global, alternando os painéis.
+A aplicação **deixou de ser uma SPA sem rotas**: agora usa `react-router-dom`,
+e a navegação acontece por URL (`/dashboard`, `/monitor/:tab`, `/admin/...`).
+O antigo `activePanel` no contexto global foi substituído por `<Routes>` em
+`App.jsx`. Todos os módulos são carregados via `React.lazy` + `<Suspense>`.
 
 ---
 
 ## 2. Stack técnica
 
-- **Frontend:** React 19, Vite 8, React-hooks, Recharts (gráficos), TipTap
-  (editor rich-text do Workspace), xlsx (parser de planilhas), `vite-plugin-pwa`
-  (instalável + service worker).
-- **Backend:** Supabase JS SDK (`@supabase/supabase-js`). Postgres com Realtime
-  para sync de listas. Auth via e-mail + senha, com fluxo de convite.
+- **Frontend:** React 19, Vite 8, **react-router-dom 7**, Recharts (gráficos do
+  Dashboard), **Chart.js** (gráficos do Analytics), TipTap (editor rich-text do
+  Workspace), `xlsx` (parser de planilhas), `vite-plugin-pwa` (instalável +
+  service worker).
+- **Backend de aplicação (`server/`):** Node + **Express 4**. Agrega Analytics
+  a partir de `driver_events` (via RPCs/rollup do Postgres) e faz proxy da
+  WhatsApp Cloud API. Deploy em container (Docker/Coolify). O front fala com ele
+  via `VITE_API_URL`.
+- **Backend de dados (Supabase):** Postgres com Realtime para sync de listas;
+  Auth por e-mail + senha com fluxo de convite; Storage (`workspace-images`,
+  avatares).
 - **Edge Functions (Deno):**
-  - `append-sheet`: registra atendimento em planilha Google.
-  - `invite-user`: envia convite a novos operadores (apenas admin).
-  - `pull-sascar`: busca alarmes do dia via API Sascar usando token do operador (bookmarklet).
-- **Google Apps Script:** Webhook de backup que reaproveita o payload da
-  `append-sheet`.
+  - `append-sheet` — registra atendimento em planilha Google (auth em camadas, ver §11).
+  - `read-sheet` — lê abas mensais do Sheets (mês atual + anterior).
+  - `invite-user` — envia convite a novos operadores (admin).
+  - `pull-sascar` — busca alarmes Sascar via token do operador (bookmarklet).
+  - `generate-report` — relatório executivo por transportadora gerado por IA.
+  - `generate-dossier-report` — laudo clínico-operacional do motorista por IA.
+- **Google Apps Script:** webhook de backup que reaproveita o payload da `append-sheet`.
 
 ---
 
@@ -43,80 +59,108 @@ A aplicação é uma SPA sem roteamento de URL — a navegação acontece via o
 
 ```
 src/
-├── App.jsx               # Shell, autenticação, painel ativo, notifier, SascarTokenHandler
-├── main.jsx              # Bootstrap React + providers globais
-├── context.jsx           # AppProvider — UI state, fila, preferências, platformId
-├── data.js               # Constantes estáticas (NAV, títulos, defaults, mocks)
-├── utils.js              # Helpers genéricos (iniciais, datas, accent)
-├── supabase.js           # Cliente Supabase + flag de configuração
-├── parseSheet.js         # Wrapper @deprecated p/ adapter Sascar (compat)
-├── auth/                 # AuthContext, LoginPage, SetPasswordPage
-├── components/           # Topbar (com brand), Sidebar, ErrorBoundary, MaintenancePage
-├── hooks/                # Hooks de domínio (atendimentos, drivers_queue, templates, …)
-├── lib/                  # uploadImage.js
-├── modules/              # Painéis principais (Dashboard, Monitor, Agenda, ...)
-│   ├── dashboard/        # Subcomponentes + CSS do Dashboard (gestão à vista)
-│   │   ├── components.jsx    # KPI, FilterBar, CriticalSLA, ProductivityRanking, etc.
-│   │   └── dashboard.css     # Estilos isolados do painel
-│   ├── monitor/          # Subcomponentes do Monitor
-│   └── crosscheck/       # Subcomponentes do Cross-Check
-│       ├── utils.js          # Funções puras: normalize, parsers, buildStats
-│       ├── SideUploadCard.jsx
-│       ├── MatchCard.jsx
-│       ├── CrossCheckFilters.jsx
-│       └── CarrierStats.jsx
-├── platforms/            # ⭐ Camada de adapters de plataforma
-│   ├── base.js           # Contrato + helpers (emptyDriver/emptyStats)
-│   ├── index.js          # Registry, getPlatform, detectPlatform
-│   ├── shared/           # Utilitários compartilhados entre adapters
-│   │   ├── normalize.js
-│   │   ├── parsers.js
-│   │   └── history.js
-│   ├── sascar/           # Adapter Sascar (spreadsheet + scraper)
-│   │   ├── index.js      # Metadata + blocos spreadsheet e scraper
-│   │   ├── columns.js    # Mapa de colunas e taxonomia
-│   │   └── parser.js     # Parser xlsx/csv comentado
-│   ├── maxtrack/         # Adapter Maxtrack (scraper)
-│   │   ├── index.js      # Metadata + bloco spreadsheet (parse de xlsx/csv)
-│   │   ├── columns.js    # Categorias, severidades e taxonomia
-│   │   └── parser.js     # parseApiResponse — transforma resposta da Edge Function
-│   └── _template/        # Esqueleto para novas plataformas
-│       └── index.js
-└── styles/               # CSS tokens + layout + módulos
+├── App.jsx                  # Shell + React Router (<Routes>), guards de role, notifier, SascarTokenHandler
+├── main.jsx                 # Bootstrap React + <BrowserRouter> + providers globais
+├── context.jsx              # AppProvider — UI state, fila, preferências, platformId
+├── data.js                  # NAV_ITEMS (com path + minRole), ROLE_LEVEL, PANEL_TITLES, defaults, mocks
+├── supabase.js              # Cliente Supabase + helpers de erro
+├── utils.js                 # Helpers genéricos
+├── utils/
+│   ├── fatigueParser.js     # ⭐ Parser/registry das 8 plataformas de IMPORT do Analytics
+│   └── fatigueParser.test.js
+├── auth/                    # AuthContext, LoginPage, SetPasswordPage
+├── components/              # Topbar, Sidebar (menu por role), ErrorBoundary, MaintenancePage, DataProvider
+├── hooks/                   # Hooks de domínio (atendimentos, drivers_queue, automations, maintenance, …)
+├── lib/                     # uploadImage.js, uploadAvatar.js
+├── modules/                 # Painéis (cada um é uma rota lazy)
+│   ├── Dashboard.jsx + dashboard/    # Gestão à Vista (components/, hooks/, drills/, _helpers, _mocks)
+│   ├── Monitor.jsx + monitor/        # Fila de intervenção (UploadArea, DriverCard, HistoryTab, …)
+│   ├── CrossCheck.jsx + crosscheck/  # Comparação cruzada de planilhas (líder+)
+│   ├── EmbeddedSheet.jsx             # Planilha Embedded (/planilha) — grid editável sync c/ Sheets
+│   ├── DossiesPage.jsx               # Dossiês Clínicos (/dossies/:tab) — prontuário + telemetria + IA
+│   ├── Agenda.jsx, Templates.jsx, Workspace.jsx, WorkspaceEditor.jsx, Notes.jsx, Links.jsx, Profile.jsx
+│   ├── Automacoes.jsx + automacoes/  # Hooks VPS + WhatsApp (HooksTab, ChatTab, DisparosTab, MetricsGrid, DispatchesTable)
+│   ├── Analytics.jsx + analytics/    # Analytics histórico (FadigaKPIs, FadigaCharts, ImportModal, ComparisonView, components/)
+│   ├── Reports.jsx                   # Relatórios IA por transportadora (/admin/relatorios)
+│   ├── PlatformBadge.jsx
+│   └── admin/                        # ⭐ Escopo /admin decomposto em layouts + abas
+│       ├── AdminLayout.jsx           # Tab bar do /admin (rotas reais via <Outlet/>)
+│       ├── EquipeTab.jsx             # /admin/equipe — convites, roles, last_seen
+│       ├── AdminAuditoria.jsx        # /admin/auditoria — trilha global de tratativas (paginada)
+│       ├── IntegracoesLayout.jsx     # /admin/integracoes (sub-abas)
+│       ├── IntegracoesCredenciais.jsx    # OmniLink (operator_email)
+│       ├── IntegracoesTransportadoras.jsx# de-para de transportadoras (carrier_aliases)
+│       ├── AiCredentials.jsx         # /admin/ia — provedor/modelo/chaves de IA
+│       ├── SistemaLayout.jsx         # /admin/sistema (sub-abas)
+│       ├── SistemaManutencao.jsx     # toggle de manutenção + mensagem
+│       ├── SistemaLimpeza.jsx        # limpeza de histórico de atendimentos (com prévia + CSV)
+│       └── adminSubnav.css
+└── platforms/               # ⭐ Adapters do MONITOR (realtime) — distinto do fatigueParser
+    ├── base.js, index.js    # Contrato + registry (sascar, maxtrack, omnilink)
+    ├── shared/              # normalize, parsers, history
+    ├── sascar/  maxtrack/  omnilink/   # cada um: index.js, columns.js, parser.js
+    └── _template/
+
+server/                      # ⭐ Backend Express (deploy próprio)
+├── index.js                 # Bootstrap Express; registra rotas
+├── analytics-routes.js      # /api/analytics, /api/platforms, /api/compare-options, /api/analytics/csv, /api/clear-cache
+├── analytics-rpc.js         # Orquestra get_analytics_rollup* (RPC) + fallback JS
+├── analytics-parity.js      # Comparação JS×RPC (paridade)
+├── whatsapp-routes.js       # /api/whatsapp/* (credentials, templates, send, chats, webhook)
+└── Dockerfile
 
 supabase/
-├── migrations/
-│   ├── 20260507000000_initial_schema.sql          # Baseline (atendimentos, templates, …)
-│   ├── 20260518211646_drivers_queue.sql           # Fila compartilhada com realtime
-│   └── …outras migrations incrementais
-└── functions/
-    ├── append-sheet/index.ts   # Append Google Sheets
-    ├── read-sheet/index.ts     # Leitura das abas mensais do Sheets
-    ├── invite-user/index.ts    # Convite de operadores
-    └── pull-sascar/index.ts    # Busca automática Sascar (alarm/page)
+├── migrations/              # ~40 migrations incrementais (ver §6)
+└── functions/               # append-sheet, read-sheet, invite-user, pull-sascar, generate-report, generate-dossier-report
 ```
 
 ---
 
-## 4. Navegação e painéis (`NAV_ITEMS` em `src/data.js`)
+## 4. Navegação, rotas e papéis (`NAV_ITEMS` em `src/data.js`)
 
-| id           | Label            | Grupo        | Apenas admin? |
-| ------------ | ---------------- | ------------ | ------------- |
-| `dashboard`  | Dashboard        | Operação     | —             |
-| `monitor`    | Monitor de Frota | Operação     | —             |
-| `crosscheck` | Cross-Check      | Operação     | —             |
-| `agenda`     | Agenda           | Operação     | —             |
-| `templates`  | Templates        | Conhecimento | —             |
-| `workspace`  | Workspace        | Conhecimento | —             |
-| `notas`      | Bloco de Notas   | Conhecimento | —             |
-| `links`      | Links Rápidos    | Conhecimento | —             |
-| `crosscheck` | Cross-Check      | Operação     | —             |
-| `perfil`     | Meu Perfil       | Conta        | —             |
-| `admin`      | Administração    | Conta        | ✅            |
-| `analytics`  | Analytics        | Conta        | ✅            |
+A Sidebar monta o menu a partir de `NAV_ITEMS`, **filtrando por hierarquia de
+role**: `ROLE_LEVEL = { operador: 0, lider: 1, admin: 2 }`. Um item com `minRole`
+só aparece para quem está no nível igual/superior. As rotas têm guard
+correspondente em `App.jsx` (`RoleGuard` / `AdminGuard`).
 
-Busca global (⌘K / Ctrl+K) na Sidebar pesquisa entre páginas e motoristas
-(por nome ou placa) na fila atual.
+| Grupo            | Label             | Rota (`path`)         | minRole | Módulo                          |
+| ---------------- | ----------------- | --------------------- | ------- | ------------------------------- |
+| **Operação**     | Dashboard         | `/dashboard`          | —       | `Dashboard.jsx`                 |
+| Operação         | Monitor de Frota  | `/monitor/:tab`       | —       | `Monitor.jsx`                   |
+| Operação         | Planilha Embedded | `/planilha`           | —       | `EmbeddedSheet.jsx`             |
+| Operação         | Dossiês Clínicos  | `/dossies/:tab`       | —       | `DossiesPage.jsx`               |
+| Operação         | Agenda            | `/agenda`             | —       | `Agenda.jsx`                    |
+| **Conhecimento** | Templates         | `/templates`          | —       | `Templates.jsx`                 |
+| Conhecimento     | Workspace         | `/workspace[/:cat]`   | —       | `Workspace.jsx`                 |
+| Conhecimento     | Bloco de Notas    | `/notas`              | —       | `Notes.jsx`                     |
+| Conhecimento     | Links Rápidos     | `/links`              | —       | `Links.jsx`                     |
+| **Gestão**       | Cross-Check       | `/crosscheck`         | `lider` | `CrossCheck.jsx`                |
+| Gestão           | Automações        | `/automacoes`         | `lider` | `Automacoes.jsx`                |
+| Gestão           | Administração     | `/admin`              | `admin` | `admin/AdminLayout.jsx` (escopo) |
+| **Conta**        | Meu Perfil        | `/perfil`             | —       | `Profile.jsx`                   |
+
+### 4.1. Escopo `/admin` (admin-only, sub-rotas reais via `<Outlet/>`)
+
+O antigo `Admin.jsx` (monolítico, ~1000 linhas) foi **removido**. Hoje `/admin`
+tem um único guard no pai e cada aba é uma rota:
+
+| Sub-rota                          | Aba                  | Módulo                          |
+| --------------------------------- | -------------------- | ------------------------------- |
+| `/admin/analytics`                | Analytics            | `Analytics.jsx`                 |
+| `/admin/relatorios`               | Relatórios IA        | `Reports.jsx`                   |
+| `/admin/auditoria`                | Auditoria            | `admin/AdminAuditoria.jsx`      |
+| `/admin/equipe`                   | Equipe & Acessos     | `admin/EquipeTab.jsx`           |
+| `/admin/integracoes/credenciais`  | Credenciais & OmniLink | `admin/IntegracoesCredenciais.jsx`   |
+| `/admin/integracoes/transportadoras` | Transportadoras (de-para) | `admin/IntegracoesTransportadoras.jsx` |
+| `/admin/ia`                       | IA & Parsing         | `admin/AiCredentials.jsx`       |
+| `/admin/sistema/manutencao`       | Modo manutenção      | `admin/SistemaManutencao.jsx`   |
+| `/admin/sistema/limpeza`          | Limpeza de histórico | `admin/SistemaLimpeza.jsx`      |
+
+Rotas antigas redirecionam: `/analytics → /admin/analytics`,
+`/relatorios → /admin/relatorios`.
+
+Busca global (⌘K / Ctrl+K) na Sidebar pesquisa entre páginas (respeitando o
+`minRole` do usuário) e motoristas (por nome ou placa) na fila atual.
 
 ---
 
@@ -125,638 +169,550 @@ Busca global (⌘K / Ctrl+K) na Sidebar pesquisa entre páginas e motoristas
 ### 5.1. Dashboard — Gestão à Vista (`modules/Dashboard.jsx` + `modules/dashboard/`)
 
 Visão de diretoria, foco em macros do dia + drill rápido. Realtime end-to-end
-(fila de motoristas + atendimentos da equipe) — qualquer ação de qualquer
-operador propaga em <2 s pros 6 dashboards abertos.
+(fila de motoristas `drivers_queue` + atendimentos da equipe).
+
+O módulo foi decomposto: `dashboard/components/` (KPI, FilterBar, CriticalSLA,
+ProductivityRanking, TechAlerts, ClassificationBreakdown, TransportadoraRanking,
+HourlyActivity, Banner, Section, SheetInsights, `_shared.jsx`),
+`dashboard/hooks/` (useDashboardFilters, useDashboardMetrics, useDashboardSettings),
+`dashboard/drills/`, `dashboard/_helpers.js` e `dashboard/_mocks.js`.
+
+**KPIs (4 cards):** Volume do dia · Fechados hoje · Em aberto agora · Reincidência.
+Cada KPI tem delta vs. ontem (toggle) e drill inline.
 
-**Subcomponentes** (todos em `modules/dashboard/components.jsx`):
-`KPI`, `FilterBar`, `CriticalSLA`, `ProductivityRanking`, `TechAlerts`,
-`ClassificationBreakdown` (donut Tipo × Resultado), `TransportadoraRanking`,
-`HourlyActivity` (24 h), `Banner`, `Section`, `AnimatedNumber`, `Donut` interno.
-CSS isolado em `dashboard/dashboard.css`.
+**Seções:** Banner SLA vencido · Pulso da operação (Críticos & SLA, Atividade por
+hora 24 h, Tipo & Resultado donut, Atenção técnica, Transportadoras) ·
+Produtividade da equipe.
 
-#### KPIs (4 cards no topo)
+**Filtros (`FilterBar`):** Tipo · Resultado · Empresa (após `resolveAlias`) ·
+Operador (de `useProfiles()`) · Período (hoje/turno). Persistidos em
+`localStorage.mn_dash_filters`. Counts dos chips sempre absolutos.
 
-| KPI                 | Cálculo                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| **Volume do dia**   | `fechados + emAberto` (hero, accent laranja, mostra % concluído)                    |
-| **Fechados hoje**   | Atendimentos `tipo ∈ (intervencao, reportar)` de hoje (exclui `descarte`/`limpeza`) |
-| **Em aberto agora** | Motoristas com `alertas > 0` OU `reportaveis > 0` (técnico não conta)               |
-| **Reincidência**    | Pos-positivos hoje (placas com intervenção nos últimos 30 d)                        |
+**Tweaks popover (engrenagem):** SLA, comparação, layout (balanceado/cinema/
+compacto), modo executivo, seções visíveis, tema/accent/densidade, atalho admin
+para aliases. Persistência granular em `mn_dash_*`. **Modo TV** (`body.dash-tv-mode`)
+e **Modo Executivo** (`body.dash-exec-mode`) infláveis.
 
-Cada KPI tem **delta vs. ontem** (se toggle "Comparar com ontem" estiver
-ligado) e **drill inline** ao clicar (abre um painel com breakdown por
-tipo/resultado/operador/transportadora).
+DEV mocks (`dashboard/_mocks.js`) só carregam em `import.meta.env.DEV` com fila
+vazia — tree-shaken em produção.
 
-#### Seções abaixo dos KPIs
+### 5.2. Monitor de Frota (`modules/Monitor.jsx` + `modules/monitor/`)
 
-- **Banner SLA vencido** — só aparece quando algum crítico passa do `slaLimit`
-- **Pulso da operação** (grid 2 colunas):
-  - Coluna principal: `Críticos & SLA` (lista expansível com timeline de eventos) + `Atividade por hora` (24 barras, eixo X em horas pares)
-  - Coluna lateral: `Tipo & Resultado` (donut), `Atenção técnica`, `Transportadoras` (top 6 ranqueadas)
-- **Produtividade da equipe** — ranking por operador com volume × qualidade (taxa de reincidência destacada)
+Núcleo operacional. Rota `/monitor/:tab` (a aba ativa é segmento de URL). Recebe
+a entrada da plataforma e organiza em abas: **Intervenção**, **Reportar à
+empresa**, **Só técnico**, **Histórico**.
 
-#### Filtros (`FilterBar`)
+Plataformas disponíveis vêm do registry `src/platforms/` (Sascar, Maxtrack,
+OmniLink). Filtros dinâmicos por plataforma (turno, severidade, transportadora,
+evento) + **presets** em `localStorage` (`mn_filter_presets`). DriverCard mostra
+badges de reincidência (Supabase) e planilha (Google Sheets). Descarte com
+motivo, exportação CSV da aba ativa, descarte em massa.
 
-Todos os filtros cabeiam **toda** a página (KPIs, drills, cards, ONTEM). Os
-counts dos chips são **sempre absolutos** (independentes da seleção atual) pra
-o gestor enxergar o universo antes de filtrar.
-
-| Filtro                                       | Semântica                                                                                                                                | Afeta                                                                                                                 |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Tipo** (fadiga/comportamento)              | Fadiga = drivers com `alertas > 0` · Comportamento = drivers só em `reportaveis > 0`                                                     | Drivers, atendimentos (intervencao=fadiga, reportar=comportamento), KPIs, donut, hourly, transp, produtividade, ONTEM |
-| **Resultado** (positivo/pos-positivo/aberto) | Recorta fechados (não-reinc vs reinc) e liga/desliga contagem de em-aberto                                                               | KPIs, donut                                                                                                           |
-| **Empresa**                                  | Nome da transportadora **após `resolveAlias`** (aliases vêm do Admin). Top 6 viram chips, resto vai pro select "Outras…"                 | Drivers, atendimentos, tecnicos, ONTEM, transp                                                                        |
-| **Operador**                                 | Lista vem de `useProfiles()` (equipe atual, role ∈ {operador, admin}) — não do histórico de atendimentos                                 | Atendimentos, produtividade, fechados, ONTEM                                                                          |
-| **Período** (hoje/turno)                     | `hoje` = 00 h → agora · `turno` = janela do turno atual (diurno 06 h–agora ou noturno 18 h–agora, cruzando meia-noite quando a hora < 6) | Atendimentos (timeframe)                                                                                              |
-
-Filtros **persistidos em `localStorage.mn_dash_filters`** — view do gestor
-sobrevive a reload e troca de painel. Botão "Limpar filtros" reseta.
-
-#### Tweaks popover (engrenagem na barra de saudação)
-
-Substitui o antigo `TweaksPanel` global (removido). Conteúdo do popover:
-
-| Grupo                 | Itens                                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **SLA**               | Input numérico 5–240 min com -5/+5                                                                            |
-| **Apresentação**      | Comparar com ontem · Modo executivo (esconde Hourly/Tech/Transp, infla KPIs)                                  |
-| **Layout**            | Balanceado · Cinema (1 coluna) · Compacto (2 colunas com cards menores)                                       |
-| **Seções visíveis**   | Toggle individual: Hourly, Tipo & Resultado, Atenção técnica, Transportadoras                                 |
-| **Aparência**         | Tema (claro/escuro) · Densidade (compacta/normal/espaçada) · 6 swatches de accent — todos espelham `useApp()` |
-| **Footer** (só admin) | Atalho **Configurar aliases de transportadora** → vai direto pro Admin                                        |
-
-Persistidos em `localStorage`: `mn_dash_sla`, `mn_dash_compare`, `mn_dash_hourly`,
-`mn_dash_transp`, `mn_dash_classif`, `mn_dash_tech`, `mn_dash_exec`,
-`mn_dash_layout`, `mn_dash_tv`. Tema/accent/densidade reusam as chaves globais
-de `context.jsx`.
-
-#### Modo TV (`body.dash-tv-mode`)
-
-Botão dedicado na barra (`ti-layout-sidebar-left-collapse`). Esconde a sidebar
-e infla `dg-kpi-value` pra ~48 px (`is-hero` ~60 px). CSS em
-`dashboard.css §body.dash-tv-mode`.
-
-#### Modo Executivo (`body.dash-exec-mode`)
-
-Toggle no Tweaks. Esconde Hourly/Tech/Transp, infla KPIs ainda mais (~56 px,
-hero ~68 px). Mostra só macros + críticos + produtividade.
-
-#### "Atualizado há X min"
-
-Indicador na barra de saudação derivado do `max(driversLastChangeAt,
-lastAtendimentoAt)`. Atualiza junto com o clock de 30 s. Formatos: `agora`
-(< 1 min), `X min` (< 60), `Xh` (< 24 h), `Xd`.
-
-#### Topbar do projeto (estendida hoje)
-
-- **Brand integrado**: SVG M + "GRUPO MedNet" à esquerda do título (mesma marca do sidebar, pra reforço quando em Modo TV)
-- **Turno dinâmico** no breadcrumb: "Visão da diretoria · turno diurno/noturno" calculado por `new Date().getHours()` (diurno 06–18)
-- **Dedup de data**: `fmtDate()` saiu do breadcrumb da topbar; agora aparece só na barra de saudação do Dashboard
-
-#### DEV mocks
-
-`Dashboard.jsx` define `MOCK_DRIVERS` + `MOCK_HISTORY` (~70 motoristas + ~250
-atendimentos sintéticos) usados só quando `import.meta.env.DEV && driversReal.length === 0`. Vite faz tree-shake em produção (`import.meta.env.DEV = false`), então a build de prod **não contém os mocks** (verificado no build).
-
-### 5.2. Monitor de Frota (`modules/Monitor.jsx`)
-
-Núcleo operacional. Recebe a entrada da plataforma (atualmente upload de
-planilha Sascar) e organiza em quatro abas:
-
-| Aba                    | Conteúdo                                                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Intervenção**        | Drivers com eventos de fadiga/distração (Bocejo, Olho fechado, Distração Genérica). Ações: histórico, template, inserir-na-planilha, descartar. |
-| **Reportar à empresa** | Drivers com eventos reportáveis. Ações: histórico, template, reportar, descartar.                                                               |
-| **Só técnico**         | Drivers com apenas eventos técnicos (câmera obstruída, perda de vídeo). Ação: descartar.                                                        |
-| **Histórico**          | Atendimentos passados, com filtros por período, tipo e busca, e exportação CSV.                                                                 |
-
-Filtros: turno, severidade, transportadora, evento (todos dinâmicos por
-plataforma). **Presets de filtro** salvos em `localStorage` (`mn_filter_presets`) — até 5 combinações nomeadas, aplicadas com um clique.
-
-**Badges por motorista no DriverCard:**
-
-| Badge                                 | Cor             | Origem                                           |
-| ------------------------------------- | --------------- | ------------------------------------------------ |
-| Reincidente há Xd                     | Danger/Warning  | Supabase — atendimento nos últimos 30 dias       |
-| Planilha · dd/mm · Realizado/Pendente | Success/Warning | Google Sheets — entrada no mês atual ou anterior |
-
-**Descarte com motivo** — ao clicar em descartar, um modal solicita o motivo (falso positivo, câmera com falha, etc.) antes de registrar. O motivo é salvo no campo `obs` do atendimento.
-
-**Exportação da aba ativa** — botão "Exportar" na barra de abas gera CSV dos motoristas visíveis na aba atual (Intervenção, Reportar ou Só técnico).
-
-Sub-arquivos:
-
-- `monitor/UploadArea.jsx` — status bar, seletor de plataforma, drop zone, KPIs
-- `monitor/MonitorFilters.jsx` — filtros + presets de filtro
-- `monitor/DriverCard.jsx` — cartão de cada motorista com badges (reincidência + planilha)
-- `monitor/MonitorModals.jsx` — modal de template + dossiê do motorista
-- `monitor/HistoryTab.jsx` — aba de histórico com filtros e CSV
-- `monitor/utils.jsx` — helpers (sevClass, applyTemplate, exportCSV)
-
-### 5.3. Cross-Check (`modules/CrossCheck.jsx` + `modules/crosscheck/`)
-
-Ferramenta de comparação cruzada de alertas entre duas plataformas de monitoramento. O operador carrega uma planilha por plataforma (`.xlsx`, `.xls`, `.csv`) e o módulo cruza os registros automaticamente.
-
-**Motor de matching** (`crosscheck/utils.js`):
-
-| Conceito            | Descrição                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| Match por placa     | Eventos cujas placas normalizadas coincidem nas duas fontes                        |
-| Match por motorista | Eventos cujos nomes normalizados coincidem e não estão cobertos por match de placa |
-| Divergência         | Matches com contagem de ocorrências diferente entre as fontes                      |
-
-Normalização resistente a acentos, maiúsculas/minúsculas e separadores em todos os campos.
-
-**Recursos:**
-
-- **Carrier fallback** — campo "Transportadora" na planilha da Fonte 2 pode ser preenchido manualmente quando a planilha não possui coluna própria; aplicado via `useEffect` ao alterar o campo.
-- **Filtro de período** — intervalo de datas (detecta automaticamente se as planilhas têm coluna de data).
-- **Filtro de transportadora** — clique em qualquer item da lista de transportadoras para filtrar os matches; badge ativo com botão de remoção.
-- **Estatísticas de transportadora** — ranking por plataforma (top 6 + contagem de outras).
-- **Duplicados internos** — detecta placas e motoristas que aparecem mais de uma vez dentro da mesma planilha (top 5).
-- **Export CSV** — dois modos: todos os resultados filtrados ou somente divergências; BOM UTF-8; colunas transportadora e data incluídas.
-
-**Arquivos do módulo:**
-
-| Arquivo                            | Responsabilidade                                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `CrossCheck.jsx`                   | Orquestrador: estado, `useMemo`, handlers, JSX estrutural                                           |
-| `crosscheck/utils.js`              | Funções puras: normalize, parsers de data, `buildStats`, `buildCarrierStats`, `buildDuplicateStats` |
-| `crosscheck/SideUploadCard.jsx`    | Área de upload com spinner de loading e metadados do arquivo                                        |
-| `crosscheck/MatchCard.jsx`         | Card de resultado individual com colunas lado a lado e badge "Match perfeito"                       |
-| `crosscheck/CrossCheckFilters.jsx` | Barra de filtros: período, tipo, ordenação, divergências, badge de transportadora                   |
-| `crosscheck/CarrierStats.jsx`      | Painéis de transportadoras e duplicados internos por plataforma                                     |
-
-### 5.4. Agenda (`modules/Agenda.jsx`)
-
-Lembretes com data, hora, ícone, prioridade urgente e detalhes opcionais.
-Filtros: hoje, futuros, todos. Notificações via Notification API quando o
-horário chega.
-
-### 5.5. Templates (`modules/Templates.jsx`)
-
-Scripts reutilizáveis para WhatsApp. Tags: `contato`, `questionario`, `alerta`,
-`encerramento`. Variáveis built-in: `[NOME]`, `[PLACA]`, `[TRANSPORTADORA]`,
-`[HORA]`, `[SAUDACAO]`. Variáveis customizadas em `localStorage`.
-Drag-reorder, copy-to-clipboard.
-
-### 5.6. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
-
-Wiki interna com TipTap. Suporta upload de imagens para o bucket
-`workspace-images` (Supabase Storage). Categorias: `protocolos`, `sistemas`,
-`config`. Favoritos, busca e drag-reorder.
-
-### 5.7. Bloco de Notas (`modules/Notes.jsx`)
-
-Notas pessoais (privadas do operador) ou compartilhadas (toda a equipe).
-Auto-save com debounce de ~800ms.
-
-### 5.8. Links Rápidos (`modules/Links.jsx`)
-
-Atalhos para sistemas. Seções `interno` / `externo`. Personalização de ícone
-e paleta de cor por link. Drag-reorder.
-
-### 5.9. Meu Perfil (`modules/Profile.jsx`)
-
-Edita `nome`, `cargo` e senha. E-mail é read-only.
-
-**Seção Integrações** — configuração por operador das plataformas automáticas:
-
-| Integração | O que armazena               | Como configurar                                                                                    |
-| ---------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| Sascar     | `sascar_token` em `profiles` | Arrastar o **bookmarklet** até a barra de favoritos; clicar uma vez por turno após login no portal |
-
-O token Sascar é enviado via URL hash (`#sascar-token=…`) pelo bookmarklet e capturado por `SascarTokenHandler` em `App.jsx`.
-
-### 5.10. Administração (`modules/Admin.jsx`, admin-only)
-
-Lista a equipe com `last_seen`. Convida operadores por e-mail (chama
-`invite-user`). Toggle de manutenção e edição de role/nome/cargo dos colegas.
-
-**Mapeamento de transportadoras** — seção "Mapeamento de transportadoras" permite cadastrar pares Monitor → Planilha (ex.: "LSL Transportes" → "LSL 2W"). Persistido em `app_settings` com chave `carrier_aliases`. Aplicado automaticamente em `postToSheets` via `useCarrierAliases` + `resolveAlias`.
-
-### 5.11. Analytics (`modules/Analytics.jsx`, admin-only)
-
-Janela de 30 dias: top 10 motoristas reincidentes (bar), top 5 transportadoras
-(pie), tendência de 14 dias intervenção × descarte (line). **Exportação CSV** — botão "Exportar CSV" no cabeçalho gera arquivo com as três seções (motoristas, transportadoras, série temporal).
-
----
-
-## 5.12. Integração Google Sheets bidirecional
-
-### Escrita (`supabase/functions/append-sheet`)
-
-Acionada em "Inserir na planilha". Usa JWT de service account para autenticar na Sheets API.
-
-- **Range de detecção**: `A:H` — evita que a fórmula `=SE(ÉCÉL.VAZIA(N:N);"NÃO";"SIM")` pré-preenchida em ~1000 linhas da coluna I desvie o ponto de inserção para o final dessas linhas.
-- **Coluna I**: escrita com a fórmula idêntica às demais linhas — status auto-calculado para o novo registro sem intervenção manual.
-- **Mapeamento de transportadora**: aplica `resolveAlias()` antes de enviar, usando os aliases cadastrados em `app_settings.carrier_aliases`.
-
-### Leitura (`supabase/functions/read-sheet`)
-
-Nova Edge Function. Lê uma ou mais abas mensais (padrão: mês atual + anterior).
-
-- **Detecção de linhas vazias**: ignora linhas onde empresa, colaborador e placa estão todos vazios — resistente à fórmula da coluna I que preenche linhas sem dados reais.
-- **Erros de fórmula**: `#N/A`, `#VALOR!`, `#REF!` etc. são normalizados para string vazia.
-- **Ordenação**: última linha inserida na aba aparece primeiro (`.reverse()` por aba + sort por data descendente entre meses).
-- **Query param**: `?meses=MARÇO 2025,ABRIL 2025` para abas específicas.
-
-### Frontend
-
-- `hooks/useSheetHistory.js` — hook lazy; `load()` acionado sob demanda.
-- **HistoryTab** — botão "Planilha Sheets" no histórico carrega dados sob demanda, com paginação de 15 itens e busca por colaborador/placa/empresa.
-- **DriverCard** — badge "Planilha · dd/mm · Realizado/Pendente" para motoristas com entrada no Sheets; dados carregados em background ao montar o Monitor.
-
----
-
-## 5.13. Integração automática Sascar (Bookmarklet)
-
-Além do upload manual de planilha (modo `spreadsheet`), a Sascar pode ser
-integrada de forma automática via **scraper com bookmarklet** — sem necessidade
-de instalar nada, sem alteração de rede corporativa.
-
-### Por que bookmarklet?
-
-O portal Sascar (`smartcamera.michelin.com`) exige CAPTCHA no login, o que
-impede qualquer automação de credenciais. A solução adotada é ler o
-`AUTH_TOKEN` que o portal já grava em `localStorage` após o operador fazer
-login normalmente. Esse token é enviado ao MedNet com um único clique.
-
-### Como funciona (visão do operador)
-
-1. **Início do turno** — o operador abre o portal Sascar no navegador e faz
-   login normalmente (usuário + senha + CAPTCHA).
-2. **Um clique no bookmarklet** — o favorito (salvo na barra do navegador) lê
-   o `AUTH_TOKEN` do `localStorage` do portal e o envia de forma segura à
-   Edge Function `sascar-token` do MedNet.
-3. **Pronto.** A partir daí o Monitor passa a buscar os alertas automaticamente,
-   sem mais uploads manuais durante aquele turno.
-
-### Como obter o bookmarklet
-
-Acesse **Meu Perfil → Integrações → Sascar** dentro do MedNet. O código do
-bookmarklet é exibido pronto para arrastar até a barra de favoritos do
-navegador (ou copiar e criar um favorito manualmente).
-
-### Renovação automática do token
-
-O `AUTH_TOKEN` da Sascar expira em **30 minutos de inatividade**. O MedNet
-chama automaticamente o endpoint de refresh
-(`/gateway/base-server-service/api/v1/user/refresh`) antes do vencimento,
-mantendo a sessão ativa enquanto o operador estiver trabalhando. Não é
-necessária nenhuma ação enquanto o turno estiver em andamento.
-
-### Token expirado (idle > 30 min)
-
-Se o operador ficar mais de 30 minutos sem nenhuma atividade no MedNet (e o
-refresh automático não for suficiente), o sistema exibe um **banner de aviso**
-solicitando que o bookmarklet seja clicado novamente. O processo é idêntico ao
-início do turno: abrir o portal Sascar (que mantém a sessão do navegador) e
-clicar o favorito.
-
-### Endpoints utilizados
-
-| Finalidade             | Endpoint                                                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Salvar token no MedNet | Edge Function `pull-sascar` (o token é capturado via `#sascar-token=…` na URL e salvo por `SascarTokenHandler` em `profiles.sascar_token`) |
-| Renovar token          | `POST /gateway/base-server-service/api/v1/user/refresh`                                                                                    |
-| Listar alarmes         | `POST /gateway/report/shipper/alarm/page`                                                                                                  |
-| Detalhes de evidências | `POST /gateway/report/shipper/evidence/by/alarm/list`                                                                                      |
-
-> O login direto (`/gateway/base-server-service/api/v1/user/login`) **não é
-> usado** — é bloqueado por CAPTCHA server-side e não faz parte do fluxo.
-
-### Mapeamento de alarmes (Sascar API)
-
-A classificação usa `categoryInfoList[0].categoryId` (mais confiável que `alarmType`):
-
-| `categoryId` | Categoria MedNet                     |
-| ------------ | ------------------------------------ |
-| `100574`     | INTERVENÇÃO (Fadiga)                 |
-| `100575`     | REPORTAR (Distração / Comportamento) |
-| `100573`     | TÉCNICO (câmera/vídeo)               |
-
-Severidade via `levelInfo.levelId`:
-
-| `levelId` | Severidade |
-| --------- | ---------- |
-| `15`      | Gravíssimo |
-| `14`      | Grave      |
-| `13`      | Normal     |
-
-Velocidade: campo `speed` em **1/10 km/h** (ex: `620` → 62 km/h). Eventos com `speed < 100` (< 10 km/h) são filtrados.
-
-Turno em BRT: `((startTime_utcHour - 3) + 24) % 24` — diurno 06–18 h, noturno demais.
-
-Falsos positivos: **excluídos pelo servidor** via filtro `alarmLevelIds: '15,14,13'` no payload; `stats.falsosPositivos` sempre retorna 0.
-
----
-
-## 5.14. Integração Maxtrack (Planilha)
-
-A Maxtrack é integrada via **upload manual de planilha** — o mesmo fluxo da Sascar em modo `spreadsheet`. O operador exporta o relatório do portal e carrega o arquivo (`.xlsx`, `.csv`) diretamente no Monitor.
-
-### Colunas esperadas na planilha
-
-| Coluna        | Campo no adapter                            |
-| ------------- | ------------------------------------------- |
-| `Placa`       | identificador do veículo                    |
-| `Motorista`   | nome do condutor                            |
-| `Empresa`     | transportadora                              |
-| `Frota`       | número de frota                             |
-| `Evento`      | nome do evento                              |
-| `Criticidade` | severidade (Gravíssimo/Grave/Médio)         |
-| `Data/Hora`   | timestamp do evento                         |
-| `Velocidade`  | em km/h — eventos < 10 km/h são descartados |
-
-### Mapeamento de severidade
-
-| Criticidade na planilha | Canônico   |
-| ----------------------- | ---------- |
-| `Gravíssimo`            | Gravíssimo |
-| `Grave`                 | Grave      |
-| `Médio`                 | Normal     |
+Toda mutação na fila passa pelos métodos do `useDriversQueue` (local + DB +
+realtime). Pipeline de parse e regras de negócio: ver §10.
+
+> A camada de **RPA** (cartão de automação Maxtrack no UploadArea) foi
+> **removida** — a automação Maxtrack passou a ser gerida fora da plataforma
+> (N8N/código). Ver §22.
+
+### 5.3. Cross-Check (`modules/CrossCheck.jsx` + `modules/crosscheck/`) — líder+
+
+Comparação cruzada de alertas entre duas plataformas. O operador carrega uma
+planilha por fonte e o módulo cruza por placa e por motorista, destacando
+divergências. Filtros de período/transportadora, estatísticas por
+transportadora, duplicados internos e export CSV. **Agora restrito a líder+.**
+
+### 5.4. Planilha Embedded (`modules/EmbeddedSheet.jsx`) — `/planilha`
+
+Grid editável inline das intervenções **do dia**, sincronizada
+bidirecionalmente com a planilha mensal do Google Sheets. Substitui o trabalho
+direto na planilha pelo operador.
+
+- Tabela `intervencoes_sheet` (uma linha por intervenção do dia). Colunas
+  editáveis célula a célula: data, empresa, sistema, colaborador, placa, frota,
+  criticidade, classificação, **Realizado?** (pílula SIM/NÃO em 1 clique),
+  motivo, solicitado/realizado por, horas, justificativa.
+- `loadData` filtra só HOJE (variantes de data tolerantes). Realtime (INSERT/
+  UPDATE/DELETE) com guardas anti-leitura-parcial.
+- Sincronização com Sheets via `read-sheet` (importa) e `append-sheet`
+  (escreve), com **dedup por chave normalizada** (placa+data+colaborador) e
+  **match posicional** pela coluna P (id) / `linha_sheet`. Trigger no banco
+  espelha alterações para o Sheets (ver §11).
+- Excluir linha (lixeira com confirmação) remove do banco. _Pendência conhecida:
+  delete não propaga para o Sheets._
+
+### 5.5. Dossiês Clínicos (`modules/DossiesPage.jsx`) — `/dossies/:tab`
+
+Prontuário do motorista cruzando saúde + telemetria + tratativas, com laudo por
+IA. Abas `clinico` e `tratativas` (segmento de URL); seleção de motorista via
+`?driver=`.
+
+- Lista consolidada de motoristas (de `driver_health` + `driver_events` +
+  `atendimentos`), com cache em memória.
+- **Ficha Clínica** (`driver_health`): escala de Epworth (0–24, com faixa de
+  alerta), polissonografia/apneia, histórico clínico, último exame, placa,
+  transportadora, frota, turno. Editável e upsert por `motorista_nome`.
+- **Telemetria:** count real + primeiros 200 eventos de `driver_events`
+  (severidade, plataforma, velocidade, turno, data).
+- **Tratativas:** atendimentos anteriores (`atendimentos`).
+- **Laudo Integrado por IA:** botão "Analisar com I.A" chama a edge function
+  `generate-dossier-report` (provedor/modelo de `app_settings.ai_config`),
+  cruzando fadiga + exames em uma análise clínico-operacional (markdown).
+
+### 5.6. Agenda (`modules/Agenda.jsx`)
+
+Lembretes com data, hora, ícone, prioridade urgente e detalhes. Notificações via
+Notification API + toast (`ReminderNotifier` em `App.jsx`).
+
+### 5.7. Templates (`modules/Templates.jsx`)
+
+Scripts reutilizáveis para WhatsApp. Tags, variáveis built-in (`[NOME]`,
+`[PLACA]`, …) e customizadas, drag-reorder, copy-to-clipboard.
+
+### 5.8. Workspace (`modules/Workspace.jsx` + `WorkspaceEditor.jsx`)
+
+Wiki interna com TipTap (upload de imagens p/ bucket `workspace-images`).
+Categorias roteadas por `/workspace/:categoria`. Inclui **modo de cópia rápida**
+com feedback visual no editor.
+
+### 5.9. Bloco de Notas (`modules/Notes.jsx`)
+
+Notas pessoais ou compartilhadas, auto-save com debounce.
+
+### 5.10. Links Rápidos (`modules/Links.jsx`)
+
+Atalhos para sistemas, seções interno/externo, personalização de ícone/cor,
+drag-reorder.
+
+### 5.11. Meu Perfil (`modules/Profile.jsx`)
+
+Edita nome, cargo, avatar e senha (e-mail read-only). **Seção Integrações:**
+bookmarklet Sascar (ver §12).
+
+### 5.12. Analytics (`modules/Analytics.jsx` + `modules/analytics/`) — `/admin/analytics`
+
+> **Reescrito.** Deixou de ser a janela fixa de 30 dias sobre `atendimentos` e
+> virou um **sistema de analytics histórico** sobre eventos brutos importados de
+> planilhas, agregados pelo backend Express.
+
+Fluxo:
+
+1. **Import universal** (`ImportModal` + `utils/fatigueParser.js`): o usuário
+   sobe um relatório de qualquer das 8 plataformas (MaxTrack, Sascar, Sascar JD,
+   Sighra, Horizon, AutoTrac, OmniLink, Trimble). O parser detecta o layout pelo
+   cabeçalho, mapeia colunas e normaliza. Os registros são gravados em
+   `driver_events` (upsert idempotente por `platform_id,placa,ocorrido_em,
+   nome_evento`, em chunks de 2500). Depois, `POST /api/clear-cache`.
+2. **Agregação:** o front chama `GET /api/analytics` no servidor Express, que
+   agrega `driver_events` no banco (RPC + rollup — ver §8) e devolve o objeto
+   `d` (KPIs, séries, top motoristas/placas/UF, distribuições). `prevD` = mês
+   anterior, para variação.
+3. **Visualização:** `FadigaKPIs` + `FadigaKPIsDrill`, `FadigaCharts`
+   (`analytics/components/`: Distribution, DriverVehicle, Temporal, Volume,
+   AlertsStatus, CategoryEvidence), filtros de mês/severidade/classificação/tipo/
+   empresa, e fontes (`SourceChips`).
+4. **Comparação** (`ComparisonModal` + `ComparisonView`): dois modos —
+   **plataformas** (entre si) e **empresas** (de UMA plataforma entre si).
+5. **Export:** CSV (`/api/analytics/csv`) e HTML self-contained (clona o DOM,
+   converte `<canvas>` em imagem). Filtros persistidos em `localStorage`
+   (`mednet_analytics_*`).
+
+Normalização: criticidades unificadas em Gravíssimo/Grave/Médio; classificação
+em Positivo/Falso positivo/Não classificado; UF extraída da localidade. Eventos
+"Leve" ficam no banco mas fora da análise. Fuso `America/Sao_Paulo`.
+
+### 5.13. Relatórios IA (`modules/Reports.jsx`) — `/admin/relatorios`
+
+Gera relatório executivo por transportadora a partir de `driver_events`. Escolhe
+transportadora (de `get_distinct_transportadoras`), período (1–12 meses),
+provedor (Anthropic/Google) e modelo. Chama a edge function `generate-report`,
+que devolve markdown + meta (eventos, intervenções, motoristas, modelo usado).
+
+### 5.14. Automações (`modules/Automacoes.jsx` + `modules/automacoes/`) — líder+
+
+Três abas:
+
+- **Integrações & Webhooks** (`HooksTab`):
+  - _Automações VPS (hooks de saída):_ cadastra automações que disparam POST a um
+    endpoint da VPS (trigger manual/agendado/por evento). Strip de saúde da VPS
+    (`vpsHealth`), modal VNC (noVNC) para operar o robô remotamente. Persistido
+    via `useAutomations`/`automation_logs`.
+  - _WhatsApp Cloud API & Webhook (entrada):_ formulário das credenciais Meta
+    (`phone_number_id`, `whatsapp_business_account_id`, token) e exibição da URL
+    de callback + verify token para configurar no painel da Meta.
+- **Disparos** (`DisparosTab` + `DispatchesTable` + `MetricsGrid`): histórico de
+  `whatsapp_dispatches` (realtime) com métricas do dia (enviados, falhas, taxa de
+  leitura, custo estimado).
+- **Chat WhatsApp** (`ChatTab`): inbox em tempo real (`whatsapp_chats` /
+  `whatsapp_messages` via realtime). Envio de texto livre dentro da **janela de
+  24 h**; quando expira, exige envio de **template homologado** (com variáveis)
+  para reabrir. Status de entrega/leitura (✓/✓✓). Deep-link de outras abas via
+  `?phone=&name=`.
+
+Todas as chamadas WhatsApp passam pelo Express (`/api/whatsapp/*`), que guarda o
+token e fala com a Graph API da Meta.
+
+### 5.15. Administração (`/admin/*`) — admin-only
+
+Decomposta nas abas de §4.1:
+
+- **Equipe & Acessos** (`EquipeTab`): convida operadores (`invite-user`), lista a
+  equipe com `last_seen`/avatar, edita nome/cargo e **role** (operador/líder/
+  admin). Remoção de acesso é feita no Supabase Auth.
+- **Auditoria** (`AdminAuditoria`): trilha global somente-leitura de todas as
+  tratativas (`atendimentos`), reaproveitando o realtime já carregado.
+  Filtro por texto/tipo e **paginação** (25/página).
+- **Integrações:** _Credenciais & OmniLink_ (`app_settings.omnilink_config.
+  operator_email` — define qual operador da OmniLink é mantido no parsing) e
+  _Transportadoras (de-para)_ (`app_settings.carrier_aliases`).
+- **IA & Parsing** (`AiCredentials`): provedor ativo + modelos
+  (`app_settings.ai_config`) e chaves de API por provedor (`ai_credentials`,
+  grava só existência no front). Modelos: Claude Haiku 4.5 / Sonnet 4.6 / Opus
+  4.7; Gemini 2.0 Flash / 2.5 Flash / 2.5 Pro.
+- **Sistema:** _Modo manutenção_ (`SistemaManutencao`, toggle + mensagem) e
+  _Limpeza de histórico_ (`SistemaLimpeza`, apaga `atendimentos` por período/tipo
+  com **prévia, confirmação por digitação `LIMPAR` e CSV de backup automático**).
 
 ---
 
 ## 6. Modelo de dados (Supabase)
 
-| Tabela          | Colunas principais                                                                                                                                                                                                                                                                                                  | Observações                                                                                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `profiles`      | `id`, `nome`, `cargo`, `role`, `last_seen`, `created_at`, `maxtrack_email`, `maxtrack_password`, `sascar_token`                                                                                                                                                                                                     | `role ∈ {operador, admin}` · credenciais lidas só via `service_role`                                                                                                     |
-| `atendimentos`  | `id`, `motorista`, `placa`, `transportadora`, `operador_id`, `operador_nome`, `tipo`, `obs`, `hora`, `created_at`                                                                                                                                                                                                   | `tipo ∈ {intervencao, reportar, descarte, limpeza}`                                                                                                                      |
-| `templates`     | `id`, `tag`, `tag_label`, `title`, `body`, `position`, `created_at`                                                                                                                                                                                                                                                 | —                                                                                                                                                                        |
-| `notes`         | `id`, `title`, `body`, `is_personal`, `author_id`, timestamps                                                                                                                                                                                                                                                       | `is_personal = true` ⇒ só o autor vê                                                                                                                                     |
-| `ws_pages`      | `id`, `title`, `icon_index`, `category`, `favorite`, `content`, `position`, timestamps                                                                                                                                                                                                                              | Conteúdo HTML do TipTap                                                                                                                                                  |
-| `links`         | `id`, `section`, `name`, `description`, `url`, `icon`, `bg`, `ic`, `position`, `created_at`                                                                                                                                                                                                                         | —                                                                                                                                                                        |
-| `reminders`     | `id`, `title`, `sub`, `time`, `urgent`, `done`, `reminder_date`, `icon`, `created_at`                                                                                                                                                                                                                               | —                                                                                                                                                                        |
-| `app_settings`  | `key`, `value` (JSON), `updated_at`, `updated_by`                                                                                                                                                                                                                                                                   | `key='maintenance'` controla lockout · `key='carrier_aliases'` mapeia nomes de transportadoras                                                                           |
-| `drivers_queue` | `id`, `placa` (UNIQUE), `platform_id`, `nome`, `transportadora`, `frota`, `turno`, `alertas`, `tipos` (jsonb), `ultimo_evento`, `reportaveis`, `tipos_reportar`, `ultimo_evento_reportar`, `tecnicos`, `tipos_tecnico` (jsonb), `eventos_detalhados` (jsonb), `severidade`, `loaded_at`, `updated_at`, `updated_by` | 1 linha por placa (cross-platform dedup). Trigger `drivers_queue_touch_updated_at` mantém `updated_at`. `replica identity full` pra DELETE entregar a placa via realtime |
+Tabelas operacionais (já existentes, inalteradas em essência): `profiles`,
+`atendimentos`, `templates`, `notes`, `ws_pages`, `links`, `reminders`,
+`app_settings`, `drivers_queue`, `profile_credentials`. Ver detalhes históricos
+no git/migrations.
+
+### 6.1. Tabelas novas / relevantes
+
+| Tabela                  | Para quê                                                                                              | Colunas-chave                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `driver_events`         | Histórico permanente de eventos brutos de telemetria (Analytics, Dossiês, Relatórios)                | `platform_id, placa, nome, transportadora, frota, nome_evento, descricao, categoria_bucket, severidade, turno, localidade, velocidade_kmh, analise_ia_plataforma, ocorrido_em`. UNIQUE `(platform_id, placa, ocorrido_em, nome_evento)` |
+| `analytics_daily`       | Rollup diário pré-agregado de `driver_events` (acelera Analytics)                                    | PK `(platform, dia, fleet_raw, sev_norm, clf_norm, nome_evento)`; agregados jsonb + `cnt`                                                     |
+| `driver_health`         | Prontuário clínico do motorista (Dossiês)                                                             | `motorista_nome` (UNIQUE), `escala_epworth` (0–24), `polissonografia`, `historico_clinico`, `ultimo_exame_em`                                |
+| `intervencoes_sheet`    | Planilha Embedded — intervenções do dia + controle de sync com Sheets                                | dados da intervenção + `realizado`, `status_sync` (pendente/sincronizado/erro), `tentativas_sync`, `linha_sheet`                            |
+| `ai_credentials`        | Chaves de API de IA por provedor                                                                     | `provider` (UNIQUE), `api_key`                                                                                                               |
+| `whatsapp_credentials`  | Token Meta Cloud API (admin-only)                                                                    | `token`, `phone_number_id`, `whatsapp_business_account_id`                                                                                   |
+| `whatsapp_templates`    | Cache dos templates homologados na Meta                                                              | `name` (UNIQUE), `category`, `language`, `status`, `components` (jsonb)                                                                       |
+| `whatsapp_dispatches`   | Histórico de disparos + custo estimado                                                               | `recipient_*`, `template_name`, `estimated_cost`, `status` (sent/delivered/read/failed), `meta_message_id`                                   |
+| `whatsapp_chats`        | Conversas (inbox)                                                                                    | `phone` (UNIQUE), `name`, `last_message_at`, `unread_count`                                                                                  |
+| `whatsapp_messages`     | Mensagens da conversa                                                                                | `chat_id`, `direction` (inbound/outbound), `body`, `status`, `meta_message_id`                                                               |
+| `maxtrack_sessions` / `maxtrack_cache` | Infra de sessão/cache (legado do scraping Maxtrack)                                    | —                                                                                                                                            |
+
+Automações da VPS: `automations` (hooks cadastrados) + `automation_logs`
+(execuções) — alimentam a aba Automações (`useAutomations`).
+
+`app_settings` (chaves JSON): `maintenance` (lockout + mensagem),
+`carrier_aliases` (de-para de transportadoras), `omnilink_config`
+(`operator_email`), `ai_config` (`provider`, `anthropic_model`, `google_model`),
+`vps_config` (saúde/host da VPS para a aba Automações).
+
+**Removidas:** `rpa_credentials` e a chave `app_settings.rpa_config`
+(migration `20260625102000_remove_rpa_infrastructure.sql`).
 
 Realtime: `atendimentos`, `templates`, `notes`, `ws_pages`, `links`,
-`reminders`, `app_settings`, `drivers_queue`.
+`reminders`, `app_settings`, `drivers_queue`, `whatsapp_chats`,
+`whatsapp_messages`, `whatsapp_dispatches`.
 
-#### Sincronização realtime end-to-end
+### 6.2. Sincronização realtime end-to-end
 
-Após a migration `20260518211646_drivers_queue.sql`, a fila de motoristas é
-compartilhada entre todos os operadores:
-
-| Hook                                                | Tabela                                           | Eventos escutados                                                     |
-| --------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
-| `useAtendimentos`                                   | `atendimentos`                                   | INSERT (novos atendimentos da equipe)                                 |
-| `useDriversQueue`                                   | `drivers_queue`                                  | INSERT/UPDATE/DELETE                                                  |
-| `useCarrierAliases`                                 | `app_settings` (filter `key=eq.carrier_aliases`) | `*` — aliases recém-salvos no Admin propagam pro Dashboard sem reload |
-| `useReminders` / `useTemplates` / `useNotes` / etc. | Cada um na sua tabela                            | INSERT/UPDATE/DELETE                                                  |
-
-`useDriversQueue` faz **backfill automático** no load inicial: se o DB
-estiver vazio mas houver cache em `localStorage('mn_drivers_queue')`,
-sobe o cache pro DB (cobre casos de upload feito antes da migration ou de
-upsert que falhou silenciosamente). Caso contrário, DB é fonte de verdade.
+| Hook                | Tabela                                  | Eventos                       |
+| ------------------- | --------------------------------------- | ----------------------------- |
+| `useAtendimentos`   | `atendimentos`                          | INSERT (+ helpers de limpeza) |
+| `useDriversQueue`   | `drivers_queue`                         | INSERT/UPDATE/DELETE + backfill `localStorage` |
+| `useCarrierAliases` | `app_settings` (`key=carrier_aliases`)  | `*`                           |
+| `useAutomations`    | automações + `automation_logs`          | status/execuções da VPS       |
+| ChatTab / DisparosTab | `whatsapp_chats/messages/dispatches`  | `*`                           |
 
 ---
 
 ## 7. Autenticação e papéis
 
-- Login: e-mail + senha via Supabase Auth.
-- Sessões persistidas; convite de usuário usa fluxo "invite" + senha inicial.
-- `AuthContext` sincroniza metadata com `profiles`, criando perfil no primeiro
-  login.
-- Roles:
-  - `operador`: acesso a Dashboard, Monitor, Agenda, Templates, Workspace,
-    Notas, Links, Perfil.
-  - `admin`: tudo acima + Admin + Analytics + toggle de manutenção.
+- Login: e-mail + senha via Supabase Auth. Convite usa fluxo "invite" + senha
+  inicial (`SetPasswordPage`). `AuthContext` sincroniza metadata com `profiles`.
+- **Hierarquia de roles** (`ROLE_LEVEL` em `data.js`):
+  - `operador` (0): Operação (Dashboard, Monitor, Planilha, Dossiês, Agenda) +
+    Conhecimento + Perfil.
+  - `lider` (1): tudo do operador + **Cross-Check** + **Automações**.
+  - `admin` (2): tudo + **Administração** (`/admin/*`) + toggle de manutenção.
+- Guards: `AdminGuard` (exige `role==='admin'`) e `RoleGuard min="lider"`
+  redirecionam para `/dashboard` quem não tem nível. A Sidebar esconde o que o
+  usuário não pode ver (`canSee`).
 
 ---
 
-## 8. Regras de negócio — Monitor
+## 8. Backend de Analytics (servidor Express + Postgres)
 
-### 8.1. Pipeline de processamento de planilha (Sascar)
+O caminho de Analytics tem duas camadas: o **servidor Express** (`server/`) e as
+**RPCs/rollup no Postgres**.
 
-Implementado em `src/platforms/sascar/parser.js`. Ordem das regras:
-
-1. **Falso positivo** — linhas com `Status === 'Falso positivo'` são removidas
-   (contabilizadas em `stats.falsosPositivos`).
-2. **Baixa velocidade** — linhas com velocidade `< 10 km/h` são removidas
-   (`stats.filtradosPorVelocidade`). A coluna de velocidade é localizada por
-   match parcial `includes('velocidade')` (case-insensitive).
-3. **Agrupamento por `Placa`** — cada placa vira um `driver`.
-4. **Classificação dos eventos** por placa:
-   - **INTERVENÇÃO**: `Bocejo`, `Olho fechado`, `Distração Genérica` (matchada
-     também via combinação `Evento` + `Categoria` para variações).
-   - **TÉCNICO**: categoria `Obstrução de Câmera` ou eventos
-     `Perda de vídeo` / `Sem motorista`.
-   - **REPORTAR**: todo o resto.
-5. **Filtro de histórico** — eventos anteriores à última ação registrada para
-   a placa são removidos:
-   - tipos `intervencao` e `descarte` limpam alertas de intervenção;
-   - tipo `reportar` limpa alertas reportáveis;
-   - eventos sem data parseável são mantidos (postura conservadora);
-   - contabilizados em `stats.filtradosPorHistorico`.
-6. **Regra Dinon (auto-descarte)** — transportadoras cujo nome contém
-   "dinon" têm eventos de fumo descartados automaticamente. O Monitor registra
-   um atendimento `descarte` silencioso em background (`stats.autoDescartes`).
-7. **Severidade do driver** = `max(Gravíssimo > Grave > Normal)` entre
-   eventos de intervenção + reportar (técnicos não contam para severidade).
-8. **Turno predominante** = mais frequente entre os eventos da placa.
-   Diurno = 06h–18h, Noturno = 18h–06h.
-9. **`ultimoEvento` / `ultimoEventoReportar`** = maior `Hora do evento` de
-   cada bucket, para exibição.
-
-### 8.2. Ações no Monitor
-
-Todas as mutações na fila vão pra tabela `drivers_queue` via os métodos do
-`useDriversQueue` (expostos pelo contexto). Não há mais `setDrivers` direto —
-o Monitor refatorou para chamar o método semântico apropriado, que atualiza
-local + DB e propaga via realtime pros outros operadores.
-
-| Ação                                         | Atendimento gerado                           | Método chamado                                                                                        | Effect no driver                                                          |
-| -------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Upload de planilha**                       | — (auto-descartes Dinon vão como background) | `replaceDrivers(batch, platformId)` — upsert dos novos + DELETE escopado ao `platform_id` dos sumidos | substitui a fila daquela plataforma                                       |
-| **Scrape automático**                        | —                                            | `replaceDrivers(batch, platformId)`                                                                   | mesma lógica do upload                                                    |
-| **Inserir na planilha** (intervenção)        | `tipo='intervencao'` + post à `append-sheet` | `updateDriver(placa, {alertas: 0, tipos: []})`                                                        | zera o bucket de intervenção                                              |
-| **Reportar e remover**                       | `tipo='reportar'`                            | `updateDriver(placa, {reportaveis: 0, tiposReportar: []})`                                            | zera o bucket de reportar                                                 |
-| **Descartar (intervenção/reportar/técnico)** | `tipo='descarte'`                            | `updateDriver(placa, patch)` com o bucket apropriado                                                  | zera o bucket correspondente (linha persiste zerada — não é deletada)     |
-| **Descarte em massa**                        | um `tipo='descarte'` por placa               | `bulkUpdateDrivers(placas, patch)`                                                                    | zera o bucket nas placas em lote (`UPDATE … IN`)                          |
-| **Auto-descarte Dinon**                      | `tipo='descarte'` (background)               | (evento removido antes de virar driver)                                                               | —                                                                         |
-| **Limpar fila**                              | nenhum                                       | `clearDrivers()`                                                                                      | `DELETE` em `drivers_queue` (propaga via realtime pros outros operadores) |
-
-Quando uma placa fica com todos os buckets zerados (alertas + reportaveis +
-tecnicos = 0), a linha **permanece** em `drivers_queue` (não é deletada). Sai
-da UI por ser filtrada em `driversAtivos`, mas serve de referência caso o mesmo
-motorista volte a gerar evento (preserva `_loadedAt` original, etc).
-
-### 8.3. Critérios de notificação push
-
-`notificarCriticos()` dispara Notification API para motoristas com
-`alertas >= 5` ao final do upload. Necessita `Notification.permission === 'granted'`.
-
-### 8.4. Idade da planilha
-
-A timestamp do último upload é guardada em `localStorage.mn_sheet_loaded_at`.
-Um chip ao lado do status mostra a idade colorida:
-
-- `< 30 min` → verde
-- `30–60 min` → âmbar
-- `>= 60 min` → vermelho
+- **Rotas** (`server/analytics-routes.js`):
+  - `GET /api/platforms` — contagem de eventos por plataforma (badges).
+  - `GET /api/compare-options` — plataformas + suas empresas (modal de comparação).
+  - `GET /api/analytics` — agrega e devolve `{ d, prevD, availableMonths,
+    availableCompanies, availableTypes, sources }`. Aceita `platformId`/`compare`/
+    `sources`/`month`/`startDate`/`endDate`/`company`/`severity`/`classification`/
+    `eventType`.
+  - `GET /api/analytics/csv` — export.
+  - `POST /api/clear-cache` — invalida o cache de resultado.
+- **Engine** (`server/analytics-rpc.js`): por padrão usa **RPC** (lê o rollup
+  pré-agregado), com fallback automático para o caminho JS em erro. As RPCs no
+  banco (`get_analytics_rollup`, `get_analytics_rollup_multi`,
+  `analytics_metadata_rollup`, `analytics_platform_counts`) leem a tabela
+  `analytics_daily`, mantida consistente por triggers statement-level sobre
+  `driver_events`. Há ainda `get_analytics` (cru, sobre colunas geradas) como
+  referência/fallback.
+- **Resultado:** "todos os meses" ~44s → ~1,5s; mês único ~13s → ~0,13s, sem
+  varrer dados crus. Histórico completo do esforço em
+  [docs/analytics-rpc-progress.md](./analytics-rpc-progress.md).
+- **Config:** o front aponta para o servidor via `VITE_API_URL`; o servidor usa
+  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` e (opcional) `ANALYTICS_ENGINE`.
+  Deploy via `server/Dockerfile`.
 
 ---
 
-## 9. Integração externa — Google Sheets
+## 9. Camadas de plataforma (duas, distintas)
 
-Edge Function `append-sheet` (autenticada por JWT do operador). Adiciona uma
-linha em planilha mensal (`MAIO 2026`, etc.) na planilha
-`1Zk8iMPnTw-GkjcK3tHvR4oMFrzqXFaUocF6VWn0yC7s`. Colunas A–P; o operador
-preenche `REALIZADO?`, `REALIZADO POR`, `DE REALIZAÇÃO`, `JUSTIFICATIVA`
-manualmente depois.
+Existem **dois** sistemas de plataforma — não confundir:
 
-Color coding:
-
-- `GRAVÍSSIMO` → fundo vermelho `#FF9999`
-- `GRAVE` → fundo amarelo `#FFD966`
-
-Campo `sistema`: **agora é dinâmico** — vem do adapter da plataforma
-(`platform.sistema`). Sascar envia `'SASCAR'`.
-
-Backup: `google-apps-script.js` (Apps Script Web App) aceita o mesmo payload
-caso a Edge Function caia.
+1. **Monitor (realtime)** — `src/platforms/` (registry `index.js`). Adapters
+   `sascar`, `maxtrack`, `omnilink` (modo `spreadsheet`/`scraper`). Alimenta a
+   fila do dia (`drivers_queue`). Guia: [docs/PLATFORMS.md](./PLATFORMS.md).
+2. **Analytics (import histórico)** — `src/utils/fatigueParser.js`. Registry de
+   **8 plataformas** (MaxTrack, Sascar, Sascar JD, Sighra, Horizon, AutoTrac,
+   OmniLink, Trimble) com detecção por assinatura de cabeçalho. Alimenta
+   `driver_events` para Analytics/Dossiês/Relatórios.
 
 ---
 
-## 10. Modo manutenção
+## 10. Regras de negócio — Monitor
 
-Admins ativam via `Admin` panel → updateia `app_settings.key='maintenance'`.
-Realtime propaga; não-admins veem `MaintenancePage`; admins continuam vendo
-a UI normal com um chip "Plataforma em manutenção" no rodapé.
+### 10.1. Pipeline de processamento (Sascar — referência)
+
+Implementado em `src/platforms/sascar/parser.js`. Ordem:
+
+1. **Falso positivo** removido (`stats.falsosPositivos`).
+2. **Baixa velocidade** (`< 10 km/h`) removido (`stats.filtradosPorVelocidade`).
+3. **Agrupamento por placa**.
+4. **Classificação**: INTERVENÇÃO (Bocejo, Olho fechado, Distração Genérica),
+   TÉCNICO (câmera obstruída, perda de vídeo, sem motorista), REPORTAR (resto).
+5. **Filtro de histórico**: eventos anteriores à última ação registrada para a
+   placa são removidos (`stats.filtradosPorHistorico`).
+6. **Regra Dinon (auto-descarte)**: transportadoras com "dinon" têm fumo
+   auto-descartado em background (`stats.autoDescartes`).
+7. **Severidade** = max(Gravíssimo > Grave > Normal) entre intervenção+reportar.
+8. **Turno predominante** (diurno 06–18 h, noturno 18–06 h).
+
+OmniLink e Maxtrack seguem o mesmo contrato com colunas/taxonomia próprias.
+
+### 10.2. Ações no Monitor
+
+Mutações via `useDriversQueue` (local + DB + realtime): `replaceDrivers`
+(upload/scrape, com DELETE escopado ao `platform_id`), `updateDriver` (zera
+bucket após intervenção/reportar/descarte), `bulkUpdateDrivers` (descarte em
+massa), `clearDrivers` (limpa fila). Placas com todos os buckets zerados
+permanecem na tabela (saem da UI por filtro).
+
+### 10.3. Critérios de notificação / badge
+
+`notificarCriticos()` dispara Notification API para drivers com `alertas >= 5`.
+No badge da Sidebar, Maxtrack conta a partir de **8** alertas; demais
+plataformas a partir de **5**.
 
 ---
 
-## 11. Personalização visual
+## 11. Integração Google Sheets (bidirecional)
 
-O antigo `TweaksPanel` FAB global foi removido. As preferências visuais agora
-moram no **popover ⚙ da barra de saudação do Dashboard** (ver §5.1 Tweaks
-popover). Todas seguem persistidas em `localStorage` com prefixo `mn_`:
-
-| Chave             | Valores                                                       | Aplicado por                                          |
-| ----------------- | ------------------------------------------------------------- | ----------------------------------------------------- |
-| `theme`           | `light` \| `dark` (default `dark`)                            | `useApp` + `data-theme` no `<html>`                   |
-| `density`         | `compact` \| `normal` \| `cozy`                               | `useApp` + `data-density` no `<html>`                 |
-| `accent`          | `vinho` \| `roxo` \| `azul` \| `verde` \| `ambar` \| `rosa`   | `useApp` + `applyAccent()` que seta vars `--accent-*` |
-| `platformId`      | `sascar` \| `maxtrack`                                        | Monitor (qual adapter está ativo)                     |
-| `mn_dash_*`       | SLA, compare, hourly, transp, classif, tech, exec, layout, tv | Dashboard-only (popover ⚙)                            |
-| `mn_dash_filters` | JSON `{tipo, resultado, empresa, operador, periodo}`          | Dashboard (FilterBar)                                 |
-
-Aliases `mode`/`vibe`/`rhythm` foram removidos com a desativação do TweaksPanel
-global — não eram aplicados em nenhum CSS ativo do Dashboard novo.
+- **Escrita** (`append-sheet`): "Inserir na planilha" e a trigger da
+  `intervencoes_sheet`. Range de detecção `A:H`; coluna I com fórmula de status;
+  aplica `resolveAlias()` (de-para). **Auth em camadas** (ver
+  [AUDITORIA-2026-05-29.md](./AUDITORIA-2026-05-29.md)): `service_role` exata →
+  `TRIGGER_SECRET` (env, comparação exata) → literal legado `SYSTEM_TRIGGER`
+  (só enquanto `TRIGGER_SECRET` não estiver provisionado) → sessão do operador.
+  > ⚠️ Pendência: provisionar `TRIGGER_SECRET` no Vault + env da função para
+  > fechar a brecha. Detalhes na auditoria.
+- **Leitura** (`read-sheet`): lê `A:P` de abas mensais (mês atual + anterior),
+  ignora linhas vazias, normaliza erros de fórmula, devolve `idPlataforma`
+  (coluna P) e `_row`. Usada pela Planilha Embedded e pelo histórico do Monitor.
+- Backup: `google-apps-script.js` aceita o mesmo payload da `append-sheet`.
 
 ---
 
-## 12. PWA
+## 12. Integração automática Sascar (Bookmarklet)
+
+Além do upload manual (`spreadsheet`), a Sascar pode ser integrada por **scraper
+com bookmarklet** (beta), porque o portal exige CAPTCHA no login. O operador faz
+login no portal, clica o bookmarklet (salvo na barra de favoritos) e o
+`AUTH_TOKEN` do `localStorage` é enviado via `#sascar-token=…`, capturado por
+`SascarTokenHandler` em `App.jsx` e salvo em `profiles.sascar_token`. O MedNet
+renova o token automaticamente; se expirar (idle > 30 min), pede novo clique.
+
+**Mapeamento de alarmes** (`categoryInfoList[0].categoryId`): `100574`
+INTERVENÇÃO · `100575` REPORTAR · `100573` TÉCNICO. Severidade por `levelId`:
+`15` Gravíssimo · `14` Grave · `13` Normal. Velocidade em 1/10 km/h; `< 10 km/h`
+filtrado. Falsos positivos excluídos no servidor (`alarmLevelIds: '15,14,13'`).
+Guia completo de plataformas em [docs/PLATFORMS.md](./PLATFORMS.md).
+
+---
+
+## 13. Integrações de IA
+
+Dois usos, ambos via edge function (Deno) lendo provedor/modelo de
+`app_settings.ai_config` e a chave de `ai_credentials`:
+
+- `generate-dossier-report` — laudo clínico-operacional do motorista (Dossiês).
+- `generate-report` — relatório executivo por transportadora (Relatórios IA).
+
+Provedores: **Anthropic (Claude)** e **Google (Gemini)**. A configuração padrão
+fica em `/admin/ia`; cada gerador pode sobrescrever provedor/modelo na hora.
+
+---
+
+## 14. WhatsApp (Cloud API / Meta)
+
+Toda a comunicação passa pelo Express (`server/whatsapp-routes.js`):
+
+- `GET/POST /api/whatsapp/credentials` — token Meta (admin).
+- `GET /api/whatsapp/templates` — templates homologados.
+- `POST /api/whatsapp/send` — dispara template (com variáveis) → grava
+  `whatsapp_dispatches` + custo estimado.
+- `GET /api/whatsapp/chats`, `/chats/:id/messages`, `/chats/:id/read`,
+  `/chats/:id/send`, `/chats/open` — inbox.
+- `GET/POST /api/whatsapp/webhook` — verificação (verify token
+  `mednet_verify_token`) e recebimento de mensagens/status da Meta.
+
+Regra de negócio central: **janela de 24 h** — fora dela, só template homologado
+reabre a conversa (ver §5.14).
+
+---
+
+## 15. Modo manutenção
+
+Admins ativam em `/admin/sistema/manutencao` (atualiza `app_settings.maintenance`).
+Realtime propaga; não-admins veem `MaintenancePage`; admins seguem com a UI e um
+chip "Plataforma em manutenção" no rodapé.
+
+---
+
+## 16. Personalização visual
+
+Preferências no popover ⚙ do Dashboard, persistidas em `localStorage` com
+prefixo `mn_`:
+
+| Chave             | Valores                                                       | Aplicado por                          |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------- |
+| `theme`           | `light` \| `dark` (default `dark`)                            | `useApp` + `data-theme` no `<html>`   |
+| `density`         | `compact` \| `normal` \| `cozy`                               | `useApp` + `data-density`             |
+| `accent`          | `vinho`/`roxo`/`azul`/`verde`/`ambar`/`rosa`                  | `useApp` + `applyAccent()`            |
+| `platformId`      | `sascar` \| `maxtrack` \| `omnilink`                          | Monitor (adapter ativo)               |
+| `mn_dash_*`       | SLA, compare, hourly, transp, classif, tech, exec, layout, tv | Dashboard (popover ⚙)                 |
+| `mn_dash_filters` | JSON dos filtros do Dashboard                                 | Dashboard (FilterBar)                 |
+| `mednet_analytics_*` | mês, comparação, severidade, datas, fontes                | Analytics                             |
+
+---
+
+## 17. PWA
 
 `vite-plugin-pwa` gera service worker e manifest. `usePWA` expõe o
-`beforeinstallprompt` para o botão "Instalar App" na sidebar.
+`beforeinstallprompt` para o botão "Instalar App" na Sidebar.
 
 ---
 
-## 13. Camada de plataformas (arquitetura)
-
-A pasta `src/platforms/` introduz o padrão **Adapter** para encapsular cada
-plataforma de monitoramento. O contrato suporta três modos de ingestão:
-
-- `spreadsheet` (Sascar): operador faz upload de xlsx/csv.
-- `scraper` (Sascar bookmarklet + Maxtrack): busca automática via Edge Function.
-- `api` (futuro): polling em endpoint REST com autenticação pública.
-
-O Monitor consulta o **registry** (`platforms/index.js`) para descobrir
-plataformas, exibe um seletor quando há mais de uma cadastrada, e despacha
-o parse para o adapter correto. Todas as Strings que antes diziam "Sascar"
-agora vêm da metadata do adapter (`name`, `portalUrl`, `sistema`,
-`uploadTitle`, etc.).
-
-📘 **Guia detalhado para adicionar novas plataformas:**
-[docs/PLATFORMS.md](./PLATFORMS.md)
-
----
-
-## 14. Atalhos de teclado
+## 18. Atalhos de teclado
 
 | Atalho          | Ação                        |
 | --------------- | --------------------------- |
 | `⌘K` / `Ctrl+K` | Foca busca global (sidebar) |
-| `Esc`           | Fecha modais                |
+| `Esc`           | Fecha modais / paleta       |
 
 ---
 
-## 15. Variáveis de ambiente
+## 19. Variáveis de ambiente
 
-Veja `.env.example`:
+**Frontend** (`.env`):
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- `VITE_API_URL` — URL do servidor Express de Analytics/WhatsApp.
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+**Servidor Express** (`server/.env`):
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PORT`
+- `ANALYTICS_ENGINE` (opcional; `rpc` por padrão no código, `js` força fallback).
 
-Edge Functions usam secrets gerenciados via Supabase CLI.
+**Edge Functions:** secrets via Supabase CLI (`TRIGGER_SECRET`, credenciais
+Google, etc.).
 
 ---
 
-## 16. Scripts npm
+## 20. Scripts npm
 
 ```bash
-npm run dev       # Servidor dev (Vite)
-npm run build     # Build de produção
-npm run preview   # Servir o build
-npm run lint      # ESLint
+# Frontend
+npm run dev        # Servidor dev (Vite)
+npm run build      # Build de produção
+npm run preview    # Servir o build
+npm run lint       # ESLint
+npm test           # Vitest (parsers de plataforma + fatigueParser)
+
+# Backend
+cd server && npm start   # Servidor Express
 ```
 
 ---
 
-## 17. Roadmap / Plataformas futuras
+## 21. Roadmap / status das plataformas
+
+**Monitor (realtime):**
 
 | Plataforma | Modo                                | Status                     |
 | ---------- | ----------------------------------- | -------------------------- |
 | Sascar     | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper beta |
-| Maxtrack   | spreadsheet (upload manual)         | ✅ ativa                   |
-| Autotrack  | a definir                           | 📋 planejada               |
-| Trimble    | a definir                           | 📋 planejada               |
-| Cobli      | a definir                           | 📋 planejada               |
-| Horizon    | a definir                           | 📋 planejada               |
+| Maxtrack   | spreadsheet                         | ✅ ativa                   |
+| OmniLink   | spreadsheet                         | ✅ ativa                   |
+| Autotrack/Trimble/Cobli/Horizon | a definir              | 📋 planejadas              |
 
-Para integrar uma plataforma nova: copie `src/platforms/_template/`,
-implemente o(s) bloco(s) de ingestão e registre no `index.js`. Detalhes em
-[docs/PLATFORMS.md](./PLATFORMS.md).
+**Analytics (import):** MaxTrack, Sascar, Sascar JD, Sighra, Horizon, AutoTrac,
+OmniLink, Trimble — todas com detecção de layout no `fatigueParser.js`.
+
+Para integrar uma plataforma nova no Monitor: ver [docs/PLATFORMS.md](./PLATFORMS.md).
 
 ---
 
-## 18. Changelog — 2026-05-18 (Dashboard redesign + realtime end-to-end)
+## 22. Changelog
 
-### Novo
+### 2026-06-25 — Reestruturação de rotas, roles e remoção do RPA
 
-- **Dashboard "Gestão à Vista"** completo (§5.1): 4 KPIs, drills, Críticos & SLA, donut Tipo × Resultado, Hourly 24 h, Transportadoras, Produtividade, Banner SLA. Tudo realtime.
-- **Tabela `drivers_queue`** (§6) — fila compartilhada per-row com realtime, replica identity full, trigger touch_updated_at. Migration `20260518211646_drivers_queue.sql`.
-- **Hook `useDriversQueue`** — INSERT/UPDATE/DELETE subscription + backfill automático do `localStorage('mn_drivers_queue')` se DB vazio na primeira carga após migration.
-- **Tweaks popover do Dashboard** (§5.1) — substitui `TweaksPanel` global FAB (removido). SLA, comparação, layout, executivo, seções, tema/accent/densidade, atalho admin pra aliases. Persistência granular em `mn_dash_*`.
-- **FilterBar 100 % funcional** (§5.1): tipo/resultado/empresa/operador/período cabeiam todos os widgets + ONTEM. Counts dos chips absolutos. Persistido em `mn_dash_filters`.
-- **Topbar reformulada** (§5.1): brand integrado (M MedNet) à esquerda, turno dinâmico no breadcrumb, data removida (dedup com greet do Dashboard).
-- **`useCarrierAliases` ganhou realtime** (§6) — admin edita aliases, Dashboard atualiza sem reload.
+- **React Router**: navegação por URL; `App.jsx` com `<Routes>` + lazy/Suspense;
+  `NAV_ITEMS` ganharam `path`. Fim do `activePanel`.
+- **Hierarquia de roles** `operador < lider < admin` (`ROLE_LEVEL`); guards
+  `RoleGuard`/`AdminGuard`; Sidebar filtra por `minRole`. Cross-Check e Automações
+  viraram líder+.
+- **Admin decomposto**: `Admin.jsx` removido; `/admin` com `AdminLayout` +
+  sub-rotas (analytics, relatorios, **auditoria**, equipe, integracoes, ia,
+  sistema). Auditoria com paginação.
+- **RPA removido**: `rpa_credentials` dropada, `rpa_config` apagada, RpaCard
+  retirado de Automações/Monitor (migration `20260625102000`).
 
-### Mudanças de semântica
+### Antes (já consolidado, agora documentado aqui)
 
-- **Em aberto agora** e **Fechados hoje** passam a incluir o bucket **reportar** (antes era só intervenção).
-- **Reincidência** continua restrita a `tipo='intervencao'` (não faz sentido pra reportar).
-- **Limiar de críticos** virou per-plataforma: Sascar ≥ 5, Maxtrack ≥ 8.
-- **Transportadora ranking** + chips de filtro usam `resolveAlias` (consistência com Sheets/Admin).
-- **HourlyActivity** agora cobre 24 h (era 06–19 h) — turno noturno deixou de ser invisível.
-- **Operador filter** agora vem de `useProfiles()` (equipe atual), não do histórico de `atendimentos.operador_nome`.
-- **`ONTEM.emAberto`** virou heurística declarada (placas com evento ontem que não tiveram intervenção/reportar fechado no dia) — proxy, não snapshot.
-- **`PANEL_TITLES.dashboard`**: t='Dashboard · Gestão à Vista', s='Visão da diretoria' (turno colado dinamicamente pelo Topbar).
-
-### Removido
-
-- `src/components/TweaksPanel.jsx` (FAB global)
-- `setDrivers` direto no `context.jsx` (substituído pelos métodos do hook)
-- `aliases mode/vibe/rhythm` do TweaksPanel global (não eram aplicados em CSS ativo)
+- **Backend Express** (`server/`) para Analytics + WhatsApp.
+- **Analytics reescrito** sobre `driver_events` (import de 8 plataformas via
+  `fatigueParser.js`, agregação por RPC + rollup `analytics_daily`, comparação
+  plataformas/empresas, export CSV/HTML). Ver
+  [analytics-rpc-progress.md](./analytics-rpc-progress.md).
+- **Planilha Embedded** (`/planilha`, `intervencoes_sheet`), **Dossiês Clínicos**
+  (`/dossies`, `driver_health` + telemetria + laudo IA), **Relatórios IA**
+  (`/admin/relatorios`).
+- **WhatsApp Cloud API** (chat, disparos, templates, janela 24 h, webhook) +
+  tabelas `whatsapp_*`.
+- **IA** (Anthropic/Gemini) via `ai_credentials` + `app_settings.ai_config`.
+- **OmniLink** adicionada ao Monitor (3ª plataforma realtime).
+- Edge functions novas: `read-sheet`, `generate-report`, `generate-dossier-report`.
+- Auditoria de código/segurança e correções da Planilha Embutida em
+  [AUDITORIA-2026-05-29.md](./AUDITORIA-2026-05-29.md) (inclui a pendência do
+  `TRIGGER_SECRET`).
 
 ### Known limitations
 
-- `ONTEM.emAberto` é heurística — pra precisão real, faltaria snapshot diário automatizado à meia-noite.
-- Produtividade não rastreia tempo médio de atendimento (precisaria coluna `duracao_seg` em `atendimentos` + capturar `started_at` no Monitor).
-- Sem indicador de "operador X está com a placa Y" — para reduzir colisão de dois operadores atendendo o mesmo motorista, faltaria tabela `atendimentos_em_andamento` (com TTL).
-- Status pill do Topbar ("Fadiga Zero · Online") segue hardcoded — não reflete saúde real de backend/scraper.
+- Planilha Embedded: excluir linha não propaga delete para o Google Sheets.
+- `append-sheet` ainda lê o range inteiro por inserção (O(n)).
+- Modo `compare` do Analytics multi-plataforma já tem caminho RPC; conferir
+  paridade ao evoluir.
+- Status pill do Topbar ("Fadiga Zero · Online") segue hardcoded.
