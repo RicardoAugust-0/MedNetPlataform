@@ -11,8 +11,15 @@ import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
 import { DataProvider } from "./components/DataProvider.jsx";
-const Admin = lazy(() => import("./modules/Admin.jsx"));
 const AdminLayout = lazy(() => import("./modules/admin/AdminLayout.jsx"));
+const AdminEquipe = lazy(() => import("./modules/admin/EquipeTab.jsx"));
+const AdminIntegracoes = lazy(() => import("./modules/admin/IntegracoesLayout.jsx"));
+const AdminCredenciais = lazy(() => import("./modules/admin/IntegracoesCredenciais.jsx"));
+const AdminTransportadoras = lazy(() => import("./modules/admin/IntegracoesTransportadoras.jsx"));
+const AdminIA = lazy(() => import("./modules/admin/AiCredentials.jsx"));
+const AdminSistema = lazy(() => import("./modules/admin/SistemaLayout.jsx"));
+const AdminManutencao = lazy(() => import("./modules/admin/SistemaManutencao.jsx"));
+const AdminLimpeza = lazy(() => import("./modules/admin/SistemaLimpeza.jsx"));
 const Agenda = lazy(() => import("./modules/Agenda.jsx"));
 const Analytics = lazy(() => import("./modules/Analytics.jsx"));
 const CrossCheck = lazy(() => import("./modules/CrossCheck.jsx"));
@@ -193,10 +200,18 @@ function AppShell() {
                     <Route index element={<Navigate to="analytics" replace />} />
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="relatorios" element={<Reports />} />
-                    <Route path="equipe" element={<Admin section="equipe" />} />
-                    <Route path="integracoes" element={<Admin section="integracoes" />} />
-                    <Route path="ia" element={<Admin section="ia" />} />
-                    <Route path="sistema" element={<Admin section="sistema" />} />
+                    <Route path="equipe" element={<AdminEquipe />} />
+                    <Route path="integracoes" element={<AdminIntegracoes />}>
+                      <Route index element={<Navigate to="credenciais" replace />} />
+                      <Route path="credenciais" element={<AdminCredenciais />} />
+                      <Route path="transportadoras" element={<AdminTransportadoras />} />
+                    </Route>
+                    <Route path="ia" element={<AdminIA />} />
+                    <Route path="sistema" element={<AdminSistema />}>
+                      <Route index element={<Navigate to="manutencao" replace />} />
+                      <Route path="manutencao" element={<AdminManutencao />} />
+                      <Route path="limpeza" element={<AdminLimpeza />} />
+                    </Route>
                   </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
