@@ -71,7 +71,7 @@ export const PLATFORM_COLUMN_MAPS = {
     plate:          ['Placa'],
     criticality:    ['Severidade'],
     type:           ['Evento'],
-    classification: ['Validação', 'Classificação', 'Status'],
+    classification: ['Status', 'Validação', 'Classificação'],
     speed:          ['Velocidade', 'Velocidade (km/h)'],
     location:       ['Localidade'],
     fleet:          ['Transportadora', 'Frota/Empresa', 'Cliente'],
