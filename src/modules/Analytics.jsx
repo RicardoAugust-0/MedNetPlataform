@@ -687,19 +687,16 @@ export default function Analytics() {
       const dupsFiltered = rowsToInsert.length - uniqueRows.length;
       console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
 
-      // 2. Inserir no banco de dados usando chunks menores, com retentativas automáticas e delay de respiro
-      const CHUNK_SIZE = 400;
+      // 2. Inserir no banco de dados usando chunks adaptativos para evitar statement timeout
+      let chunkSize = 400; // Começa com 400
+      let i = 0;
       const totalRows = uniqueRows.length;
       let lastReportedProgress = 0;
 
-      for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
-        const chunk = uniqueRows.slice(i, i + CHUNK_SIZE);
+      while (i < totalRows) {
+        const chunk = uniqueRows.slice(i, i + chunkSize);
         
-        let attempts = 3;
-        let success = false;
-        let lastError = null;
-
-        while (attempts > 0 && !success) {
+        try {
           const { error: upsertError } = await supabase
             .from('driver_events')
             .upsert(chunk, {
@@ -707,31 +704,44 @@ export default function Analytics() {
               ignoreDuplicates: true,
             });
 
-          if (!upsertError) {
-            success = true;
+          if (upsertError) {
+            throw upsertError;
+          }
+
+          // Se teve sucesso, avança no vetor
+          i += chunk.length;
+
+          // Dar feedback visual a cada ~10% de progresso
+          const progress = Math.min(Math.round((i / totalRows) * 100), 100);
+          if (progress - lastReportedProgress >= 10 || progress === 100) {
+            lastReportedProgress = progress;
+            toast(`Gravando dados: ${progress}% concluído (${i.toLocaleString('pt-BR')}/${totalRows.toLocaleString('pt-BR')})...`, 'info');
+          }
+
+          // Delay curto de respiro
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        } catch (err) {
+          const errCodeStr = String(err?.code || '');
+          const errMessageStr = String(err?.message || err || '').toLowerCase();
+          const errStatus = err?.status;
+
+          // Se for erro de timeout ou erro de gateway (500/504), e o lote ainda for redutível
+          if ((errCodeStr === '57014' || 
+               errMessageStr.includes('timeout') || 
+               errMessageStr.includes('failed to fetch') ||
+               errStatus === 500 || errStatus === 504) && chunkSize > 25) {
+            const oldSize = chunkSize;
+            chunkSize = Math.max(25, Math.floor(chunkSize / 2));
+            console.warn(`[Import] Instabilidade/Timeout detectado com lote de ${oldSize}. Reduzindo lote para ${chunkSize} e retentando...`, err);
+            toast(`Ajustando velocidade do banco (lote reduzido para ${chunkSize})...`, 'warning');
+            
+            // Pausa de 1.5s antes de retentar com lote menor
+            await new Promise((resolve) => setTimeout(resolve, 1500));
           } else {
-            lastError = upsertError;
-            attempts--;
-            if (attempts > 0) {
-              console.warn(`[Import] Falha no chunk (tentativa falhou). Retentando em 1.5s... Restam ${attempts} tentativas.`, upsertError);
-              await new Promise((resolve) => setTimeout(resolve, 1500));
-            }
+            // Se for outro erro definitivo ou o lote já estiver no tamanho mínimo (25), falha definitivamente
+            throw err;
           }
         }
-
-        if (!success) {
-          throw lastError;
-        }
-
-        // Dar feedback visual a cada ~10% de progresso
-        const progress = Math.min(Math.round(((i + chunk.length) / totalRows) * 100), 100);
-        if (progress - lastReportedProgress >= 10 || progress === 100) {
-          lastReportedProgress = progress;
-          toast(`Gravando dados: ${progress}% concluído (${(i + chunk.length).toLocaleString('pt-BR')}/${totalRows.toLocaleString('pt-BR')})...`, 'info');
-        }
-
-        // Delay curto para evitar estressar a pool de conexões do banco de dados
-        await new Promise((resolve) => setTimeout(resolve, 60));
       }
 
       try {
