@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { PLATFORMS } from '../utils/fatigueParser.js';
 import { supabase } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
+import { API_URL, apiFetch, buildAnalyticsQuery } from '../lib/analyticsApi.js';
 
 import '../styles/analytics.css';
 
@@ -17,8 +18,6 @@ import AnalyticsHeader from './analytics/components/AnalyticsHeader.jsx';
 import SourceChips from './analytics/components/SourceChips.jsx';
 import ComparisonModal from './analytics/components/ComparisonModal.jsx';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
 export default function Analytics() {
   const [sources, setSources] = useState([]);
   const [d, setD] = useState(null);
@@ -30,7 +29,16 @@ export default function Analytics() {
   const [availableCompanies, setAvailableCompanies] = useState([]);
   const [availableTypes, setAvailableTypes] = useState([]);
 
-  const [activeId, setActiveId] = useState(null);
+  // Restaura a fonte ativa direto no estado inicial: assim o effect reativo já
+  // faz a carga inicial correta, sem precisar de um segundo effect de mount
+  // (que causava duplo fetch concorrente).
+  const [activeId, setActiveId] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_active_id') || null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [activeKpi, setActiveKpi] = useState(null);
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -97,10 +105,17 @@ export default function Analytics() {
     activeId: null,
     compare: false,
     comparePlatformIds: [],
+    compareMode: 'platforms',
+    companyComparePlatform: '',
+    companyCompareList: [],
     selectedMonth: null,
     startDate: '',
     endDate: ''
   });
+  // Sequência de carregamento: descarta respostas fora de ordem (a última
+  // requisição emitida vence, não a última a resolver).
+  const loadSeqRef = useRef(0);
+  const loadAbortRef = useRef(null);
 
   const [selectedCompany, setSelectedCompany] = useState('');
   const [compareCompanies, setCompareCompanies] = useState(() => {
@@ -213,6 +228,14 @@ export default function Analytics() {
 
 
   const loadFromDatabase = async (preferredPlatformId = null, isSilent = false) => {
+    // Guard de corrida: cancela a requisição anterior e marca esta como a atual.
+    // Respostas fora de ordem (de uma seleção antiga) são descartadas.
+    if (loadAbortRef.current) loadAbortRef.current.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
+
     if (!isSilent) {
       setLoading(true);
     }
@@ -220,27 +243,31 @@ export default function Analytics() {
       // 1. Fetch platform counts from backend
       let counts = {};
       try {
-        const res = await fetch(`${API_URL}/api/platforms`);
+        const res = await apiFetch('/api/platforms', { signal: controller.signal });
         if (res.ok) {
           counts = await res.json();
         } else {
           throw new Error('Falha ao obter contagem do servidor');
         }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.warn('[MedNet] Fallback para Supabase local para contagem:', err);
-        // Fallback to client-side Supabase query
+        // Fallback client-side. `.or(severidade.is.null,severidade.neq.Leve)`
+        // preserva linhas com severidade NULL — mesma semântica do rollup e do
+        // excludeLeve; `.neq` sozinho descartaria os NULLs e subnotificaria.
         const promises = PLATFORMS.map(async (p) => {
           const { count, error } = await supabase
             .from('driver_events')
             .select('*', { count: 'exact', head: true })
             .eq('platform_id', p.id)
-            .neq('severidade', 'Leve');
+            .or('severidade.is.null,severidade.neq.Leve');
           if (!error && count !== null) {
             counts[p.id] = count;
           }
         });
         await Promise.all(promises);
       }
+      if (isStale()) return;
       setPlatformCounts(counts);
 
       // Mantém apenas plataformas de comparação que realmente têm dados — evita
@@ -301,32 +328,29 @@ export default function Analytics() {
         return;
       }
 
-      // Load analytics from backend Express server
-      let url = `${API_URL}/api/analytics?`;
-      if (compare) {
-        const platformIds = [...new Set(compareSources.map((s) => s.platformId))];
-        url += `compare=true&platformIds=${platformIds.join(',')}`;
-        url += `&sources=${encodeURIComponent(JSON.stringify(compareSources))}`;
-      } else {
-        url += `platformId=${targetPlatformId}`;
-        if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
-      }
-      if (activeMonth) url += `&month=${activeMonth}`;
-      if (activeMonth === 'custom' && startDate && endDate) {
-        url += `&startDate=${startDate}&endDate=${endDate}`;
-      }
-      if (selectedSeverity) url += `&severity=${selectedSeverity}`;
-      if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
-      if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
+      // Load analytics from backend Express server (builder unificado).
+      const qs = buildAnalyticsQuery({
+        compare,
+        sources: compareSources,
+        platformId: targetPlatformId,
+        company: selectedCompany,
+        month: activeMonth,
+        startDate,
+        endDate,
+        severity: selectedSeverity,
+        classification: selectedClassification,
+        eventType: selectedType,
+      });
 
-      const res = await fetch(url);
+      const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || 'Erro no servidor de analytics');
       }
 
       const data = await res.json();
-      
+      if (isStale()) return;
+
       setAvailableMonths(data.availableMonths || []);
       setAvailableCompanies(data.availableCompanies || []);
       setAvailableTypes(data.availableTypes || []);
@@ -359,23 +383,18 @@ export default function Analytics() {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('[MedNet] Erro ao carregar analíticos:', err);
       toast('Não foi possível carregar os dados de analytics: ' + (err.message || String(err)), 'error');
     } finally {
-      setLoading(false);
+      // Só a requisição atual controla o loading — uma obsoleta que terminou
+      // (ou foi abortada) não deve desligar o spinner de uma carga mais nova.
+      if (!isStale()) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    // Read saved active_id if present
-    const saved = localStorage.getItem('mednet_analytics_active_id');
-    if (saved && !activeId && !compare) {
-      setActiveId(saved);
-      loadFromDatabase(saved.replace('src-', ''), false);
-    } else {
-      loadFromDatabase(null, false);
-    }
-  }, []);
+  // A carga inicial é feita pelo effect reativo abaixo (activeId já vem
+  // restaurado do localStorage no useState), evitando um segundo fetch de mount.
 
   // Update dates automatically when selecting a dynamic month
   useEffect(() => {
@@ -462,19 +481,39 @@ export default function Analytics() {
     return sources.find((s) => s.id === activeId) || null;
   }, [sources, activeId]);
 
-  const exportToCSV = () => {
+  const exportToCSV = async () => {
     if (!activeSource) return;
-    let url = `${API_URL}/api/analytics/csv?platformId=${activeSource.platformId}`;
-    if (selectedMonth) url += `&month=${selectedMonth}`;
-    if (selectedMonth === 'custom' && startDate && endDate) {
-      url += `&startDate=${startDate}&endDate=${endDate}`;
+    // Via fetch+blob (não window.location.href) para enviar o header de auth —
+    // o endpoint de CSV agora exige token admin.
+    const qs = buildAnalyticsQuery({
+      platformId: activeSource.platformId,
+      company: selectedCompany,
+      month: selectedMonth,
+      startDate,
+      endDate,
+      severity: selectedSeverity,
+      classification: selectedClassification,
+      eventType: selectedType,
+    });
+    try {
+      const res = await apiFetch(`/api/analytics/csv?${qs}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao gerar o CSV');
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', `relatorio_fadiga_${activeSource.platformId}_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('[MedNet] Erro ao exportar CSV:', err);
+      toast('Não foi possível exportar o CSV: ' + (err.message || String(err)), 'error');
     }
-    if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
-    if (selectedSeverity) url += `&severity=${selectedSeverity}`;
-    if (selectedClassification && selectedClassification !== 'all') url += `&classification=${selectedClassification}`;
-    if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
-
-    window.location.href = url;
   };
 
   const exportToHTML = async () => {
@@ -648,21 +687,41 @@ export default function Analytics() {
       const dupsFiltered = rowsToInsert.length - uniqueRows.length;
       console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
 
-      // 2. Inserir no banco de dados usando chunks menores e delay entre requisições para evitar statement timeout
+      // 2. Inserir no banco de dados usando chunks menores, com retentativas automáticas e delay de respiro
       const CHUNK_SIZE = 400;
       const totalRows = uniqueRows.length;
       let lastReportedProgress = 0;
 
       for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
         const chunk = uniqueRows.slice(i, i + CHUNK_SIZE);
-        const { error: upsertError } = await supabase
-          .from('driver_events')
-          .upsert(chunk, {
-            onConflict: 'platform_id,placa,ocorrido_em,nome_evento',
-            ignoreDuplicates: true,
-          });
+        
+        let attempts = 3;
+        let success = false;
+        let lastError = null;
 
-        if (upsertError) throw upsertError;
+        while (attempts > 0 && !success) {
+          const { error: upsertError } = await supabase
+            .from('driver_events')
+            .upsert(chunk, {
+              onConflict: 'platform_id,placa,ocorrido_em,nome_evento',
+              ignoreDuplicates: true,
+            });
+
+          if (!upsertError) {
+            success = true;
+          } else {
+            lastError = upsertError;
+            attempts--;
+            if (attempts > 0) {
+              console.warn(`[Import] Falha no chunk (tentativa falhou). Retentando em 1.5s... Restam ${attempts} tentativas.`, upsertError);
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+          }
+        }
+
+        if (!success) {
+          throw lastError;
+        }
 
         // Dar feedback visual a cada ~10% de progresso
         const progress = Math.min(Math.round(((i + chunk.length) / totalRows) * 100), 100);
@@ -676,7 +735,7 @@ export default function Analytics() {
       }
 
       try {
-        await fetch(`${API_URL}/api/clear-cache`, {
+        await apiFetch('/api/clear-cache', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ platformId }),
@@ -696,7 +755,11 @@ export default function Analytics() {
       await loadFromDatabase(platformId);
     } catch (err) {
       console.error('Erro ao salvar no banco:', err);
-      toast('Erro ao salvar no banco de dados: ' + (err.message || String(err)), 'error');
+      const errMsg = err?.message || String(err);
+      const errDetails = err?.details ? ` | Detalhes: ${err.details}` : '';
+      const errHint = err?.hint ? ` | Dica: ${err.hint}` : '';
+      const errCode = err?.code ? ` (Código: ${err.code})` : '';
+      toast(`Erro ao salvar no banco de dados: ${errMsg}${errDetails}${errHint}${errCode}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -712,13 +775,18 @@ export default function Analytics() {
     }
     // Carrega opções (plataformas + suas empresas) para o modal.
     try {
-      const res = await fetch(`${API_URL}/api/compare-options`);
+      const res = await apiFetch('/api/compare-options');
       if (res.ok) {
         const opts = await res.json();
         setCompareOptions(Array.isArray(opts) ? opts : []);
+      } else {
+        throw new Error('Falha ao obter opções de comparação');
       }
     } catch (e) {
       console.warn('[MedNet] Falha ao carregar opções de comparação:', e);
+      // Modo "plataformas" ainda funciona sem as opções; só o modo "empresas"
+      // depende delas. Avisa o usuário em vez de abrir o modal mudo.
+      toast('Não foi possível carregar as empresas para comparação. O modo por empresa pode ficar indisponível.', 'warning');
     }
     // Inicializa o estado temporário do modal a partir da seleção atual.
     setTempMode(compareMode);

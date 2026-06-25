@@ -7,6 +7,52 @@ let carrierAliasesCache = null;
 const resultCache = new Map();
 const RESULT_TTL = 5 * 60 * 1000;
 
+// Hierarquia de acesso (espelha src/data.js ROLE_LEVEL e o AdminGuard do front).
+const ROLE_LEVELS = { operador: 0, lider: 1, admin: 2 };
+
+// Middleware: exige um JWT Supabase válido no header Authorization e um role
+// igual/superior a `minRole`. O front (Analytics) é admin-only, mas o front
+// sozinho não protege nada — esta API roda com service_role (ignora RLS), então
+// SEM este gate qualquer um alcançaria os dados e o CSV com PII. Validação via
+// supabase.auth.getUser(token) + leitura de profiles.role.
+function requireRole(supabase, minRole) {
+  const min = ROLE_LEVELS[minRole] ?? 99;
+  return async (req, res, next) => {
+    try {
+      const header = req.headers.authorization || '';
+      const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+      if (!token) {
+        return res.status(401).json({ error: 'Autenticação obrigatória.' });
+      }
+
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userData?.user) {
+        return res.status(401).json({ error: 'Sessão inválida ou expirada.' });
+      }
+
+      const { data: profile, error: profErr } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userData.user.id)
+        .maybeSingle();
+      if (profErr || !profile) {
+        return res.status(403).json({ error: 'Perfil não encontrado.' });
+      }
+
+      if ((ROLE_LEVELS[profile.role] ?? 0) < min) {
+        return res.status(403).json({ error: 'Acesso negado: nível de permissão insuficiente.' });
+      }
+
+      req.authUser = userData.user;
+      req.authRole = profile.role;
+      next();
+    } catch (err) {
+      console.error('[MedNet Backend] Erro na verificação de acesso:', err);
+      return res.status(500).json({ error: 'Erro na verificação de acesso.' });
+    }
+  };
+}
+
 // Fetch and cache carrier aliases
 async function getCarrierAliases(supabase) {
   if (carrierAliasesCache && (Date.now() - carrierAliasesCache.timestamp < 5 * 60 * 1000)) {
@@ -198,8 +244,11 @@ function filterRows(rows, { company, severity, month, startDate, endDate, classi
 }
 
 export function registerAnalyticsRoutes(app, supabase) {
+  // Analytics é restrito a admin (espelha o AdminGuard de /admin/analytics).
+  const requireAdmin = requireRole(supabase, 'admin');
+
   // 1. Get platform counts from the database
-  app.get('/api/platforms', async (req, res) => {
+  app.get('/api/platforms', requireAdmin, async (req, res) => {
     try {
       // Contagens (eventos ativos por plataforma) servidas pelo rollup —
       // uma RPC, sem varrer driver_events. Fallback: head count por plataforma.
@@ -210,11 +259,14 @@ export function registerAnalyticsRoutes(app, supabase) {
 
       const counts = {};
       const promises = PLATFORMS.map(async (p) => {
+        // `is distinct from 'Leve'` preserva linhas com severidade NULL — bate com
+        // o rollup/índices parciais e com o excludeLeve do JS. `.neq` sozinho
+        // descartaria os NULLs e subnotificaria a contagem.
         const { count, error } = await supabase
           .from('driver_events')
           .select('*', { count: 'exact', head: true })
           .eq('platform_id', p.id)
-          .neq('severidade', 'Leve');
+          .or('severidade.is.null,severidade.neq.Leve');
         if (!error && count !== null) {
           counts[p.id] = count;
         }
@@ -229,7 +281,7 @@ export function registerAnalyticsRoutes(app, supabase) {
 
   // 1b. Opções de comparação: plataformas (com contagem) e suas empresas.
   // Alimenta o modal de comparação (modo "empresas" precisa das empresas por plataforma).
-  app.get('/api/compare-options', async (req, res) => {
+  app.get('/api/compare-options', requireAdmin, async (req, res) => {
     try {
       const aliases = await getCarrierAliases(supabase);
       const { data: counts, error: cErr } = await supabase.rpc('analytics_platform_counts');
@@ -251,7 +303,7 @@ export function registerAnalyticsRoutes(app, supabase) {
   });
 
   // 2. Fetch aggregated analytics
-  app.get('/api/analytics', async (req, res) => {
+  app.get('/api/analytics', requireAdmin, async (req, res) => {
     const {
       platformId, compare, platformIds, month, startDate, endDate,
       company, severity, classification, eventType
@@ -453,7 +505,7 @@ export function registerAnalyticsRoutes(app, supabase) {
   });
 
   // 3. Export filtered data as CSV
-  app.get('/api/analytics/csv', async (req, res) => {
+  app.get('/api/analytics/csv', requireAdmin, async (req, res) => {
     const {
       platformId, month, startDate, endDate, company, severity, classification, eventType
     } = req.query;
@@ -502,7 +554,7 @@ export function registerAnalyticsRoutes(app, supabase) {
   });
 
   // 4. Clear cache (triggered when new data is imported)
-  app.post('/api/clear-cache', (req, res) => {
+  app.post('/api/clear-cache', requireAdmin, (req, res) => {
     const { platformId } = req.body || req.query;
 
     if (platformId) {

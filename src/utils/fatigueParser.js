@@ -52,7 +52,7 @@ export const FIELD_DEFS = [
   { key: 'treatEnd',       label: 'Fim da tratativa', req: false,
     aliases: ['fim da tratativa', 'fim tratativa', 'finalizado em', 'encerramento', 'data fim tratativa', 'conclusao', 'data finalizacao evento'] },
   { key: 'description',    label: 'Descrição / Categoria', req: false,
-    aliases: ['descricao', 'categoria', 'description', 'category'] },
+    aliases: ['descricao', 'categoria', 'description', 'category', 'justificativa'] },
 ];
 
 // ── Mapas determinísticos de colunas por plataforma conhecida ──
@@ -119,13 +119,13 @@ export const PLATFORM_COLUMN_MAPS = {
     plate:          ['Placa / Empurrador'],
     criticality:    ['Gravidade'],
     type:           ['Evento'],
-    classification: ['Avaliação', 'Justificativa', 'Status'],
+    classification: ['Avaliação', 'Status'],
     speed:          ['Velocidade'],
     location:       ['Local'],
     fleet:          ['Transportadora / Empresa de Navegação', 'Filial'],
     evidence:       ['Data/Hora Disponibilidade Vídeo'],
     treatStart:     ['Data/Hora Publicação'],
-    description:    ['Descrição'],
+    description:    ['Justificativa', 'Descrição'],
   },
 };
 

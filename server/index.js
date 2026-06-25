@@ -10,7 +10,13 @@ dotenv.config({ path: '../.env' });
 dotenv.config();
 
 const app = express();
-app.use(cors());
+// CORS: por padrão permissivo (compat). Defina CORS_ORIGIN (lista separada por
+// vírgula) para travar a API à(s) origem(ns) do front em produção. A proteção
+// real das rotas é o middleware de auth/role — CORS é só defesa-em-profundidade.
+const corsAllowed = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
+  : null;
+app.use(cors(corsAllowed ? { origin: corsAllowed } : {}));
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
