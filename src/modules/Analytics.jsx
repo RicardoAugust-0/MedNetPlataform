@@ -648,9 +648,12 @@ export default function Analytics() {
       const dupsFiltered = rowsToInsert.length - uniqueRows.length;
       console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
 
-      // 2. Inserir no banco de dados usando chunks menores (500 em vez de 2500) para evitar statement timeout
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < uniqueRows.length; i += CHUNK_SIZE) {
+      // 2. Inserir no banco de dados usando chunks menores e delay entre requisições para evitar statement timeout
+      const CHUNK_SIZE = 400;
+      const totalRows = uniqueRows.length;
+      let lastReportedProgress = 0;
+
+      for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
         const chunk = uniqueRows.slice(i, i + CHUNK_SIZE);
         const { error: upsertError } = await supabase
           .from('driver_events')
@@ -660,6 +663,16 @@ export default function Analytics() {
           });
 
         if (upsertError) throw upsertError;
+
+        // Dar feedback visual a cada ~10% de progresso
+        const progress = Math.min(Math.round(((i + chunk.length) / totalRows) * 100), 100);
+        if (progress - lastReportedProgress >= 10 || progress === 100) {
+          lastReportedProgress = progress;
+          toast(`Gravando dados: ${progress}% concluído (${(i + chunk.length).toLocaleString('pt-BR')}/${totalRows.toLocaleString('pt-BR')})...`, 'info');
+        }
+
+        // Delay curto para evitar estressar a pool de conexões do banco de dados
+        await new Promise((resolve) => setTimeout(resolve, 60));
       }
 
       try {
