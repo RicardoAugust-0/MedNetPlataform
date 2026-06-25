@@ -511,6 +511,11 @@ export function useAnalyticsState() {
 
           i += chunk.length;
 
+          // Recupera gradualmente o tamanho do lote em caso de sucesso
+          if (chunkSize < 1000) {
+            chunkSize = Math.min(1000, chunkSize + 100);
+          }
+
           const progress = Math.min(Math.round((i / totalRows) * 100), 100);
           if (progress - lastReportedProgress >= 10 || progress === 100) {
             lastReportedProgress = progress;
