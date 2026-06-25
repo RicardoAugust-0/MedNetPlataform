@@ -477,7 +477,7 @@ export default function Analytics() {
     window.location.href = url;
   };
 
-  const exportToHTML = () => {
+  const exportToHTML = async () => {
     const container = document.querySelector('.analytics-container');
     if (!container) return;
 
@@ -496,6 +496,8 @@ export default function Analytics() {
           img.style.cssText = clonedCanvas.style.cssText;
           img.style.maxWidth = '100%';
           img.style.height = 'auto';
+          img.width = origCanvas.width;
+          img.height = origCanvas.height;
           img.className = clonedCanvas.className;
           clonedCanvas.replaceWith(img);
         } catch (e) {
@@ -538,17 +540,35 @@ export default function Analytics() {
 
     // Gather stylesheet contents to make it self-contained
     let stylesHtml = '';
-    for (const sheet of document.styleSheets) {
-      try {
-        let rules = [];
-        for (const rule of sheet.cssRules) {
-          rules.push(rule.cssText);
+
+    // 1. Copy all style tag contents directly
+    document.querySelectorAll('style').forEach((tag) => {
+      stylesHtml += `<style>${tag.textContent || tag.innerHTML}</style>\n`;
+    });
+
+    // 2. Fetch external same-origin stylesheet contents and embed them, keep cross-origin link tags
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+    const linkStyles = await Promise.all(
+      links.map(async (link) => {
+        try {
+          const href = link.href;
+          // If it's a relative URL or on the same origin, we can fetch its content
+          if (href.startsWith(window.location.origin) || !href.startsWith('http')) {
+            const res = await fetch(href);
+            if (res.ok) {
+              const cssText = await res.text();
+              return `<style data-href="${href}">${cssText}</style>`;
+            }
+          }
+          // Fallback for cross-origin links
+          return `<link rel="stylesheet" href="${href}" />`;
+        } catch (err) {
+          // If fetch fails, keep the link tag
+          return `<link rel="stylesheet" href="${link.href}" />`;
         }
-        stylesHtml += `<style>${rules.join('\\n')}</style>\n`;
-      } catch (e) {
-        // Ignore cross-origin stylesheet errors
-      }
-    }
+      })
+    );
+    stylesHtml += linkStyles.join('\n');
 
     // Capture active theme
     const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
@@ -567,9 +587,9 @@ export default function Analytics() {
   ${stylesHtml}
   <style>
     body {
-      background-color: var(--background, #0b0f14);
+      background-color: var(--bg-app, #0d0c0d);
       color: var(--text-primary, #ffffff);
-      font-family: 'DM Sans', 'Poppins', sans-serif;
+      font-family: var(--font-sans, 'DM Sans', 'Poppins', sans-serif);
       margin: 0;
       padding: 24px;
       display: flex;
