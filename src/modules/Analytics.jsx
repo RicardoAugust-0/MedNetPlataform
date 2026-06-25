@@ -634,9 +634,24 @@ export default function Analytics() {
   const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
     setSaving(true);
     try {
-      const CHUNK_SIZE = 2500;
-      for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
-        const chunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
+      // 1. Deduplicar em memória antes de enviar ao banco de dados
+      const uniqueRows = [];
+      const seenKeys = new Set();
+      for (const r of rowsToInsert) {
+        const key = `${r.platform_id}|${r.placa}|${r.ocorrido_em}|${r.nome_evento}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          uniqueRows.push(r);
+        }
+      }
+
+      const dupsFiltered = rowsToInsert.length - uniqueRows.length;
+      console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
+
+      // 2. Inserir no banco de dados usando chunks menores (500 em vez de 2500) para evitar statement timeout
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < uniqueRows.length; i += CHUNK_SIZE) {
+        const chunk = uniqueRows.slice(i, i + CHUNK_SIZE);
         const { error: upsertError } = await supabase
           .from('driver_events')
           .upsert(chunk, {
@@ -659,9 +674,9 @@ export default function Analytics() {
 
       setModalOpen(false);
       toast(
-        `Planilha processada · ${platformName} · ${rowsToInsert.length.toLocaleString(
+        `Planilha processada · ${platformName} · ${uniqueRows.length.toLocaleString(
           'pt-BR'
-        )} registros salvos.`,
+        )} registros únicos salvos${dupsFiltered > 0 ? ` (${dupsFiltered.toLocaleString('pt-BR')} duplicados locais filtrados)` : ''}.`,
         'success'
       );
 
