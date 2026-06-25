@@ -6,6 +6,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 const ADMIN_TABS = [
   { to: 'analytics',   label: 'Analytics',        icon: 'ti-chart-pie' },
   { to: 'relatorios',  label: 'Relatórios IA',    icon: 'ti-report-analytics' },
+  { to: 'auditoria',   label: 'Auditoria',        icon: 'ti-history' },
   { to: 'equipe',      label: 'Equipe & Acessos', icon: 'ti-users' },
   { to: 'integracoes', label: 'Integrações',      icon: 'ti-api' },
   { to: 'ia',          label: 'IA & Parsing',     icon: 'ti-cpu' },

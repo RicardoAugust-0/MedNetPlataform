@@ -20,6 +20,7 @@ const AdminIA = lazy(() => import("./modules/admin/AiCredentials.jsx"));
 const AdminSistema = lazy(() => import("./modules/admin/SistemaLayout.jsx"));
 const AdminManutencao = lazy(() => import("./modules/admin/SistemaManutencao.jsx"));
 const AdminLimpeza = lazy(() => import("./modules/admin/SistemaLimpeza.jsx"));
+const AdminAuditoria = lazy(() => import("./modules/admin/AdminAuditoria.jsx"));
 const Agenda = lazy(() => import("./modules/Agenda.jsx"));
 const Analytics = lazy(() => import("./modules/Analytics.jsx"));
 const CrossCheck = lazy(() => import("./modules/CrossCheck.jsx"));
@@ -36,11 +37,20 @@ const Workspace = lazy(() => import("./modules/Workspace.jsx"));
 const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
 import { supabase } from "./supabase.js";
 import { applyAccent } from "./utils.js";
+import { ROLE_LEVEL } from "./data.js";
 
 function AdminGuard({ children }) {
   const { profile } = useAuth();
   if (!profile) return null;
   if (profile.role !== "admin") return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+// Guard genérico por hierarquia de role (operador < líder < admin).
+function RoleGuard({ min = "lider", children }) {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  if ((ROLE_LEVEL[profile.role] ?? 0) < ROLE_LEVEL[min]) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -175,12 +185,17 @@ function AppShell() {
                   />
                   <Route path="/monitor/:tab" element={<Monitor />} />
                   <Route path="/planilha" element={<EmbeddedSheet />} />
-                  <Route path="/dossies" element={<DossiesPage />} />
+                  <Route path="/dossies" element={<Navigate to="/dossies/clinico" replace />} />
+                  <Route path="/dossies/:tab" element={<DossiesPage />} />
                   <Route path="/agenda" element={<Agenda />} />
-                  <Route path="/crosscheck" element={<CrossCheck />} />
+                  <Route
+                    path="/crosscheck"
+                    element={<RoleGuard min="lider"><CrossCheck /></RoleGuard>}
+                  />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/automacoes" element={<Automacoes />} />
                   <Route path="/workspace" element={<Workspace />} />
+                  <Route path="/workspace/:categoria" element={<Workspace />} />
                   <Route path="/notas" element={<Notes />} />
                   <Route path="/links" element={<Links />} />
                   <Route path="/perfil" element={<Profile />} />
@@ -212,6 +227,7 @@ function AppShell() {
                       <Route path="manutencao" element={<AdminManutencao />} />
                       <Route path="limpeza" element={<AdminLimpeza />} />
                     </Route>
+                    <Route path="auditoria" element={<AdminAuditoria />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>

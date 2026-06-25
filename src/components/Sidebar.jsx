@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from "../context.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { NAV_ITEMS } from "../data.js";
+import { NAV_ITEMS, ROLE_LEVEL } from "../data.js";
 import { iniciais } from '../utils.js';
 import { usePWA } from '../hooks/usePWA.js';
 
@@ -44,7 +44,9 @@ export default function Sidebar() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  const isAdmin = profile?.role === 'admin';
+  // Visibilidade por hierarquia de role: operador < líder < admin.
+  const myLevel = ROLE_LEVEL[profile?.role] ?? 0;
+  const canSee = (item) => !item.minRole || myLevel >= ROLE_LEVEL[item.minRole];
 
   const isItemActive = (item) => {
     // Casa pelo primeiro segmento do path do item (não pelo id), para que a
@@ -55,7 +57,7 @@ export default function Sidebar() {
   };
 
   const navResults = query.length > 0
-    ? NAV_ITEMS.filter(i => (!i.adminOnly || isAdmin) && i.label.toLowerCase().includes(query.toLowerCase()))
+    ? NAV_ITEMS.filter(i => canSee(i) && i.label.toLowerCase().includes(query.toLowerCase()))
     : [];
 
   const driverResults = query.length >= 2
@@ -69,7 +71,7 @@ export default function Sidebar() {
 
   let curGroup = '';
   const navRows = [];
-  NAV_ITEMS.filter(item => !item.adminOnly || isAdmin).forEach(item => {
+  NAV_ITEMS.filter(canSee).forEach(item => {
     if (item.group !== curGroup) {
       curGroup = item.group;
       navRows.push(<div className="nav-group-label" key={'g-' + item.group}>{item.group}</div>);

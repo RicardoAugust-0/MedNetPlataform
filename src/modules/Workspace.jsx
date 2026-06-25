@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useParams, NavLink } from 'react-router-dom';
 import { useWsPages } from '../hooks/useWsPages';
 import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
@@ -8,10 +9,23 @@ import { useAuth } from '../auth/AuthContext.jsx';
 
 function escapeHtml(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
 
+function wsCatPillStyle(active) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '4px 9px', fontSize: 11, fontWeight: 500, textDecoration: 'none',
+    borderRadius: 999, whiteSpace: 'nowrap',
+    color: active ? '#fff' : 'var(--text-muted)',
+    background: active ? '#9E1A45' : 'var(--surface-1, rgba(255,255,255,0.04))',
+    border: '1px solid ' + (active ? '#9E1A45' : 'var(--border)'),
+  };
+}
+
 export default function Workspace() {
   const { wsPages, loading, add, update, remove, reorder } = useWsPages();
   const { profile } = useAuth();
   const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
+  const { categoria } = useParams();
+  const activeCat = categoria || null; // null = visão geral (todas as categorias)
   const confirm = useConfirm();
   const [current, setCurrent] = useState(null);
   const [search, setSearch] = useState('');
@@ -54,9 +68,13 @@ export default function Workspace() {
     setCurrent(null);
   };
 
-  const filt = wsPages.filter(p => !search || p.title.toLowerCase().includes(search));
+  const filt = wsPages.filter(p =>
+    (!search || p.title.toLowerCase().includes(search)) &&
+    (!activeCat || (p.category || 'protocolos') === activeCat)
+  );
   const favs = filt.filter(p => p.favorite);
-  const groups = WS_CATEGORIES.map(c => ({ ...c, pages: filt.filter(p => (p.category || 'protocolos') === c.id) }));
+  const allGroups = WS_CATEGORIES.map(c => ({ ...c, pages: filt.filter(p => (p.category || 'protocolos') === c.id) }));
+  const groups = activeCat ? allGroups.filter(g => g.id === activeCat) : allGroups;
   const recents = wsPages.slice(-3).reverse();
   const page = wsPages.find(p => p.id === current);
 
@@ -114,6 +132,16 @@ export default function Workspace() {
             <i className="ti ti-search"></i>
             <input placeholder="Buscar página..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+            <NavLink to="/workspace" end style={({ isActive }) => wsCatPillStyle(isActive)}>
+              <i className="ti ti-layout-grid"></i> Geral
+            </NavLink>
+            {WS_CATEGORIES.map(c => (
+              <NavLink key={c.id} to={`/workspace/${c.id}`} style={({ isActive }) => wsCatPillStyle(isActive)}>
+                <i className={`ti ${c.icon}`}></i> {c.label}
+              </NavLink>
+            ))}
+          </div>
         </div>
         <div className="ws-pages-list">
           {filt.length === 0
@@ -153,17 +181,19 @@ export default function Workspace() {
               )}
             </div>
 
-            <div className="ws-home-stats">
-              {WS_CATEGORIES.map(c => {
-                const count = wsPages.filter(p => (p.category || 'protocolos') === c.id).length;
-                return (
-                  <div key={c.id} className="ws-stat-card">
-                    <div className="ws-stat-icon"><i className={`ti ${c.icon}`}></i></div>
-                    <div><div className="ws-stat-value">{count}</div><div className="ws-stat-label">{c.label}</div></div>
-                  </div>
-                );
-              })}
-            </div>
+            {!activeCat && (
+              <div className="ws-home-stats">
+                {WS_CATEGORIES.map(c => {
+                  const count = wsPages.filter(p => (p.category || 'protocolos') === c.id).length;
+                  return (
+                    <div key={c.id} className="ws-stat-card">
+                      <div className="ws-stat-icon"><i className={`ti ${c.icon}`}></i></div>
+                      <div><div className="ws-stat-value">{count}</div><div className="ws-stat-label">{c.label}</div></div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {favs.length > 0 && (
               <div className="ws-section-block">
@@ -172,10 +202,12 @@ export default function Workspace() {
               </div>
             )}
 
-            <div className="ws-section-block">
-              <div className="ws-section-label"><i className="ti ti-clock"></i> Recentes</div>
-              <div className="ws-pages-grid">{recents.map(p => <PageCard key={p.id} p={p} />)}</div>
-            </div>
+            {!activeCat && (
+              <div className="ws-section-block">
+                <div className="ws-section-label"><i className="ti ti-clock"></i> Recentes</div>
+                <div className="ws-pages-grid">{recents.map(p => <PageCard key={p.id} p={p} />)}</div>
+              </div>
+            )}
 
             {groups.map(g => g.pages.length > 0 && (
               <div key={g.id} className="ws-section-block">

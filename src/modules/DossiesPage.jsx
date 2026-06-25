@@ -1,6 +1,6 @@
 // deno-lint-ignore-file
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
@@ -32,6 +32,8 @@ let cachedDriversList = null;
 export default function DossiesPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { tab = 'clinico' } = useParams();
+  const navigate = useNavigate();
   const { resolveMonitorName } = useCarrierAliases();
   const { history: atendimentosHistory } = useAtendimentos();
 
@@ -531,9 +533,30 @@ export default function DossiesPage() {
               </div>
             </div>
 
-            {/* Layout dos cards de Prontuário e Histórico */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Card de Ficha de Saúde (Dados Clínicos) */}
+            {/* Navegação de abas: Clínico × Tratativas (vira /dossies/:tab) */}
+            <div style={{ display: 'flex', gap: 6, borderBottom: '1px solid var(--border)', paddingBottom: 2 }}>
+              {[
+                { id: 'clinico',    label: 'Clínico',    icon: 'ti-activity' },
+                { id: 'tratativas', label: 'Tratativas', icon: 'ti-history' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => navigate({ pathname: `/dossies/${t.id}`, search: searchParams.toString() })}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                    border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                    fontWeight: tab === t.id ? 600 : 500,
+                    color: tab === t.id ? '#9E1A45' : 'var(--text-muted)',
+                    borderBottom: tab === t.id ? '2.5px solid #9E1A45' : '2.5px solid transparent',
+                  }}
+                >
+                  <i className={`ti ${t.icon}`}></i> {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Ficha de Saúde (Dados Clínicos) */}
+            {tab === 'clinico' && (
               <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-title">
@@ -680,8 +703,10 @@ export default function DossiesPage() {
                   )}
                 </div>
               </div>
+            )}
 
-              {/* Histórico Operacional de Contatos */}
+            {/* Atendimentos & Ações realizadas (Tratativas) */}
+            {tab === 'tratativas' && (
               <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 400 }}>
                 <div className="card-header">
                   <div className="card-title">
@@ -718,9 +743,10 @@ export default function DossiesPage() {
                   )}
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* AI Laudo Clínico / Relatório Integrado */}
+            {/* Laudo Integrado por IA (clínico) */}
+            {tab === 'clinico' && (
             <div className="card">
               <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="card-title">
@@ -766,8 +792,10 @@ export default function DossiesPage() {
                 )}
               </div>
             </div>
+            )}
 
-            {/* Linha do tempo dos alertas brutos de fadiga (telemetria) */}
+            {/* Telemetria — eventos brutos (clínico) */}
+            {tab === 'clinico' && (
             <div className="card">
               <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="card-title">
@@ -817,6 +845,7 @@ export default function DossiesPage() {
                 )}
               </div>
             </div>
+            )}
           </>
         ) : (
           <div className="card empty-state" style={{ flex: 1 }}>

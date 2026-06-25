@@ -136,7 +136,7 @@ export function MotoristasMaisAlertasCard({ d, noData }) {
                     </td>
                     <td style={{ padding: '8px 4px', textAlign: 'center' }}>
                       <Link
-                        to={`/dossies?driver=${encodeURIComponent(driver)}`}
+                        to={`/dossies/clinico?driver=${encodeURIComponent(driver)}`}
                         className="btn btn-sm btn-ghost"
                         style={{
                           display: 'inline-flex',

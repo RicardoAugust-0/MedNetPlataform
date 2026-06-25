@@ -4,20 +4,28 @@ export const APP_CONFIG = {
   usuario: { nome: 'Ana Ribeiro', iniciais: 'AR', cargo: 'Analista Sênior · Fadiga Zero' },
 };
 
+// Hierarquia de acesso. Um item com `minRole` só aparece para quem está no
+// nível igual/superior. Usado por Sidebar (menu) e RoleGuard (rotas).
+export const ROLE_LEVEL = { operador: 0, lider: 1, admin: 2 };
+
 export const NAV_ITEMS = [
+  // OPERAÇÃO — uso diário do operador de plantão (monitoramento de fadiga)
   { id: 'dashboard',  label: 'Dashboard',       icon: 'ti-layout-dashboard', group: 'Operação',     path: '/dashboard' },
   { id: 'monitor',    label: 'Monitor de Frota', icon: 'ti-truck-delivery',  group: 'Operação',     path: '/monitor/intervencao' },
   { id: 'planilha',   label: 'Planilha Embedded',icon: 'ti-table-alias',     group: 'Operação',     path: '/planilha' },
-  { id: 'dossies',    label: 'Dossiês Clínicos', icon: 'ti-steering-wheel',  group: 'Operação',     path: '/dossies' },
+  { id: 'dossies',    label: 'Dossiês Clínicos', icon: 'ti-steering-wheel',  group: 'Operação',     path: '/dossies/clinico' },
   { id: 'agenda',     label: 'Agenda',           icon: 'ti-calendar-event',  group: 'Operação',     path: '/agenda' },
-  { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Operação',     path: '/crosscheck' },
+  // CONHECIMENTO — referência, baixa frequência
   { id: 'templates',  label: 'Templates',        icon: 'ti-message-2',       group: 'Conhecimento', path: '/templates' },
   { id: 'workspace',  label: 'Workspace',        icon: 'ti-notebook',        group: 'Conhecimento', path: '/workspace' },
   { id: 'notas',      label: 'Bloco de Notas',   icon: 'ti-file-text',       group: 'Conhecimento', path: '/notas' },
   { id: 'links',      label: 'Links Rápidos',    icon: 'ti-link',            group: 'Conhecimento', path: '/links' },
-  { id: 'automacoes', label: 'Automações',       icon: 'ti-webhook',         group: 'Automação',    path: '/automacoes' },
+  // GESTÃO — ferramentas avançadas (Líder+); fora do menu do operador comum
+  { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Gestão',       path: '/crosscheck',  minRole: 'lider' },
+  { id: 'automacoes', label: 'Automações',       icon: 'ti-webhook',         group: 'Gestão',       path: '/automacoes',  minRole: 'lider' },
+  { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Gestão',       path: '/admin',       minRole: 'admin' },
+  // CONTA
   { id: 'perfil',     label: 'Meu Perfil',       icon: 'ti-user-circle',     group: 'Conta',        path: '/perfil' },
-  { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Conta',        path: '/admin',      adminOnly: true },
 ];
 
 export const PANEL_TITLES = {
@@ -39,6 +47,7 @@ export const PANEL_TITLES = {
   'admin/integracoes': { t: 'Integrações',      s: 'OmniLink, credenciais e mapeamento de transportadoras' },
   'admin/ia':          { t: 'IA & Parsing',     s: 'Provedores, modelos e chaves de API' },
   'admin/sistema':     { t: 'Sistema',          s: 'Modo manutenção e limpeza de histórico' },
+  'admin/auditoria':   { t: 'Auditoria',        s: 'Trilha global de tratativas e atendimentos registrados' },
   analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
   relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
   crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
@@ -98,6 +107,7 @@ export const WS_ICONS = [
 
 export const WS_CATEGORIES = [
   { id:'protocolos', label:'Protocolos',         icon:'ti-shield-check' },
+  { id:'onboarding', label:'Onboarding & FAQs',  icon:'ti-school' },
   { id:'sistemas',   label:'Sistemas & Acessos', icon:'ti-key' },
   { id:'config',     label:'Configurações',      icon:'ti-settings' },
 ];
