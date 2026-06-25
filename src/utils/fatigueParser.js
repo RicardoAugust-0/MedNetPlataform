@@ -225,7 +225,8 @@ export function normClf(v) {
     s.includes('improced') ||
     s.includes('invalid') ||
     s.includes('nao procede') ||
-    s.includes('sem proced')
+    s.includes('sem proced') ||
+    s.includes('justific')
   ) {
     return 'Falso positivo';
   }

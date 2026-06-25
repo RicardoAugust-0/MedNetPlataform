@@ -5,6 +5,7 @@ describe('fatigueParser · normClf', () => {
   it('identifica falso positivo', () => {
     expect(normClf('Falso positivo')).toBe('Falso positivo');
     expect(normClf('falso')).toBe('Falso positivo');
+    expect(normClf('Justificada')).toBe('Falso positivo');
   });
 
   it('identifica positivo para termos comuns e "Válido"', () => {
