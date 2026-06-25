@@ -14,12 +14,14 @@ const TIPO_META = {
 };
 
 const TIPOS = ['intervencao', 'reportar', 'descarte', 'limpeza'];
+const PAGE_SIZE = 25;
 
 export default function AdminAuditoria() {
   const { history, loading, reload } = useAtendimentos();
   const { resolveMonitorName } = useCarrierAliases();
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState(''); // '' = todos
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -34,6 +36,12 @@ export default function AdminAuditoria() {
       );
     });
   }, [history, search, tipo]);
+
+  // Paginação. O clamp da página evita ficar numa página vazia quando a lista
+  // encolhe (filtro mais restrito ou DELETE chegando via realtime).
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(currentPage, totalPages);
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="fz-in" style={{ width: '100%' }}>
@@ -54,9 +62,9 @@ export default function AdminAuditoria() {
             style={{ flex: 1, minWidth: 200 }}
             placeholder="Buscar por motorista, placa, operador ou transportadora…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
           />
-          <select className="form-control" style={{ width: 'auto' }} value={tipo} onChange={e => setTipo(e.target.value)}>
+          <select className="form-control" style={{ width: 'auto' }} value={tipo} onChange={e => { setTipo(e.target.value); setCurrentPage(1); }}>
             <option value="">Todos os tipos</option>
             {TIPOS.map(t => <option key={t} value={t}>{TIPO_META[t].label}</option>)}
           </select>
@@ -81,7 +89,7 @@ export default function AdminAuditoria() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(h => {
+                {pageRows.map(h => {
                   const meta = TIPO_META[h.tipo] || { label: h.tipo, badge: 'info' };
                   return (
                     <tr key={h.id} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.02))' }}>
@@ -101,6 +109,20 @@ export default function AdminAuditoria() {
                 })}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                <button className="btn btn-sm" disabled={page === 1} onClick={() => setCurrentPage(page - 1)}>
+                  <i className="ti ti-chevron-left"></i>
+                </button>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  Página {page} de {totalPages} · {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
+                </span>
+                <button className="btn btn-sm" disabled={page === totalPages} onClick={() => setCurrentPage(page + 1)}>
+                  <i className="ti ti-chevron-right"></i>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
