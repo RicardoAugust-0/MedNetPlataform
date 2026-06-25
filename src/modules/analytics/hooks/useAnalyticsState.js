@@ -489,7 +489,7 @@ export function useAnalyticsState() {
       const dupsFiltered = rowsToInsert.length - uniqueRows.length;
       console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
 
-      let chunkSize = 400;
+      let chunkSize = 1000;
       let i = 0;
       const totalRows = uniqueRows.length;
       let lastReportedProgress = 0;
