@@ -166,55 +166,90 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     return () => { active = false; };
   }, [stage?.platformId]);
 
-  const handleFiles = (files) => {
-    const f = files && files[0];
-    if (!f) return;
+  const handleFiles = async (filesList) => {
+    const files = filesList ? Array.from(filesList) : [];
+    if (!files.length) return;
     setParsing(true);
     setError(null);
-    const isCsv = /\.csv$/i.test(f.name) || f.type === 'text/csv';
-    const reader = new FileReader();
 
-    reader.onload = (ev) => {
-      try {
+    try {
+      const parsedFiles = [];
+
+      for (const f of files) {
+        const isCsv = /\.csv$/i.test(f.name) || f.type === 'text/csv';
+        
+        const fileData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.onerror = () => reject(new Error(`Falha ao ler o arquivo: ${f.name}`));
+          if (isCsv) reader.readAsText(f, 'UTF-8');
+          else reader.readAsArrayBuffer(f);
+        });
+
         let aoa;
         if (isCsv) {
-          aoa = parseCSV(ev.target.result);
+          aoa = parseCSV(fileData);
         } else {
-          const data = new Uint8Array(ev.target.result);
+          const data = new Uint8Array(fileData);
           const wb = XLSX.read(data, { type: 'array', cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
           aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         }
+
         const { headers, dataRows } = readHeaders(aoa);
         if (!headers.length || !dataRows.length) {
-          setParsing(false);
-          setError('Não foi possível identificar o cabeçalho ou linhas de dados nesta planilha.');
-          return;
+          throw new Error(`Não foi possível identificar o cabeçalho ou linhas de dados no arquivo: ${f.name}`);
         }
-        const det = detect(headers, platformHint, f.name);
-        setParsing(false);
-        setStep('review');
-        setStage({
-          fileName: f.name,
-          headers,
-          dataRows,
-          platformId: det.platform,
-          platformName: det.platformName,
-          mapping: det.mapping,
-        });
-      } catch (err) {
-        setParsing(false);
-        setError('Erro ao ler o arquivo: ' + (err?.message || err));
+
+        parsedFiles.push({ name: f.name, headers, dataRows });
       }
-    };
 
-    reader.onerror = () => {
+      // Combinar os dados de todas as planilhas
+      const baseFile = parsedFiles[0];
+      const baseHeaders = baseFile.headers;
+      let combinedDataRows = [...baseFile.dataRows];
+
+      // Alinha as colunas dos arquivos subsequentes com base nas colunas da primeira planilha
+      for (let i = 1; i < parsedFiles.length; i++) {
+        const currentFile = parsedFiles[i];
+        
+        // Se as colunas forem idênticas em ordem e quantidade, adiciona diretamente
+        const headersMatch = currentFile.headers.length === baseHeaders.length &&
+          currentFile.headers.every((h, idx) => h === baseHeaders[idx]);
+
+        if (headersMatch) {
+          combinedDataRows.push(...currentFile.dataRows);
+        } else {
+          // Alinha as colunas conforme o nome do cabeçalho
+          const mappedRows = currentFile.dataRows.map(row => {
+            return baseHeaders.map(baseHeader => {
+              const currentIdx = currentFile.headers.indexOf(baseHeader);
+              return currentIdx > -1 ? row[currentIdx] : '';
+            });
+          });
+          combinedDataRows.push(...mappedRows);
+        }
+      }
+
+      // Detecção de plataforma usando a assinatura da primeira planilha
+      const det = detect(baseHeaders, platformHint, baseFile.name);
+      
       setParsing(false);
-      setError('Falha ao ler o arquivo.');
-    };
-
-    if (isCsv) reader.readAsText(f, 'UTF-8');
-    else reader.readAsArrayBuffer(f);
+      setStep('review');
+      setStage({
+        fileName: files.length === 1 
+          ? baseFile.name 
+          : `${files.length} arquivos (${baseFile.name} + ${files.length - 1} outro${files.length > 2 ? 's' : ''})`,
+        headers: baseHeaders,
+        dataRows: combinedDataRows,
+        platformId: det.platform,
+        platformName: det.platformName,
+        mapping: det.mapping,
+      });
+    } catch (err) {
+      setParsing(false);
+      setError(err?.message || 'Erro ao ler ou processar os arquivos.');
+    }
   };
 
   const handleDragOver = (e) => {
@@ -409,17 +444,17 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
             >
               <i className="ti ti-cloud-upload" style={{ fontSize: '34px', color: '#9E1A45' }}></i>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '10px' }}>
-                Arraste a planilha aqui ou clique para selecionar
+                Arraste uma ou mais planilhas aqui ou clique para selecionar
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '3px' }}>
-                Suporta XLSX, XLS ou CSV · A primeira aba do arquivo será utilizada
+                Suporta XLSX, XLS ou CSV · Todas as planilhas devem ser da mesma plataforma
               </div>
             </div>
 
             {parsing && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
                 <i className="ti ti-loader-2 fz-spin" style={{ fontSize: '16px', color: '#9E1A45' }}></i>
-                Processando e analisando arquivo...
+                Processando e analisando arquivos...
               </div>
             )}
 
@@ -650,6 +685,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
         accept=".xlsx,.xls,.csv"
         onChange={handleFileInputChange}
         style={{ display: 'none' }}
+        multiple
       />
     </div>
   );
