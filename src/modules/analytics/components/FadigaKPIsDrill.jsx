@@ -65,34 +65,25 @@ export default function FadigaKPIsDrill({
     let active = true;
 
     const targetPlatformId = activeId ? activeId.replace('src-', '') : null;
-    let url = `${API_URL}/api/analytics?`;
-    
-    if (compare) {
-      const validCompareIds = comparePlatformIds || [];
-      url += `compare=true&platformIds=${validCompareIds.join(',')}`;
-      for (const pid of validCompareIds) {
-        const comp = compareCompanies[pid] || '';
-        if (comp) {
-          url += `&company_${pid}=${encodeURIComponent(comp)}`;
-        }
-      }
-    } else {
-      url += `platformId=${targetPlatformId}`;
-      if (selectedCompany) url += `&company=${encodeURIComponent(selectedCompany)}`;
-    }
-    
-    if (selectedMonth) url += `&month=${selectedMonth}`;
-    if (selectedMonth === 'custom' && startDate && endDate) {
-      url += `&startDate=${startDate}&endDate=${endDate}`;
-    }
-    if (selectedSeverity) url += `&severity=${selectedSeverity}`;
-    
-    // Sobrescreve a classificação para buscar especificamente esta métrica
-    url += `&classification=${encodeURIComponent(targetClassification)}`;
-    
-    if (selectedType) url += `&eventType=${encodeURIComponent(selectedType)}`;
+    // `sources` alinhado ao loader principal (builder unificado) — substitui o
+    // antigo `company_<pid>`. A classificação é sobrescrita pela métrica-alvo.
+    const compareSources = compare
+      ? (comparePlatformIds || []).map((pid) => ({ platformId: pid, company: compareCompanies[pid] || '' }))
+      : [];
+    const qs = buildAnalyticsQuery({
+      compare,
+      sources: compareSources,
+      platformId: targetPlatformId,
+      company: selectedCompany,
+      month: selectedMonth,
+      startDate,
+      endDate,
+      severity: selectedSeverity,
+      classification: targetClassification,
+      eventType: selectedType,
+    });
 
-    fetch(url)
+    apiFetch(`/api/analytics?${qs}`)
       .then((res) => {
         if (!res.ok) throw new Error('Falha na resposta do servidor');
         return res.json();
