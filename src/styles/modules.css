@@ -1134,3 +1134,112 @@
 }
 .cc-event-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .cc-file-info { font-size: 12px; color: var(--text-muted); }
+
+/* ════════ QUICK COPY MODE ════════ */
+.copy-mode-active .ws-content p,
+.copy-mode-active .ws-content li,
+.copy-mode-active .ws-content h1,
+.copy-mode-active .ws-content h2,
+.copy-mode-active .ws-content h3,
+.copy-mode-active .ws-content blockquote,
+.copy-mode-active .ws-content td,
+.copy-mode-active .ws-content th {
+  cursor: pointer !important;
+  position: relative;
+  transition: background-color 0.15s, box-shadow 0.15s;
+  border-radius: 4px;
+}
+
+.copy-mode-active .ws-content p:hover,
+.copy-mode-active .ws-content li:hover,
+.copy-mode-active .ws-content h1:hover,
+.copy-mode-active .ws-content h2:hover,
+.copy-mode-active .ws-content h3:hover,
+.copy-mode-active .ws-content blockquote:hover,
+.copy-mode-active .ws-content td:hover,
+.copy-mode-active .ws-content th:hover {
+  background-color: var(--accent-50, rgba(158, 26, 69, 0.05)) !important;
+  box-shadow: 0 0 0 2px var(--accent-100, rgba(158, 26, 69, 0.15)) !important;
+}
+
+/* Floating "Copiar" indicator on hover */
+.copy-mode-active .ws-content p:hover::after,
+.copy-mode-active .ws-content li:hover::after,
+.copy-mode-active .ws-content h1:hover::after,
+.copy-mode-active .ws-content h2:hover::after,
+.copy-mode-active .ws-content h3:hover::after,
+.copy-mode-active .ws-content blockquote:hover::after,
+.copy-mode-active .ws-content td:hover::after,
+.copy-mode-active .ws-content th:hover::after {
+  content: '📋 Copiar';
+  position: absolute;
+  right: 8px;
+  top: 5px;
+  background: var(--accent-500, #9E1A45);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  font-family: var(--font-sans, sans-serif);
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+}
+
+/* Specific styling for list items to avoid copy button overlapping bullets */
+.copy-mode-active .ws-content li:hover::after {
+  right: 8px;
+  top: 2px;
+}
+
+/* Flash green animation when copied */
+@keyframes copy-flash-anim {
+  0% { background-color: rgba(45, 167, 90, 0.35) !important; }
+  100% { background-color: transparent !important; }
+}
+
+.copied-flash {
+  animation: copy-flash-anim 0.4s ease-out;
+}
+
+/* Floating click-to-copy badge */
+.copied-badge {
+  background: var(--success-600, #1F7A3D);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: slideUpFade 0.2s ease-out;
+  transform: translateX(-50%);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.copied-badge.fade-out {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+/* Active style for copy button */
+.btn-copy-mode-active {
+  background: var(--success-600, #1F7A3D) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.btn-copy-mode-active:hover {
+  background: #185e2f !important;
+}

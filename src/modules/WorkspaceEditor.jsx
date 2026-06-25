@@ -167,6 +167,56 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
   const onUpdateRef = useRef(null);
   const handleImageFileRef = useRef(null);
 
+  const [copyMode, setCopyMode] = useState(() => localStorage.getItem('ws_copy_mode') === 'true');
+
+  const toggleCopyMode = () => {
+    const next = !copyMode;
+    setCopyMode(next);
+    localStorage.setItem('ws_copy_mode', String(next));
+  };
+
+  const handleAreaClick = (e) => {
+    if (!copyMode) return;
+    
+    const target = e.target.closest(
+      '.ws-content p, .ws-content li, .ws-content h1, .ws-content h2, .ws-content h3, .ws-content blockquote, .ws-content td, .ws-content th'
+    );
+    if (!target) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const text = target.innerText?.trim();
+    if (text) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          target.classList.remove('copied-flash');
+          void target.offsetWidth; // trigger reflow
+          target.classList.add('copied-flash');
+          setTimeout(() => target.classList.remove('copied-flash'), 500);
+          
+          const rect = target.getBoundingClientRect();
+          const badge = document.createElement('div');
+          badge.innerText = 'Copiado!';
+          badge.className = 'copied-badge';
+          badge.style.position = 'fixed';
+          badge.style.top = `${rect.top + window.scrollY - 20}px`;
+          badge.style.left = `${rect.left + window.scrollX + (rect.width / 2)}px`;
+          badge.style.zIndex = '10000';
+          
+          document.body.appendChild(badge);
+          
+          setTimeout(() => {
+            badge.classList.add('fade-out');
+            setTimeout(() => badge.remove(), 250);
+          }, 800);
+        })
+        .catch(() => {
+          toast('Erro ao copiar texto', 'error');
+        });
+    }
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -227,9 +277,9 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
 
   useEffect(() => {
     if (editor) {
-      editor.setEditable(canEdit);
+      editor.setEditable(canEdit && !copyMode);
     }
-  }, [editor, canEdit]);
+  }, [editor, canEdit, copyMode]);
 
   useEffect(() => {
     if (!iconPickerOpen) return;
@@ -300,12 +350,25 @@ export default function PageEditor({ page, onUpdate, onDelete, onBack }) {
         <select className="form-control" aria-label="Categoria do workspace" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={page.category || 'protocolos'} onChange={e => onUpdate(page.id, { category: e.target.value })} disabled={!canEdit}>
           {WS_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
+        <button
+          className={`btn btn-sm ${copyMode ? 'btn-copy-mode-active' : ''}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+          title={copyMode ? 'Desativar modo de cópia rápida' : 'Ativar modo de cópia rápida'}
+          onClick={toggleCopyMode}
+        >
+          <i className={`ti ${copyMode ? 'ti-circle-check' : 'ti-copy'}`}></i>
+          <span>{copyMode ? 'Modo Cópia Ativo' : 'Cópia Rápida'}</span>
+        </button>
         <button className="btn btn-sm" onClick={onBack}><i className="ti ti-arrow-left"></i> Voltar</button>
         {canEdit && (
           <button className="btn btn-sm btn-danger" onClick={() => onDelete(page.id)}><i className="ti ti-trash"></i></button>
         )}
       </div>
-      <div className="ws-editor-area">
+      <div className={`ws-editor-area ${copyMode ? 'copy-mode-active' : ''}`} onClick={handleAreaClick}>
         <input className="ws-page-title-input" aria-label="Título do workspace" value={page.title} onChange={e => onUpdate(page.id, { title: e.target.value })} disabled={!canEdit} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Última edição agora · {cat?.label}</div>
         <hr className="ws-divider" />
