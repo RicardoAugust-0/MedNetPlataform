@@ -574,8 +574,29 @@ export default function Analytics() {
       }
     });
 
-    // Remove buttons (action buttons and trash/delete buttons on source chips)
-    clone.querySelectorAll('button').forEach((btn) => btn.remove());
+    // Replace/remove buttons selectively (keep filter/tab buttons as static labels)
+    const originalButtons = container.querySelectorAll('button');
+    const clonedButtons = clone.querySelectorAll('button');
+    originalButtons.forEach((origBtn, idx) => {
+      const clonedBtn = clonedButtons[idx];
+      if (clonedBtn) {
+        if (origBtn.classList.contains('btn') || origBtn.querySelector('.ti-trash') || origBtn.title?.toLowerCase().includes('remover')) {
+          clonedBtn.remove();
+        } else {
+          const isButtonActive = origBtn.style.background && origBtn.style.background !== 'transparent';
+          const span = document.createElement('span');
+          span.textContent = origBtn.textContent.trim();
+          span.className = 'static-tab-val';
+          
+          if (isButtonActive) {
+            span.style.cssText = 'padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 4px; background: var(--surface-2, rgba(255,255,255,0.05)); color: var(--text-primary); border: 1px solid var(--border-strong); display: inline-block; margin-right: 2px;';
+          } else {
+            span.style.cssText = 'padding: 4px 10px; font-size: 11px; font-weight: 500; border-radius: 4px; background: transparent; color: var(--text-muted); display: inline-block; margin-right: 2px; opacity: 0.6;';
+          }
+          clonedBtn.replaceWith(span);
+        }
+      }
+    });
 
     // Gather stylesheet contents to make it self-contained
     let stylesHtml = '';
@@ -609,12 +630,17 @@ export default function Analytics() {
     );
     stylesHtml += linkStyles.join('\n');
 
-    // Capture active theme
+    // Capture active theme and other layout configuration attributes
     const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const activeDensity = document.documentElement.getAttribute('data-density') || '1';
+    const activeMode = document.documentElement.getAttribute('data-mode') || '';
+    const activeVibe = document.documentElement.getAttribute('data-vibe') || '';
+    const activeRhythm = document.documentElement.getAttribute('data-rhythm') || '';
+    const inlineStyles = document.documentElement.getAttribute('style') || '';
 
     // Assemble the complete HTML document
     const fullHtml = `<!DOCTYPE html>
-<html lang="pt-BR" data-theme="${activeTheme}">
+<html lang="pt-BR" data-theme="${activeTheme}" data-density="${activeDensity}" data-mode="${activeMode}" data-vibe="${activeVibe}" data-rhythm="${activeRhythm}" style="${inlineStyles}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
