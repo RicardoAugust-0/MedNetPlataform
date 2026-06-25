@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { PLATFORMS } from '../utils/fatigueParser.js';
 import { supabase } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
-import { API_URL, apiFetch, buildAnalyticsQuery } from '../lib/analyticsApi.js';
+import { apiFetch, buildAnalyticsQuery } from '../lib/analyticsApi.js';
 
 import '../styles/analytics.css';
 
