@@ -489,7 +489,7 @@ export function useAnalyticsState() {
       const dupsFiltered = rowsToInsert.length - uniqueRows.length;
       console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
 
-      let chunkSize = 1000;
+      let chunkSize = 3000;
       let i = 0;
       const totalRows = uniqueRows.length;
       let lastReportedProgress = 0;
@@ -512,8 +512,8 @@ export function useAnalyticsState() {
           i += chunk.length;
 
           // Recupera gradualmente o tamanho do lote em caso de sucesso
-          if (chunkSize < 1000) {
-            chunkSize = Math.min(1000, chunkSize + 100);
+          if (chunkSize < 3000) {
+            chunkSize = Math.min(3000, chunkSize + 300);
           }
 
           const progress = Math.min(Math.round((i / totalRows) * 100), 100);
