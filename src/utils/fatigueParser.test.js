@@ -27,6 +27,16 @@ describe('fatigueParser · normClf', () => {
     expect(normClf('Improcedente')).toBe('Falso positivo');
     expect(normClf('Procedente')).toBe('Positivo');
   });
+
+  it('trata "Inválido" como falso positivo (não confunde com "válido")', () => {
+    expect(normClf('Inválido')).toBe('Falso positivo');
+    expect(normClf('invalido')).toBe('Falso positivo');
+  });
+
+  it('trata "Não procede" como falso positivo (não confunde com "procede")', () => {
+    expect(normClf('Não procede')).toBe('Falso positivo');
+    expect(normClf('nao procede')).toBe('Falso positivo');
+  });
 });
 
 describe('fatigueParser · normCrit', () => {

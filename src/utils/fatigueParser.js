@@ -218,9 +218,27 @@ export function normCrit(v) {
 
 export function normClf(v) {
   const s = norm(v); if (!s) return 'Não classificado';
-  // "Improcedente" contém "procede" — precisa ser testado ANTES do bloco Positivo.
-  if (s.includes('falso') || s.includes('improced')) return 'Falso positivo';
-  if (s.includes('positiv') || s.includes('confirmad') || s.includes('procede') || s.includes('verdadeir') || s.includes('real') || s.includes('valido')) return 'Positivo';
+  // "Improcedente" contém "procede", "inválido" contém "válido", e "não procede" contém "procede".
+  // Devem ser testados no bloco de Falso positivo antes de conferir o bloco de Positivo.
+  if (
+    s.includes('falso') ||
+    s.includes('improced') ||
+    s.includes('invalid') ||
+    s.includes('nao procede') ||
+    s.includes('sem proced')
+  ) {
+    return 'Falso positivo';
+  }
+  if (
+    s.includes('positiv') ||
+    s.includes('confirmad') ||
+    s.includes('procede') ||
+    s.includes('verdadeir') ||
+    s.includes('real') ||
+    s.includes('valido')
+  ) {
+    return 'Positivo';
+  }
   return 'Não classificado';
 }
 
