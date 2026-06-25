@@ -10,6 +10,14 @@ lerna-debug.log*
 # VPS RPA debug and temp files
 vps/debug_output.csv
 
+# Migration scripts (contain service_role keys / secrets)
+migrate_*.js
+migrate_*.mjs
+*_migration*.mjs
+fix_*.mjs
+_*.mjs
+vps_users.sql
+
 node_modules
 dist
 dist-ssr
