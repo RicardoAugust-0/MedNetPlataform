@@ -523,27 +523,7 @@ export default function Analytics() {
     // Clone the container to manipulate it offline
     const clone = container.cloneNode(true);
 
-    // Convert canvases to base64 images
-    const originalCanvases = container.querySelectorAll('canvas');
-    const clonedCanvases = clone.querySelectorAll('canvas');
-    originalCanvases.forEach((origCanvas, idx) => {
-      const clonedCanvas = clonedCanvases[idx];
-      if (clonedCanvas) {
-        try {
-          const img = document.createElement('img');
-          img.src = origCanvas.toDataURL('image/png');
-          img.style.cssText = clonedCanvas.style.cssText;
-          img.style.maxWidth = '100%';
-          img.style.height = 'auto';
-          img.width = origCanvas.width;
-          img.height = origCanvas.height;
-          img.className = clonedCanvas.className;
-          clonedCanvas.replaceWith(img);
-        } catch (e) {
-          console.error('[MedNet] Erro ao converter canvas para imagem:', e);
-        }
-      }
-    });
+    // Keep canvases intact to render them dynamically with Chart.js offline
 
     // Replace selects with static span values showing selected option text
     const originalSelects = container.querySelectorAll('select');
@@ -638,6 +618,465 @@ export default function Analytics() {
     const activeRhythm = document.documentElement.getAttribute('data-rhythm') || '';
     const inlineStyles = document.documentElement.getAttribute('style') || '';
 
+    // Define the script to initialize interactive Chart.js charts offline
+    const chartInitScript = `<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  (function() {
+    const d = ${JSON.stringify(d)};
+    if (!d) return;
+
+    const DATA = {
+      kpis: d.kpis || {},
+      mensal: d.mensal || { meses: [], valores: [], variacao: [] },
+      mensal_crit: d.mensal_crit || { meses: [], labels: [], series: {} },
+      mensal_tipo: d.mensal_tipo || { meses: [], labels: [], series: {} },
+      clf_total: d.clf_total || {},
+      falso_pos_mensal: {
+        meses: d.falso_mensal?.labels || d.mensal?.meses || [],
+        pct: d.falso_mensal?.pct || []
+      },
+      top_motoristas: d.top_motoristas || { labels: [], valores: [] },
+      top_placas: d.top_placas || { labels: [], valores: [] },
+      top_frota: d.frota || { labels: [], valores: [] },
+      uf: d.uf || { labels: [], valores: [] },
+      hora: {
+        horas: d.hora?.horas || Array.from({ length: 24 }, (_, i) => i),
+        valores: d.hora?.valores || []
+      },
+      hora_pos: {
+        valores: d.hora?.valores_pos || []
+      },
+      dow: d.dow || { labels: [], valores: [] },
+      vel_hist: {
+        labels: d.vel?.labels || [],
+        valores: d.vel?.valores || []
+      },
+      evidencia: d.evidencia ? {
+        'Evidências disponíveis': d.evidencia.disp,
+        'Aguardando evidências': d.evidencia.aguard
+      } : null
+    };
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const C = {
+      grid: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 25, 35, 0.025)',
+      text: isDark ? '#9D98B5' : '#4A5568',
+      vinho: '#9E1A45',
+      danger: '#E24B4A',
+      warning: '#E8A020',
+      success: '#2DA75A',
+      info: '#2A8DD9'
+    };
+
+    const fmt = n => n == null ? '—' : Number(n).toLocaleString('pt-BR');
+    const kf = v => v >= 1000 ? v / 1000 + 'k' : v;
+    const ax = (extra={}) => ({
+      grid: { color: C.grid, drawTicks: false },
+      border: { display: false },
+      ticks: { padding: 8, color: C.text },
+      ...extra
+    });
+
+    const mesLabel = m => {
+      if (!m || !m.includes('-')) return m;
+      const [y, mm] = m.split('-');
+      return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][+mm-1]+'/'+y.slice(2);
+    };
+
+    Chart.defaults.font.family = "'Poppins', sans-serif";
+    Chart.defaults.font.size = 11.5;
+    Chart.defaults.color = C.text;
+    Chart.defaults.plugins.legend.display = false;
+    Chart.defaults.plugins.tooltip.backgroundColor = isDark ? '#161315' : '#0F1923';
+    Chart.defaults.plugins.tooltip.borderColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,25,35,0.08)';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.titleColor = '#fff';
+    Chart.defaults.plugins.tooltip.bodyColor = '#fff';
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 8;
+
+    // Map canvases
+    document.querySelectorAll('.card').forEach(card => {
+      const heading = card.querySelector('h2, h3, h4');
+      const canvas = card.querySelector('canvas');
+      if (!canvas || !heading) return;
+      
+      const title = heading.textContent.trim().toLowerCase();
+      if (title.includes('mês') || title.includes('mensal')) {
+        canvas.id = 'c_mensal';
+      } else if (title.includes('criticidade') || title.includes('severidade')) {
+        canvas.id = 'c_crit';
+      } else if (title.includes('classificação')) {
+        canvas.id = 'c_clf';
+      } else if (title.includes('falso positivo')) {
+        canvas.id = 'c_falso';
+      } else if (title.includes('detecção') || title.includes('gatilho')) {
+        canvas.id = 'c_tipo';
+      } else if (title.includes('categoria')) {
+        canvas.id = 'c_categoria';
+      } else if (title.includes('hora')) {
+        canvas.id = 'c_hora';
+      } else if (title.includes('semana')) {
+        canvas.id = 'c_dow';
+      } else if (title.includes('velocidade')) {
+        canvas.id = 'c_vel';
+      } else if (title.includes('evidência') || title.includes('vídeo')) {
+        canvas.id = 'c_evid';
+      } else if (title.includes('motoristas')) {
+        canvas.id = 'c_mot';
+      } else if (title.includes('veículos') || title.includes('placa')) {
+        canvas.id = 'c_placa';
+      } else if (title.includes('uf') || title.includes('estado')) {
+        canvas.id = 'c_uf';
+      } else if (title.includes('frota') || title.includes('base')) {
+        canvas.id = 'c_frota';
+      }
+    });
+
+    // 1. Mensal
+    const c_mensal = document.getElementById('c_mensal');
+    if (c_mensal && DATA.mensal.valores.length) {
+      new Chart(c_mensal, {
+        type: 'bar',
+        data: {
+          labels: DATA.mensal.meses.map(mesLabel),
+          datasets: [{
+            data: DATA.mensal.valores,
+            backgroundColor: 'rgba(158,26,69,0.55)',
+            borderColor: C.vinho,
+            borderWidth: 1.5,
+            borderRadius: 8,
+            maxBarThickness: 90
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 24 } },
+          plugins: { tooltip: { callbacks: { label: c => fmt(c.parsed.y) + ' alertas' } } },
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }) }
+        }
+      });
+    }
+
+    // 2. Criticidade
+    const c_crit = document.getElementById('c_crit');
+    if (c_crit && DATA.mensal_crit.meses.length) {
+      const crColors = { 'Gravíssimo': C.danger, 'Grave': C.warning, 'Médio': C.info };
+      new Chart(c_crit, {
+        type: 'bar',
+        data: {
+          labels: DATA.mensal_crit.meses.map(mesLabel),
+          datasets: Object.keys(DATA.mensal_crit.series).map(s => ({
+            label: s,
+            data: DATA.mensal_crit.series[s],
+            backgroundColor: crColors[s],
+            borderRadius: 4,
+            maxBarThickness: 60
+          }))
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' } } },
+          scales: { x: ax({ stacked: true }), y: ax({ stacked: true, beginAtZero: true, ticks: { callback: kf } }) }
+        }
+      });
+    }
+
+    // 3. Classificação
+    const c_clf = document.getElementById('c_clf');
+    if (c_clf && Object.keys(DATA.clf_total).length) {
+      const clK = Object.keys(DATA.clf_total);
+      const clColor = { 'Positivo': C.danger, 'Falso positivo': C.info, 'Não classificado': C.text };
+      new Chart(c_clf, {
+        type: 'doughnut',
+        data: {
+          labels: clK,
+          datasets: [{
+            data: clK.map(x => DATA.clf_total[x]),
+            backgroundColor: clK.map(x => clColor[x]),
+            borderColor: isDark ? '#161315' : '#fff',
+            borderWidth: 3,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { display: true, position: 'bottom' } }
+        }
+      });
+    }
+
+    // 4. Falso positivo
+    const c_falso = document.getElementById('c_falso');
+    if (c_falso && DATA.falso_pos_mensal.pct.length) {
+      new Chart(c_falso, {
+        type: 'line',
+        data: {
+          labels: DATA.falso_pos_mensal.meses.map(mesLabel),
+          datasets: [{
+            data: DATA.falso_pos_mensal.pct,
+            borderColor: C.warning,
+            backgroundColor: 'rgba(232,160,32,0.12)',
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: C.warning,
+            pointRadius: 4,
+            borderWidth: 2.5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: v => v + '%' } }) }
+        }
+      });
+    }
+
+    // 5. Tipo detecção
+    const c_tipo = document.getElementById('c_tipo');
+    if (c_tipo && DATA.mensal_tipo.meses.length) {
+      const tpColors = [C.danger, C.warning, C.info, C.success, C.vinho];
+      new Chart(c_tipo, {
+        type: 'line',
+        data: {
+          labels: DATA.mensal_tipo.meses.map(mesLabel),
+          datasets: Object.keys(DATA.mensal_tipo.series).map((s, i) => ({
+            label: s,
+            data: DATA.mensal_tipo.series[s],
+            borderColor: tpColors[i % tpColors.length],
+            backgroundColor: 'transparent',
+            tension: 0.35,
+            pointRadius: 3,
+            borderWidth: 2
+          }))
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, padding: 10, usePointStyle: true, pointStyle: 'circle' } } },
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: kf } }) }
+        }
+      });
+    }
+
+    // 6. Categoria
+    const c_categoria = document.getElementById('c_categoria');
+    if (c_categoria && d.categorias) {
+      const catLabels = Object.keys(d.categorias);
+      const catVals = Object.values(d.categorias);
+      new Chart(c_categoria, {
+        type: 'bar',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            data: catVals,
+            backgroundColor: 'rgba(158,26,69,0.55)',
+            borderColor: C.vinho,
+            borderWidth: 1.5,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax({ beginAtZero: true }), y: ax() }
+        }
+      });
+    }
+
+    // 7. Hora do dia
+    const c_hora = document.getElementById('c_hora');
+    if (c_hora && DATA.hora.valores.length) {
+      new Chart(c_hora, {
+        type: 'bar',
+        data: {
+          labels: DATA.hora.horas.map(h => h + 'h'),
+          datasets: [
+            { type: 'bar', label: 'Total', data: DATA.hora.valores, backgroundColor: 'rgba(79,160,255,0.25)', borderColor: C.info, borderWidth: 1, borderRadius: 4 },
+            { type: 'line', label: 'Positivos', data: DATA.hora_pos.valores, borderColor: C.danger, backgroundColor: 'transparent', tension: 0.35, pointRadius: 0, borderWidth: 2.5 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom' } },
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: kf } }) }
+        }
+      });
+    }
+
+    // 8. Dia da semana
+    const c_dow = document.getElementById('c_dow');
+    if (c_dow && DATA.dow.valores.length) {
+      new Chart(c_dow, {
+        type: 'bar',
+        data: {
+          labels: DATA.dow.labels,
+          datasets: [{
+            data: DATA.dow.valores,
+            backgroundColor: DATA.dow.valores.map((_, i) => (DATA.dow.labels[i] === 'Sáb' || DATA.dow.labels[i] === 'Dom') ? 'rgba(158,26,69,0.4)' : 'rgba(45,167,90,0.4)'),
+            borderColor: DATA.dow.labels.map((_, i) => (DATA.dow.labels[i] === 'Sáb' || DATA.dow.labels[i] === 'Dom') ? C.vinho : C.success),
+            borderWidth: 1.5,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: kf } }) }
+        }
+      });
+    }
+
+    // 9. Velocidade
+    const c_vel = document.getElementById('c_vel');
+    if (c_vel && DATA.vel_hist.valores.length) {
+      new Chart(c_vel, {
+        type: 'bar',
+        data: {
+          labels: DATA.vel_hist.labels,
+          datasets: [{
+            data: DATA.vel_hist.valores,
+            backgroundColor: DATA.vel_hist.labels.map((l, i) => i >= 3 ? 'rgba(226,75,74,0.55)' : 'rgba(79,160,255,0.45)'),
+            borderColor: DATA.vel_hist.labels.map((l, i) => i >= 3 ? C.danger : C.info),
+            borderWidth: 1.5,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax(), y: ax({ beginAtZero: true, ticks: { callback: kf } }) }
+        }
+      });
+    }
+
+    // 10. Evidência
+    const c_evid = document.getElementById('c_evid');
+    if (c_evid && DATA.evidencia) {
+      const keys = Object.keys(DATA.evidencia);
+      new Chart(c_evid, {
+        type: 'doughnut',
+        data: {
+          labels: keys,
+          datasets: [{
+            data: keys.map(k => DATA.evidencia[k]),
+            backgroundColor: [C.success, C.text],
+            borderColor: isDark ? '#161315' : '#fff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { display: true, position: 'bottom' } }
+        }
+      });
+    }
+
+    // 11. Motoristas
+    const c_mot = document.getElementById('c_mot');
+    if (c_mot && DATA.top_motoristas.valores.length) {
+      new Chart(c_mot, {
+        type: 'bar',
+        data: {
+          labels: DATA.top_motoristas.labels,
+          datasets: [{
+            data: DATA.top_motoristas.valores,
+            backgroundColor: 'rgba(158,26,69,0.55)',
+            borderColor: C.vinho,
+            borderWidth: 1.5,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax({ beginAtZero: true }), y: ax() }
+        }
+      });
+    }
+
+    // 12. Placas
+    const c_placa = document.getElementById('c_placa');
+    if (c_placa && DATA.top_placas.valores.length) {
+      new Chart(c_placa, {
+        type: 'bar',
+        data: {
+          labels: DATA.top_placas.labels,
+          datasets: [{
+            data: DATA.top_placas.valores,
+            backgroundColor: 'rgba(158,26,69,0.55)',
+            borderColor: C.vinho,
+            borderWidth: 1.5,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax({ beginAtZero: true }), y: ax() }
+        }
+      });
+    }
+
+    // 13. UF
+    const c_uf = document.getElementById('c_uf');
+    if (c_uf && DATA.uf.valores.length) {
+      new Chart(c_uf, {
+        type: 'bar',
+        data: {
+          labels: DATA.uf.labels,
+          datasets: [{
+            data: DATA.uf.valores,
+            backgroundColor: 'rgba(42,141,217,0.55)',
+            borderColor: C.info,
+            borderWidth: 1.5,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax(), y: ax({ beginAtZero: true }) }
+        }
+      });
+    }
+
+    // 14. Frota
+    const c_frota = document.getElementById('c_frota');
+    if (c_frota && DATA.top_frota.valores.length) {
+      new Chart(c_frota, {
+        type: 'bar',
+        data: {
+          labels: DATA.top_frota.labels,
+          datasets: [{
+            data: DATA.top_frota.valores,
+            backgroundColor: 'rgba(45,167,90,0.55)',
+            borderColor: C.success,
+            borderWidth: 1.5,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: ax({ beginAtZero: true }) }
+        }
+      });
+    }
+
+  })();
+</script>`;
+
     // Assemble the complete HTML document
     const fullHtml = `<!DOCTYPE html>
 <html lang="pt-BR" data-theme="${activeTheme}" data-density="${activeDensity}" data-mode="${activeMode}" data-vibe="${activeVibe}" data-rhythm="${activeRhythm}" style="${inlineStyles}">
@@ -651,6 +1090,10 @@ export default function Analytics() {
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/tabler-icons.min.css" rel="stylesheet" />
   ${stylesHtml}
   <style>
+    html, body {
+      height: auto !important;
+      overflow: auto !important;
+    }
     body {
       background-color: var(--bg-app, #0d0c0d);
       color: var(--text-primary, #ffffff);
@@ -681,6 +1124,7 @@ export default function Analytics() {
     </div>
     ${clone.outerHTML}
   </div>
+  ${chartInitScript}
 </body>
 </html>`;
 
