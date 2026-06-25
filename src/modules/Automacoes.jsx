@@ -4,7 +4,6 @@ import { useConfirm } from '../hooks/useConfirm';
 import { useToast } from '../hooks/useToast.jsx';
 import '../styles/automacoes.css';
 import { HooksTab, VncModal } from './automacoes/HooksTab.jsx';
-import RpaCard from './automacoes/RpaCard.jsx';
 import DisparosTab from './automacoes/DisparosTab.jsx';
 import ChatTab from './automacoes/ChatTab.jsx';
 
@@ -82,22 +81,7 @@ export default function Automacoes() {
         >
           <i className="ti ti-webhook"></i> Integrações & Webhooks
         </div>
-        <div 
-          className={`tab ${tab === 'rpa' ? 'active' : ''}`} 
-          onClick={() => setTab('rpa')} 
-          role="button" 
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setTab('rpa');
-            }
-          }}
-          style={{ cursor: 'pointer' }}
-          aria-selected={tab === 'rpa'}
-        >
-          <i className="ti ti-robot"></i> Robô RPA
-        </div>
+
         <div 
           className={`tab ${tab === 'disparos' ? 'active' : ''}`} 
           onClick={() => setTab('disparos')} 
@@ -144,10 +128,6 @@ export default function Automacoes() {
           onSave={handleSave} 
           onDelete={handleDelete} 
         />
-      ) : tab === 'rpa' ? (
-        <div style={{ maxWidth: 720, width: '100%', marginTop: '10px' }} className="fz-in">
-          <RpaCard />
-        </div>
       ) : tab === 'chat' ? (
         <ChatTab initialParams={initialChatParams} clearInitialParams={() => setInitialChatParams(null)} />
       ) : (

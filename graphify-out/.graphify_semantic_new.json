@@ -1,152 +1,9 @@
 {
   "nodes": [
     {
-      "id": "readme_fadiga_zero",
-      "label": "Fadiga Zero Platform",
+      "id": "workflows_ci",
+      "label": "GitHub CI/CD Workflow",
       "file_type": "document",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_monitor_de_frota",
-      "label": "Monitor de Frota Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_cross_check",
-      "label": "Cross-Check Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_agenda",
-      "label": "Agenda Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_templates",
-      "label": "Templates Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_workspace",
-      "label": "Workspace Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_analytics",
-      "label": "Analytics Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_administracao",
-      "label": "Administração Panel",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_google_sheets_integration",
-      "label": "Google Sheets Integration",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_sascar",
-      "label": "Sascar Platform",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "readme_maxtrack",
-      "label": "Maxtrack Platform",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "index_root_div",
-      "label": "Root Container",
-      "file_type": "code",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\index.html",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "index_main_entry",
-      "label": "Main Script Entry",
-      "file_type": "code",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\index.html",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "workflows_ci_job_test",
-      "label": "CI Test Job",
-      "file_type": "code",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\.github\\workflows\\ci.yml",
       "source_location": null,
       "source_url": null,
@@ -155,9 +12,20 @@
       "contributor": null
     },
     {
-      "id": "docs_auditoria_2026_05_29_append_sheet_auth",
-      "label": "append-sheet Authentication Security Fix",
-      "file_type": "rationale",
+      "id": "readme",
+      "label": "MedNet README",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_auditoria_2026_05_29",
+      "label": "Technical Audit (2026-05-29)",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
       "source_location": null,
       "source_url": null,
@@ -166,53 +34,9 @@
       "contributor": null
     },
     {
-      "id": "docs_auditoria_2026_05_29_embedded_sheet_sync",
-      "label": "Embedded Sheet Sync Bug Fixes",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_auditoria_2026_05_29_trigger_secret",
-      "label": "TRIGGER_SECRET Vault Provisioning",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_auditoria_2026_05_29_eslint_config",
-      "label": "ESLint Quality Configurations",
-      "file_type": "code",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_auditoria_2026_05_29_code_cleanup",
-      "label": "Dead Code Removal",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_platforms_adapter_pattern",
-      "label": "Monitoring Platform Adapter Pattern",
-      "file_type": "rationale",
+      "id": "docs_platforms",
+      "label": "Monitoring Platforms Integration Guide",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
       "source_location": null,
       "source_url": null,
@@ -221,8 +45,20 @@
       "contributor": null
     },
     {
-      "id": "docs_platforms_ingestion_modes",
-      "label": "Ingestion Modes (Spreadsheet, API, Scraper)",
+      "id": "docs_platforms_sascar_adapter",
+      "label": "Sascar Platform Adapter",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Bookmarklet is used instead of automatic login because the Sascar portal requires server-side CAPTCHA, making login automation unfeasible."
+    },
+    {
+      "id": "docs_platforms_maxtrack_adapter",
+      "label": "Maxtrack Platform Adapter",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
       "source_location": null,
@@ -232,41 +68,8 @@
       "contributor": null
     },
     {
-      "id": "docs_platforms_sascar_bookmarklet",
-      "label": "Sascar Bookmarklet Scraper Mode",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_platforms_canonical_format",
-      "label": "Canonical Output Format (Drivers & Stats)",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_platforms_maxtrack_integration",
-      "label": "Maxtrack Integration (Spreadsheet)",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_project_overview",
-      "label": "Fadiga Zero Project Overview",
+      "id": "docs_project",
+      "label": "MedNet Project Documentation",
       "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
       "source_location": null,
@@ -276,40 +79,7 @@
       "contributor": null
     },
     {
-      "id": "docs_project_architecture",
-      "label": "SPA React / Supabase Architecture",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_project_drivers_queue",
-      "label": "Realtime Drivers Queue",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_project_dashboard_redesign",
-      "label": "Dashboard 'Gestão à Vista' Redesign",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_project_sheets_integration",
+      "id": "docs_project_google_sheets_sync",
       "label": "Google Sheets Bidirectional Integration",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
@@ -320,8 +90,8 @@
       "contributor": null
     },
     {
-      "id": "docs_project_maintenance_mode",
-      "label": "Platform Maintenance Mode",
+      "id": "docs_project_drivers_queue",
+      "label": "Realtime Drivers Queue (drivers_queue)",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
       "source_location": null,
@@ -331,9 +101,20 @@
       "contributor": null
     },
     {
-      "id": "docs_analytics_rpc_progress_rpc_acceleration",
-      "label": "Postgres RPC Analytics Acceleration",
-      "file_type": "rationale",
+      "id": "docs_project_dashboard_kpis",
+      "label": "Dashboard Gestão à Vista",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_analytics_rpc_progress",
+      "label": "Analytics Acceleration via RPC Handoff",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
       "source_location": null,
       "source_url": null,
@@ -342,41 +123,20 @@
       "contributor": null
     },
     {
-      "id": "docs_analytics_rpc_progress_daily_rollup",
-      "label": "Daily Rollup Optimization",
-      "file_type": "rationale",
+      "id": "docs_analytics_rpc_progress_rpc_rollup",
+      "label": "Postgres RPC and Daily Rollup for Analytics",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
-      "contributor": null
+      "contributor": null,
+      "rationale": "RPC and rollup are used to speed up analytics queries by performing normalizations on write and reading from a daily rollup, preventing CPU exhaustion on the micro burstable Supabase instance."
     },
     {
-      "id": "docs_analytics_rpc_progress_multi_compare",
-      "label": "Multi-Platform Comparison via RPC",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "docs_analytics_rpc_progress_performance_results",
-      "label": "RPC Performance Benchmarks",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "mednet_skill_skill_scaffold_guide",
-      "label": "Scaffold Guide for Adapters and Modules",
+      "id": "mednet_skill_skill",
+      "label": "MedNet Scaffold & Integration Skill",
       "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\skills\\mednet-skill\\SKILL.md",
       "source_location": null,
@@ -386,9 +146,9 @@
       "contributor": null
     },
     {
-      "id": "plans_2026_05_08_mednet_features_templates_var",
-      "label": "Plan: Templates with Variables in Monitor",
-      "file_type": "rationale",
+      "id": "plans_2026_05_08_mednet_features",
+      "label": "Daily-Use Features Implementation Plan",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
       "source_location": null,
       "source_url": null,
@@ -397,53 +157,9 @@
       "contributor": null
     },
     {
-      "id": "plans_2026_05_08_mednet_features_agenda_notif",
-      "label": "Plan: Agenda Reminders Notifications",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "plans_2026_05_08_mednet_features_sheet_age",
-      "label": "Plan: Sheet Age Badge in Monitor",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "plans_2026_05_08_mednet_features_history_filter",
-      "label": "Plan: Date Range Filter in History",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "plans_2026_05_08_mednet_features_pwa",
-      "label": "Plan: Installable PWA Support",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "plans_2026_05_09_workspace_editor_tiptap_editor_refactor",
-      "label": "Plan: TipTap Editor Refactoring",
-      "file_type": "rationale",
+      "id": "plans_2026_05_09_workspace_editor_tiptap",
+      "label": "Workspace Editor TipTap Refactor Implementation Plan",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
       "source_location": null,
       "source_url": null,
@@ -452,31 +168,9 @@
       "contributor": null
     },
     {
-      "id": "plans_2026_05_09_workspace_editor_tiptap_image_upload",
-      "label": "Plan: Workspace Image Upload to Storage",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "plans_2026_05_09_workspace_editor_tiptap_inline_icons",
-      "label": "Plan: Inline Icon Picker in Workspace",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "specs_2026_05_08_mednet_features_design_spec_vars",
-      "label": "Design: Dynamic Template Variables",
-      "file_type": "rationale",
+      "id": "specs_2026_05_08_mednet_features_design",
+      "label": "Daily-Use Features Design Specification",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
       "source_location": null,
       "source_url": null,
@@ -485,9 +179,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_08_mednet_features_design_spec_agenda",
-      "label": "Design: Agenda Local & Push Notifications",
-      "file_type": "rationale",
+      "id": "specs_2026_05_08_mednet_features_design_templates_vars",
+      "label": "Templates with Dynamic Variables",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
       "source_location": null,
       "source_url": null,
@@ -496,9 +190,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_08_mednet_features_design_spec_sheet_age",
-      "label": "Design: Sheet Age Calculation & Visuals",
-      "file_type": "rationale",
+      "id": "specs_2026_05_08_mednet_features_design_agenda_notifications",
+      "label": "Agenda Notifications",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
       "source_location": null,
       "source_url": null,
@@ -507,9 +201,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_08_mednet_features_design_spec_history",
-      "label": "Design: History Server-side Date Filter",
-      "file_type": "rationale",
+      "id": "specs_2026_05_08_mednet_features_design_history_filters",
+      "label": "History Filtering & CSV Export",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
       "source_location": null,
       "source_url": null,
@@ -518,9 +212,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_08_mednet_features_design_spec_pwa",
-      "label": "Design: PWA Caching Strategy",
-      "file_type": "rationale",
+      "id": "specs_2026_05_08_mednet_features_design_pwa",
+      "label": "Installable PWA",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
       "source_location": null,
       "source_url": null,
@@ -529,9 +223,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_09_agenda_edit_icons_design_edit_btn",
-      "label": "Design: Agenda Reminder Edit Modal",
-      "file_type": "rationale",
+      "id": "specs_2026_05_09_agenda_edit_icons_design",
+      "label": "Agenda Edit Button & Category Icons Design Specification",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-agenda-edit-icons-design.md",
       "source_location": null,
       "source_url": null,
@@ -540,9 +234,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_09_agenda_edit_icons_design_icons",
-      "label": "Design: Reminder Category Icons & Picker",
-      "file_type": "rationale",
+      "id": "specs_2026_05_09_agenda_edit_icons_design_icons_picker",
+      "label": "Agenda Category Icons & Edit Modal",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-agenda-edit-icons-design.md",
       "source_location": null,
       "source_url": null,
@@ -551,9 +245,9 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_09_workspace_editor_design_spec_cursor_fix",
-      "label": "Design: Cursor Position Loss Solution",
-      "file_type": "rationale",
+      "id": "specs_2026_05_09_workspace_editor_design",
+      "label": "Workspace Editor TipTap Redesign Specification",
+      "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-workspace-editor-design.md",
       "source_location": null,
       "source_url": null,
@@ -562,10 +256,33 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_09_workspace_editor_design_spec_rich_toolbar",
-      "label": "Design: TipTap Rich Formatting Toolbar",
-      "file_type": "rationale",
+      "id": "specs_2026_05_09_workspace_editor_design_tiptap_editor",
+      "label": "TipTap Editor Integration",
+      "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-workspace-editor-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "TipTap is used to replace native contentEditable because contentEditable loses the cursor position when React re-renders, while TipTap keeps the state internally and avoids cursor jumps."
+    },
+    {
+      "id": "memory_query_20260622_220510_are_the_inferred_relationships_involving_google_sh",
+      "label": "Query: Google Sheets Bidirectional Integration Validity",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\graphify-out\\memory\\query_20260622_220510_are_the_inferred_relationships_involving_google_sh.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": "2026-06-22T22:05:10.704222+00:00",
+      "author": null,
+      "contributor": "graphify"
+    },
+    {
+      "id": "index",
+      "label": "MedNet Web App Entry Point",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\index.html",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
@@ -573,19 +290,8 @@
       "contributor": null
     },
     {
-      "id": "specs_2026_05_09_workspace_editor_design_spec_auto_save",
-      "label": "Design: Auto-save Debouncing and Status",
-      "file_type": "rationale",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-workspace-editor-design.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "supabase_n8n_integration_guide_architecture",
-      "label": "n8n Integration Architecture",
+      "id": "supabase_n8n_integration_guide",
+      "label": "n8n + FastAPI + Supabase Integration Guide",
       "file_type": "document",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
       "source_location": null,
@@ -595,30 +301,8 @@
       "contributor": null
     },
     {
-      "id": "supabase_n8n_integration_guide_safety_counter",
-      "label": "n8n Infinite Loop Prevention (Safety Counter)",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "supabase_n8n_integration_guide_supabase_update",
-      "label": "n8n Supabase Row UPDATE Configuration",
-      "file_type": "concept",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
-    },
-    {
-      "id": "supabase_n8n_integration_guide_fastapi_error_mapping",
-      "label": "FastAPI VPS Error Mapping & Logs",
+      "id": "supabase_n8n_integration_guide_rpa_workflow",
+      "label": "n8n and FastAPI RPA Workflow",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
       "source_location": null,
@@ -629,7 +313,7 @@
     },
     {
       "id": "public_apple_touch_icon_180x180_logo",
-      "label": "MedNet Logo",
+      "label": "MedNet Apple Touch Icon (180x180)",
       "file_type": "image",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\apple-touch-icon-180x180.png",
       "source_location": null,
@@ -639,8 +323,8 @@
       "contributor": null
     },
     {
-      "id": "public_apple_touch_icon_180x180_mednet_branding",
-      "label": "MedNet Branding Design",
+      "id": "public_apple_touch_icon_180x180_brand_logo_concept",
+      "label": "MedNet Brand Logo Design",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\apple-touch-icon-180x180.png",
       "source_location": null,
@@ -651,7 +335,7 @@
     },
     {
       "id": "public_favicon_svg",
-      "label": "favicon.svg",
+      "label": "MedNet Platform Favicon SVG",
       "file_type": "image",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\favicon.svg",
       "source_location": null,
@@ -661,26 +345,16 @@
       "contributor": null
     },
     {
-      "id": "public_favicon_logo_concept",
-      "label": "MedNet Logo Concept",
+      "id": "public_favicon_branding",
+      "label": "MedNet Platform Visual Branding",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\favicon.svg",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
-      "contributor": null
-    },
-    {
-      "id": "public_icons",
-      "label": "icons.svg",
-      "file_type": "image",
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null
+      "contributor": null,
+      "rationale": "The visual branding combines a bold, white system-ui sans-serif 'M' letter (representing MedNet) with an orange medical cross/plus sign (#F26931) in the top-right corner, placed against a premium dark red/burgundy gradient background (#9E1A45 to #5A0F25) with a 7px border radius."
     },
     {
       "id": "public_icons_bluesky_icon",
@@ -750,7 +424,7 @@
     },
     {
       "id": "public_maskable_icon_512x512_logo",
-      "label": "MedNet Platform Logo (M+)",
+      "label": "MedNet Maskable Logo Icon",
       "file_type": "image",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\maskable-icon-512x512.png",
       "source_location": null,
@@ -760,15 +434,16 @@
       "contributor": null
     },
     {
-      "id": "public_maskable_icon_512x512_concept_mednet_plus",
-      "label": "MedNet+ Branding",
+      "id": "public_maskable_icon_512x512_brand_identity",
+      "label": "MedNet Brand Identity",
       "file_type": "concept",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\maskable-icon-512x512.png",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
-      "contributor": null
+      "contributor": null,
+      "rationale": "The logo features a clean white sans-serif letter 'M' paired with an orange '+' medical/healthcare cross symbol on a premium dark maroon gradient rounded background. It is designed as a maskable PWA icon to support visual branding across various operating systems."
     },
     {
       "id": "public_pwa_192x192_logo",
@@ -782,10 +457,56 @@
       "contributor": null
     },
     {
-      "id": "public_pwa_512x512_logo",
-      "label": "MedNet PWA Icon (512x512)",
+      "id": "public_pwa_192x192_brand_identity",
+      "label": "MedNet Brand Identity (192x192)",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-192x192.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "The logo features a clean white sans-serif letter 'M' paired with an orange '+' medical/healthcare cross symbol on a premium dark maroon rounded background. It serves as the standard 192x192 PWA application launcher icon."
+    },
+    {
+      "id": "public_pwa_512x512_app_icon",
+      "label": "MedNet App Icon",
       "file_type": "image",
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-512x512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "public_pwa_512x512_brand_identity",
+      "label": "MedNet Brand Identity",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-512x512.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "The logo features a white letter 'M' with an orange medical cross or plus sign at the top-right corner, set against a dark red/burgundy rounded square background. This design combines the initial 'M' for MedNet with the plus symbol representing health, using modern non-generic colors (burgundy/orange) to create a premium medical application brand identity."
+    },
+    {
+      "id": "public_pwa_64x64_icon",
+      "label": "MedNet PWA Icon (64x64)",
+      "file_type": "image",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-64x64.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "public_pwa_64x64_branding",
+      "label": "MedNet Visual Identity",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-64x64.png",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
@@ -795,219 +516,299 @@
   ],
   "edges": [
     {
-      "source": "specs_2026_05_08_mednet_features_design_spec_vars",
-      "target": "plans_2026_05_08_mednet_features_templates_var",
-      "relation": "cites",
+      "source": "docs_project",
+      "target": "docs_platforms",
+      "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "specs_2026_05_08_mednet_features_design_spec_agenda",
-      "target": "plans_2026_05_08_mednet_features_agenda_notif",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "specs_2026_05_08_mednet_features_design_spec_sheet_age",
-      "target": "plans_2026_05_08_mednet_features_sheet_age",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "specs_2026_05_08_mednet_features_design_spec_history",
-      "target": "plans_2026_05_08_mednet_features_history_filter",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "specs_2026_05_08_mednet_features_design_spec_pwa",
-      "target": "plans_2026_05_08_mednet_features_pwa",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "plans_2026_05_09_workspace_editor_tiptap_editor_refactor",
-      "target": "specs_2026_05_09_workspace_editor_design_spec_cursor_fix",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "plans_2026_05_09_workspace_editor_tiptap_editor_refactor",
-      "target": "specs_2026_05_09_workspace_editor_design_spec_rich_toolbar",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "plans_2026_05_09_workspace_editor_tiptap_editor_refactor",
-      "target": "specs_2026_05_09_workspace_editor_design_spec_auto_save",
-      "relation": "cites",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "docs_project_dashboard_redesign",
-      "target": "readme_analytics",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_project_sheets_integration",
-      "target": "readme_google_sheets_integration",
-      "relation": "conceptually_related_to",
+      "source": "readme",
+      "target": "docs_project",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme",
+      "target": "docs_platforms",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme",
+      "target": "mednet_skill_skill",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mednet_skill_skill",
+      "target": "docs_platforms",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\skills\\mednet-skill\\SKILL.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_auditoria_2026_05_29",
+      "target": "workflows_ci",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_auditoria_2026_05_29",
+      "target": "docs_project_google_sheets_sync",
+      "relation": "rationale_for",
       "confidence": "INFERRED",
-      "confidence_score": 0.85,
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "plans_2026_05_08_mednet_features",
+      "target": "specs_2026_05_08_mednet_features_design",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "plans_2026_05_09_workspace_editor_tiptap",
+      "target": "specs_2026_05_09_workspace_editor_design",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_09_workspace_editor_design",
+      "target": "specs_2026_05_09_workspace_editor_design_tiptap_editor",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-workspace-editor-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "plans_2026_05_09_workspace_editor_tiptap",
+      "target": "specs_2026_05_09_workspace_editor_design_tiptap_editor",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_project",
+      "target": "docs_project_google_sheets_sync",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_platforms_maxtrack_integration",
-      "target": "readme_maxtrack",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
+      "source": "docs_project",
+      "target": "docs_project_drivers_queue",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_project",
+      "target": "docs_project_dashboard_kpis",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PROJECT.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_platforms",
+      "target": "docs_platforms_sascar_adapter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_platforms_sascar_bookmarklet",
-      "target": "readme_sascar",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
+      "source": "docs_platforms",
+      "target": "docs_platforms_maxtrack_adapter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_auditoria_2026_05_29_append_sheet_auth",
-      "target": "docs_project_sheets_integration",
+      "source": "docs_analytics_rpc_progress",
+      "target": "docs_analytics_rpc_progress_rpc_rollup",
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "docs_auditoria_2026_05_29_embedded_sheet_sync",
-      "target": "docs_project_sheets_integration",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "docs_auditoria_2026_05_29_trigger_secret",
-      "target": "docs_auditoria_2026_05_29_append_sheet_auth",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "docs_analytics_rpc_progress_daily_rollup",
-      "target": "docs_project_overview",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_analytics_rpc_progress_rpc_acceleration",
-      "target": "docs_project_overview",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "supabase_n8n_integration_guide_supabase_update",
-      "target": "docs_project_sheets_integration",
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
+      "source": "supabase_n8n_integration_guide",
+      "target": "supabase_n8n_integration_guide_rpa_workflow",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_auditoria_2026_05_29_append_sheet_auth",
-      "target": "supabase_n8n_integration_guide_supabase_update",
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\AUDITORIA-2026-05-29.md",
+      "source": "memory_query_20260622_220510_are_the_inferred_relationships_involving_google_sh",
+      "target": "docs_project_google_sheets_sync",
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\graphify-out\\memory\\query_20260622_220510_are_the_inferred_relationships_involving_google_sh.md",
       "source_location": null,
       "weight": 1.0
     },
     {
-      "source": "docs_platforms_ingestion_modes",
-      "target": "supabase_n8n_integration_guide_architecture",
+      "source": "memory_query_20260622_220510_are_the_inferred_relationships_involving_google_sh",
+      "target": "supabase_n8n_integration_guide",
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\graphify-out\\memory\\query_20260622_220510_are_the_inferred_relationships_involving_google_sh.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "supabase_n8n_integration_guide_rpa_workflow",
+      "target": "docs_project_google_sheets_sync",
       "relation": "semantically_similar_to",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\PLATFORMS.md",
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\supabase\\n8n_integration_guide.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_08_mednet_features_design",
+      "target": "specs_2026_05_08_mednet_features_design_templates_vars",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_08_mednet_features_design",
+      "target": "specs_2026_05_08_mednet_features_design_agenda_notifications",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_08_mednet_features_design",
+      "target": "specs_2026_05_08_mednet_features_design_history_filters",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_08_mednet_features_design",
+      "target": "specs_2026_05_08_mednet_features_design_pwa",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_09_agenda_edit_icons_design",
+      "target": "specs_2026_05_09_agenda_edit_icons_design_icons_picker",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-agenda-edit-icons-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "specs_2026_05_09_agenda_edit_icons_design_icons_picker",
+      "target": "specs_2026_05_08_mednet_features_design_agenda_notifications",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-09-agenda-edit-icons-design.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index",
+      "target": "readme",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\index.html",
       "source_location": null,
       "weight": 1.0
     },
     {
       "source": "public_apple_touch_icon_180x180_logo",
-      "target": "public_apple_touch_icon_180x180_mednet_branding",
+      "target": "public_apple_touch_icon_180x180_brand_logo_concept",
       "relation": "conceptually_related_to",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\apple-touch-icon-180x180.png",
       "source_location": null,
       "weight": 1.0
     },
     {
       "source": "public_favicon_svg",
-      "target": "public_favicon_logo_concept",
-      "relation": "implements",
+      "target": "public_favicon_branding",
+      "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\favicon.svg",
@@ -1015,118 +816,109 @@
       "weight": 1.0
     },
     {
-      "source": "public_icons",
-      "target": "public_icons_bluesky_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "public_icons",
-      "target": "public_icons_discord_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "public_icons",
-      "target": "public_icons_documentation_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "public_icons",
-      "target": "public_icons_github_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "public_icons",
-      "target": "public_icons_social_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
-      "source": "public_icons",
-      "target": "public_icons_x_icon",
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg",
-      "source_location": null,
-      "weight": 1.0
-    },
-    {
       "source": "public_maskable_icon_512x512_logo",
-      "target": "public_maskable_icon_512x512_concept_mednet_plus",
-      "relation": "implements",
-      "confidence": "INFERRED",
-      "confidence_score": 0.9,
+      "target": "public_maskable_icon_512x512_brand_identity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\maskable-icon-512x512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_pwa_192x192_logo",
+      "target": "public_pwa_192x192_brand_identity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-192x192.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "vite_config",
+      "target": "public_pwa_192x192_logo",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-192x192.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_pwa_192x192_logo",
+      "target": "plans_2026_05_08_mednet_features_pwa",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-192x192.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_pwa_512x512_app_icon",
+      "target": "public_pwa_512x512_brand_identity",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-512x512.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_pwa_64x64_icon",
+      "target": "public_pwa_64x64_branding",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\pwa-64x64.png",
       "source_location": null,
       "weight": 1.0
     }
   ],
   "hyperedges": [
     {
-      "id": "mednet_core_features_implementation_flow",
-      "label": "MedNet Core Features Implementation Flow",
+      "id": "daily_use_features_group",
+      "label": "Daily-Use Productivity Features Group",
       "nodes": [
-        "plans_2026_05_08_mednet_features_templates_var",
-        "plans_2026_05_08_mednet_features_agenda_notif",
-        "plans_2026_05_08_mednet_features_sheet_age",
-        "plans_2026_05_08_mednet_features_history_filter",
-        "plans_2026_05_08_mednet_features_pwa"
+        "specs_2026_05_08_mednet_features_design_templates_vars",
+        "specs_2026_05_08_mednet_features_design_agenda_notifications",
+        "specs_2026_05_08_mednet_features_design_history_filters",
+        "specs_2026_05_08_mednet_features_design_pwa"
       ],
-      "relation": "implement",
+      "relation": "form",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-08-mednet-features.md"
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\specs\\2026-05-08-mednet-features-design.md"
     },
     {
-      "id": "workspace_tiptap_rich_editor_redesign_group",
-      "label": "Workspace TipTap Rich Editor Redesign Group",
+      "id": "workspace_editor_tiptap_refactor_specs",
+      "label": "Workspace Editor TipTap Redesign Specifications and Plans",
       "nodes": [
-        "plans_2026_05_09_workspace_editor_tiptap_editor_refactor",
-        "specs_2026_05_09_workspace_editor_design_spec_cursor_fix",
-        "specs_2026_05_09_workspace_editor_design_spec_rich_toolbar",
-        "specs_2026_05_09_workspace_editor_design_spec_auto_save"
+        "plans_2026_05_09_workspace_editor_tiptap",
+        "specs_2026_05_09_workspace_editor_design",
+        "specs_2026_05_09_workspace_editor_design_tiptap_editor"
       ],
-      "relation": "participate_in",
+      "relation": "implement",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\superpowers\\plans\\2026-05-09-workspace-editor-tiptap.md"
     },
     {
-      "id": "postgres_rpc_and_rollup_aggregation_pipeline",
-      "label": "Postgres RPC and Rollup Aggregation Pipeline",
+      "id": "public_icons_ui_symbols",
+      "label": "UI Icon Symbols",
       "nodes": [
-        "docs_analytics_rpc_progress_rpc_acceleration",
-        "docs_analytics_rpc_progress_daily_rollup",
-        "docs_analytics_rpc_progress_multi_compare"
+        "public_icons_bluesky_icon",
+        "public_icons_discord_icon",
+        "public_icons_documentation_icon",
+        "public_icons_github_icon",
+        "public_icons_social_icon",
+        "public_icons_x_icon"
       ],
-      "relation": "form",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\docs\\analytics-rpc-progress.md"
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Usuario\\Documents\\Projetos\\MedNetPlataform\\public\\icons.svg"
     }
   ],
   "input_tokens": 0,

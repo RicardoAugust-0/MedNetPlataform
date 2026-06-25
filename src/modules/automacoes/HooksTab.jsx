@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { useConfirm } from '../../hooks/useConfirm';
+
 import { useToast } from '../../hooks/useToast.jsx';
-import { supabase } from '../../supabase.js';
+
 
 const ICON_OPTIONS = [
   'ti-robot', 'ti-cloud-download', 'ti-bolt', 'ti-mail-bolt', 'ti-database',
