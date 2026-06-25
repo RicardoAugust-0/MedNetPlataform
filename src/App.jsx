@@ -12,6 +12,7 @@ import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
 import { DataProvider } from "./components/DataProvider.jsx";
 const Admin = lazy(() => import("./modules/Admin.jsx"));
+const AdminLayout = lazy(() => import("./modules/admin/AdminLayout.jsx"));
 const Agenda = lazy(() => import("./modules/Agenda.jsx"));
 const Analytics = lazy(() => import("./modules/Analytics.jsx"));
 const CrossCheck = lazy(() => import("./modules/CrossCheck.jsx"));
@@ -176,30 +177,27 @@ function AppShell() {
                   <Route path="/notas" element={<Notes />} />
                   <Route path="/links" element={<Links />} />
                   <Route path="/perfil" element={<Profile />} />
+                  {/* Compat: rotas antigas redirecionam para o novo escopo /admin */}
+                  <Route path="/analytics" element={<Navigate to="/admin/analytics" replace />} />
+                  <Route path="/relatorios" element={<Navigate to="/admin/relatorios" replace />} />
+
+                  {/* Administração: guard único no pai, sub-rotas reais via <Outlet/> */}
                   <Route
                     path="/admin"
                     element={
                       <AdminGuard>
-                        <Admin />
+                        <AdminLayout />
                       </AdminGuard>
                     }
-                  />
-                  <Route
-                    path="/analytics"
-                    element={
-                      <AdminGuard>
-                        <Analytics />
-                      </AdminGuard>
-                    }
-                  />
-                  <Route
-                    path="/relatorios"
-                    element={
-                      <AdminGuard>
-                        <Reports />
-                      </AdminGuard>
-                    }
-                  />
+                  >
+                    <Route index element={<Navigate to="analytics" replace />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="relatorios" element={<Reports />} />
+                    <Route path="equipe" element={<Admin section="equipe" />} />
+                    <Route path="integracoes" element={<Admin section="integracoes" />} />
+                    <Route path="ia" element={<Admin section="ia" />} />
+                    <Route path="sistema" element={<Admin section="sistema" />} />
+                  </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </Suspense>

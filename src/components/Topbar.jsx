@@ -14,8 +14,12 @@ export default function Topbar() {
     return () => clearInterval(id);
   }, []);
 
-  const panelId = location.pathname.split('/')[1] || 'dashboard';
-  const meta = PANEL_TITLES[panelId] || { t: panelId, s: '' };
+  // Resolve o título tentando a chave de 2 segmentos (ex: 'admin/analytics')
+  // e caindo para o 1º segmento (ex: 'admin'/'monitor') — suporta sub-rotas.
+  const segs = location.pathname.split('/').filter(Boolean);
+  const panelId = segs[0] || 'dashboard';
+  const key2 = segs.slice(0, 2).join('/');
+  const meta = PANEL_TITLES[key2] || PANEL_TITLES[panelId] || { t: panelId, s: '' };
   const hour = new Date().getHours();
   const turno = hour >= 6 && hour < 18 ? 'diurno' : 'noturno';
   const subtitle = panelId === 'dashboard' ? `${meta.s} · turno ${turno}` : meta.s;

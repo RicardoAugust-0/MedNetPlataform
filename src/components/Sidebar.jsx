@@ -47,8 +47,11 @@ export default function Sidebar() {
   const isAdmin = profile?.role === 'admin';
 
   const isItemActive = (item) => {
-    const p = location.pathname;
-    return p === '/' + item.id || p.startsWith('/' + item.id + '/');
+    // Casa pelo primeiro segmento do path do item (não pelo id), para que a
+    // entrada única "Administração" (/admin) fique ativa em todas as sub-rotas
+    // (/admin/analytics, /admin/equipe, …) e o Monitor em /monitor/:tab.
+    const base = '/' + item.path.split('/')[1];
+    return location.pathname === base || location.pathname.startsWith(base + '/');
   };
 
   const navResults = query.length > 0

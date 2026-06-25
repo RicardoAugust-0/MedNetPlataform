@@ -10,14 +10,14 @@ import { supabase, getFunctionErrorMessage } from '../supabase.js';
 import { iniciais } from '../utils.js';
 import { exportCSV } from './monitor/utils.jsx';
 
-export default function Admin() {
+export default function Admin({ section = 'equipe' }) {
   const { profiles, loading, updateRole, updateInfo } = useProfiles();
   const { maintenance, setMaintenance } = useMaintenance();
   const { aliases, setAliases } = useCarrierAliases();
   const { profile: me } = useAuth();
   const toast = useToast();
   
-  const [activeTab, setActiveTab] = useState('equipe'); // 'equipe' | 'integracoes' | 'ia' | 'sistema'
+  // A seção ativa vem da rota (AdminLayout controla a sub-navegação).
 
   const [editing, setEditing] = useState(null);
   const [editNome,  setEditNome]  = useState('');
@@ -163,62 +163,12 @@ export default function Admin() {
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Header */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Painel de Administração</h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Configure permissões da equipe, automações RPA, credenciais de IA e ferramentas do sistema.</p>
-      </div>
+      {/* Cabeçalho e sub-navegação movidos para AdminLayout */}
 
-      {/* Tabs Menu */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '4px', 
-        borderBottom: '1px solid var(--border)', 
-        paddingBottom: '2px',
-        overflowX: 'auto',
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none'
-      }}>
-        {[
-          { id: 'equipe', label: 'Equipe & Acessos', icon: 'ti-users' },
-          { id: 'integracoes', label: 'Integrações & RPA', icon: 'ti-api' },
-          { id: 'ia', label: 'Chaves de IA', icon: 'ti-cpu' },
-          { id: 'sistema', label: 'Sistema & Limpeza', icon: 'ti-settings' }
-        ].map(tab => {
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                border: 'none',
-                background: 'none',
-                fontSize: '13px',
-                fontWeight: active ? 600 : 500,
-                color: active ? '#9E1A45' : 'var(--text-muted, #8A94A6)',
-                borderBottom: active ? '2.5px solid #9E1A45' : '2.5px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                fontFamily: 'inherit',
-                outline: 'none'
-              }}
-            >
-              <i className={`ti ${tab.icon}`} style={{ fontSize: '15px' }}></i>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tab Contents */}
+      {/* Tab Contents — seção definida pela rota (prop `section`) */}
       <div style={{ maxWidth: 720, width: '100%', marginTop: '10px' }}>
         
-        {activeTab === 'equipe' && (
+        {section === 'equipe' && (
           <div className="fz-in">
             {/* Convidar novo operador */}
             <div className="card" style={{ marginBottom: 16 }}>
@@ -333,7 +283,7 @@ export default function Admin() {
           </div>
         )}
 
-        {activeTab === 'integracoes' && (
+        {section === 'integracoes' && (
           <div className="fz-in">
             {/* Configuração da OmniLink */}
             <OmnilinkConfigCard />
@@ -442,13 +392,13 @@ export default function Admin() {
           </div>
         )}
 
-        {activeTab === 'ia' && (
+        {section === 'ia' && (
           <div className="fz-in">
             <AiCredentialsCard />
           </div>
         )}
 
-        {activeTab === 'sistema' && (
+        {section === 'sistema' && (
           <div className="fz-in">
             {/* Modo manutenção */}
             <div className="card" style={{ marginBottom: 16, borderColor: maintenance.enabled ? '#F26931' : undefined }}>

@@ -18,8 +18,6 @@ export const NAV_ITEMS = [
   { id: 'automacoes', label: 'Automações',       icon: 'ti-webhook',         group: 'Automação',    path: '/automacoes' },
   { id: 'perfil',     label: 'Meu Perfil',       icon: 'ti-user-circle',     group: 'Conta',        path: '/perfil' },
   { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Conta',        path: '/admin',      adminOnly: true },
-  { id: 'analytics',  label: 'Analytics',        icon: 'ti-chart-pie',       group: 'Conta',        path: '/analytics',  adminOnly: true },
-  { id: 'relatorios', label: 'Relatórios IA',    icon: 'ti-report-analytics',group: 'Conta',        path: '/relatorios', adminOnly: true },
 ];
 
 export const PANEL_TITLES = {
@@ -35,6 +33,12 @@ export const PANEL_TITLES = {
   automacoes: { t: 'Automações',             s: 'Hooks da VPS · status de execução e disparos' },
   perfil:    { t: 'Meu Perfil',             s: 'Configurações da sua conta' },
   admin:     { t: 'Administração',          s: 'Gerenciamento da equipe' },
+  'admin/analytics':   { t: 'Analytics',        s: 'Análise de reincidência e métricas da operação' },
+  'admin/relatorios':  { t: 'Relatórios IA',    s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
+  'admin/equipe':      { t: 'Equipe & Acessos', s: 'Convites e permissões da equipe' },
+  'admin/integracoes': { t: 'Integrações',      s: 'OmniLink, credenciais e mapeamento de transportadoras' },
+  'admin/ia':          { t: 'IA & Parsing',     s: 'Provedores, modelos e chaves de API' },
+  'admin/sistema':     { t: 'Sistema',          s: 'Modo manutenção e limpeza de histórico' },
   analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
   relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
   crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
