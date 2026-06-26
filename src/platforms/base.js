@@ -147,3 +147,11 @@ export function emptyStats(overrides = {}) {
     ...overrides,
   };
 }
+
+// Regras padrão de plataforma.
+export const defaultRules = {
+  slaLimitMin: 30,             // Tempo limite de SLA padrão em minutos
+  criticalAlertsCount: 5,      // Limite de alertas de intervenção para considerar motorista crítico
+  minMovingSpeedKmh: 10,       // Velocidade mínima para processamento
+};
+

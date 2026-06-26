@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { useDriversQueue } from './hooks/useDriversQueue';
+import { useOpenAlerts } from './hooks/useOpenAlerts';
 import { useSheetHistory } from './hooks/useSheetHistory';
 
 function load(k, fb) {
@@ -12,10 +12,10 @@ function save(k, v) {
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
-  const { drivers, loading: driversLoading, lastChangeAt: driversLastChangeAt, replaceAll: replaceDrivers, updateOne: updateDriver, bulkUpdate: bulkUpdateDrivers, clearAll: clearDrivers, reload: reloadDrivers } = useDriversQueue();
+  const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
+  const { drivers, loading: driversLoading, loadedAt: driversLoadedAt, reload: reloadDrivers } = useOpenAlerts(platformId);
   const sheetHistory = useSheetHistory();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
-  const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
   const [density,     setDensityState]     = useState(() => load('density',  'normal'));
   const [accent,      setAccentState]      = useState(() => load('accent',   'vinho'));
@@ -34,8 +34,7 @@ export function AppProvider({ children }) {
 
   // Sem useMemo no value, todo consumer de useApp() re-renderiza a cada render do Provider.
   const value = useMemo(() => ({
-    drivers, driversLoading, driversLastChangeAt,
-    replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
+    drivers, driversLoading, driversLoadedAt, reloadDrivers,
     filters, setFilters,
     platformId, setPlatformId,
     theme, setTheme,
@@ -46,8 +45,7 @@ export function AppProvider({ children }) {
     rhythm, setRhythm,
     sheetHistory,
   }), [
-    drivers, driversLoading, driversLastChangeAt,
-    replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, reloadDrivers,
+    drivers, driversLoading, driversLoadedAt, reloadDrivers,
     filters, setFilters,
     platformId, setPlatformId,
     theme, setTheme,

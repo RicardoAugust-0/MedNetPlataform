@@ -284,6 +284,9 @@ body {
 .btn-primary:hover { background: #d85c29; }
 .btn-danger { color: var(--danger-600); }
 .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger-500); color: var(--danger-600); }
+.btn-warning { color: var(--warning-600); }
+.btn-warning:hover { background: var(--warning-bg); border-color: var(--warning-500); color: var(--warning-600); }
+
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--surface-2); }
 .btn-icon-only { padding: 7px 9px; }

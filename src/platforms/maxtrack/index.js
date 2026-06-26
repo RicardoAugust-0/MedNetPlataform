@@ -22,6 +22,14 @@ const maxtrack = {
   taxonomy:    TAXONOMY,
   severidades: ['Gravíssimo', 'Grave', 'Normal'],
 
+  // ── Regras de Negócio ──
+  rules: {
+    slaLimitMin: 30,
+    criticalAlertsCount: 8,
+    minMovingSpeedKmh: 10,
+  },
+
+
   // ── Modo planilha ──
   spreadsheet: {
     accept:      ['.xlsx', '.xls', '.csv'],

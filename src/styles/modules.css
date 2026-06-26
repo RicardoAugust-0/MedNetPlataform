@@ -154,13 +154,32 @@
 
 .upload-area {
   border: 1.5px dashed var(--border-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--vibe-radius-card, var(--radius-lg));
+  box-shadow: var(--vibe-shadow, none);
   padding: 24px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
   background: var(--surface-0);
   display: flex; align-items: center; justify-content: center; gap: 16px;
+}
+.upload-area.collapsed {
+  padding: 10px 20px;
+  gap: 12px;
+}
+.upload-area.collapsed .upload-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+.upload-area.collapsed .upload-icon i {
+  font-size: 16px;
+}
+.upload-area.collapsed .upload-title {
+  font-size: 12.5px;
+}
+.upload-area.collapsed .upload-hint {
+  display: none;
 }
 .upload-area:hover, .upload-area.drag-over {
   border-color: var(--accent-500);
@@ -245,7 +264,8 @@
 .driver-list {
   background: var(--surface-0);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--vibe-radius-card, var(--radius-lg));
+  box-shadow: var(--vibe-shadow, var(--shadow-sm));
   overflow: hidden;
 }
 .driver-item {
@@ -253,7 +273,39 @@
   padding: 13px 18px;
   border-bottom: 1px solid var(--border);
   transition: background 0.15s;
+  flex-wrap: wrap;
 }
+.d-timeline-expand {
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+
+/* Seletor de Plataforma */
+.platform-select-container select {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--vibe-radius-btn, var(--radius-sm));
+  border: 1px solid var(--border-md);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.platform-select-container select:hover {
+  border-color: var(--accent-500);
+  background: var(--surface-2);
+}
+.platform-select-container select:focus {
+  border-color: var(--accent-500);
+  box-shadow: 0 0 0 2px var(--accent-50);
+}
+
 .driver-item:last-child { border-bottom: none; }
 .driver-item:hover { background: var(--surface-1); }
 

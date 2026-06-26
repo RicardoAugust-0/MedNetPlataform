@@ -2,7 +2,7 @@ import { iniciais } from '../../utils';
 import { sevClass, TiposBadge, ElapsedTimer } from './utils';
 import PlatformBadge from '../PlatformBadge';
 
-export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }) {
+export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry, expanded, onToggleExpand }) {
   const sev = sevClass(d);
   const isGravissimo = d.severidade === 'Gravíssimo';
 
@@ -34,7 +34,32 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
             <span className="badge badge-info">{d.tecnicos} {d.tecnicos === 1 ? 'evento' : 'eventos'} técnico(s)</span>
           )}
 
+          {/* SLA Badge */}
+          {type !== 'tecnicos' && d.slaAgeMin > 0 && (
+            <span
+              className={`badge badge-${d.slaBreached ? 'danger' : 'warning'}`}
+              title={d.slaBreached ? `SLA estourado: aberto há ${Math.floor(d.slaAgeMin)} minutos` : `SLA em andamento: aberto há ${Math.floor(d.slaAgeMin)} minutos`}
+              style={{ fontSize: 9.5 }}
+            >
+              <i className={`ti ti-${d.slaBreached ? 'clock-exclamation' : 'clock'}`} style={{ marginRight: 2 }}></i>
+              SLA {Math.floor(d.slaAgeMin)}m
+            </span>
+          )}
+
           <ElapsedTimer since={d._loadedAt} />
+
+          {/* Toggle Timeline Button */}
+          {d.eventosDetalhados && d.eventosDetalhados.length > 0 && (
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ padding: '2px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2, height: 18 }}
+              onClick={onToggleExpand}
+              title={expanded ? "Recolher detalhes" : "Expandir detalhes"}
+            >
+              <i className={`ti ti-${expanded ? 'layout-navbar-collapse' : 'layout-navbar-expand'}`} style={{ fontSize: 10 }}></i>
+              {expanded ? 'Ocultar' : `Eventos (${(d.eventosDetalhados || []).filter(e => e.bucket === (type === 'intervencao' ? 'intervencao' : type === 'reportar' ? 'reportar' : 'tecnico')).length})`}
+            </button>
+          )}
 
           {daysSince !== undefined && (
             <span
@@ -139,6 +164,30 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry }
           </button>
         )}
       </div>
+
+      {/* Expanded Timeline details */}
+      {expanded && d.eventosDetalhados && d.eventosDetalhados.length > 0 && (
+        <div className="d-timeline-expand">
+          <div style={{ paddingLeft: 58, display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+            {(d.eventosDetalhados || [])
+              .filter(e => e.bucket === (type === 'intervencao' ? 'intervencao' : type === 'reportar' ? 'reportar' : 'tecnico'))
+              .slice()
+              .sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0))
+              .map((e, idx) => {
+                const dateStr = e.ts ? new Date(e.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+                const sevColor = e.severidade === 'Gravíssimo' ? 'var(--danger-500)' : e.severidade === 'Grave' ? 'var(--warning-500)' : 'var(--text-muted)';
+                return (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11.5 }}>
+                    <span style={{ color: 'var(--text-muted)', width: 40, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>{dateStr}</span>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: sevColor }}></span>
+                    <span style={{ color: 'var(--text-primary)', flex: 1 }}>{e.tipo}</span>
+                    <span style={{ color: sevColor, fontWeight: 600 }}>{e.severidade}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -83,7 +83,7 @@ export default function Monitor() {
   const { tab: activeTab = 'intervencao' } = useParams();
   const [searchParams] = useSearchParams();
 
-  const { drivers, replaceDrivers, updateDriver, bulkUpdateDrivers, clearDrivers, filters, setFilters, platformId, setPlatformId } = useApp();
+  const { drivers, driversLoading, reloadDrivers, filters, setFilters, platformId, setPlatformId } = useApp();
   const { profile } = useAuth();
   const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
@@ -93,6 +93,26 @@ export default function Monitor() {
   const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
   const { resolveAlias } = useCarrierAliases();
   const sheetHistory   = useSheetHistory();
+
+  // Estado dos cards expansíveis
+  const [expandedPlacas, setExpandedPlacas] = useState(new Set());
+
+  const handleToggleExpand = (placa) => {
+    setExpandedPlacas(prev => {
+      const next = new Set(prev);
+      if (next.has(placa)) next.delete(placa);
+      else next.add(placa);
+      return next;
+    });
+  };
+
+  const handleExpandAll = (list) => {
+    setExpandedPlacas(new Set(list.map(d => d.placa)));
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedPlacas(new Set());
+  };
 
   // Carrega dados do Sheets em background ao montar o Monitor
   useEffect(() => {
@@ -153,10 +173,24 @@ export default function Monitor() {
 
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => setCurrentPage(1), [activeTab]);
-  const [statusMsg,  setStatusMsg]  = useState(drivers.length > 0 ? `${drivers.length} motoristas na fila (planilha anterior)` : 'Aguardando carga da planilha (.xlsx ou .csv)');
-  const [statusKind, setStatusKind] = useState(drivers.length > 0 ? 'active' : 'idle');
+  const [statusMsg,  setStatusMsg]  = useState('Aguardando carga de eventos ou planilha.');
+  const [statusKind, setStatusKind] = useState('idle');
   const [loadStats,  setLoadStats]  = useState(null);
   const [loading,    setLoading]    = useState(false);
+
+  // Atualização reativa de status com base na fila
+  useEffect(() => {
+    if (driversLoading) {
+      setStatusKind('idle');
+      setStatusMsg('Carregando fila de motoristas...');
+    } else if (drivers.length > 0) {
+      setStatusKind('active');
+      setStatusMsg(`${drivers.length} motorista(s) na fila do monitor.`);
+    } else {
+      setStatusKind('idle');
+      setStatusMsg('Fila limpa. Aguardando novos eventos ou planilha.');
+    }
+  }, [drivers.length, driversLoading]);
 
   const [sheetLoadedAt, setSheetLoadedAt] = useState(() => localStorage.getItem('mn_sheet_loaded_at'));
   const [sheetAgeMin,   setSheetAgeMin]   = useState(() => {
@@ -282,7 +316,7 @@ export default function Monitor() {
         }
       }
 
-      replaceDrivers(timestamped, platform.id);
+      await reloadDrivers();
       localStorage.setItem('mn_sheet_loaded_at', loadedAt);
       const platRawData = {
         total: stats.totalFechados || 0,
@@ -342,7 +376,6 @@ export default function Monitor() {
     if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
     const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs });
-    updateDriver(d.placa, { alertas: 0, tipos: [] });
     const now = new Date();
     const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const data = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -367,7 +400,6 @@ export default function Monitor() {
   const reportar = async (d) => {
     if (!(await confirm({ title: 'Registrar notificação', message: `Registrar notificação para a empresa: ${d.nome}?` }))) return;
     await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
-    updateDriver(d.placa, { reportaveis: 0, tiposReportar: [] });
   };
 
   const deleteAlert = (d, tipo = 'intervencao') => {
@@ -387,11 +419,6 @@ export default function Monitor() {
       tipo: 'descarte',
       obs: `Alerta descartado · ${countStr} · Motivo: ${reason}`,
     });
-    const patch = {};
-    if (isIntervencao) { patch.alertas = 0; patch.tipos = []; }
-    if (isReportar)    { patch.reportaveis = 0; patch.tiposReportar = []; }
-    if (isTecnico)     { patch.tecnicos = 0; }
-    updateDriver(d.placa, patch);
   };
 
   const bulkDiscard = async () => {
@@ -420,12 +447,7 @@ export default function Monitor() {
     const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
     const fail = list.length - ok;
 
-    const placasDescartadas = [...new Set(list.map(d => d.placa))];
-    const bulkPatch = {};
-    if (tab === 'intervencao') { bulkPatch.alertas = 0; bulkPatch.tipos = []; }
-    if (tab === 'reportar')    { bulkPatch.reportaveis = 0; bulkPatch.tiposReportar = []; }
-    if (tab === 'tecnicos')    { bulkPatch.tecnicos = 0; }
-    bulkUpdateDrivers(placasDescartadas, bulkPatch);
+    await reloadDrivers();
 
     setLoading(false);
     setStatusKind(fail > 0 ? 'error' : 'active');
@@ -433,14 +455,28 @@ export default function Monitor() {
   };
 
   const clearQueue = async () => {
-    if (!(await confirm({ title: 'Limpar fila', message: 'Tem certeza que deseja limpar toda a fila de motoristas?', danger: true }))) return;
-    clearDrivers();
-    setLoadStats(null);
-    setStatusKind('idle');
-    setStatusMsg('Fila limpa. Aguardando nova planilha.');
-    localStorage.removeItem('mn_sheet_loaded_at');
-    setSheetLoadedAt(null);
-    setSheetAgeMin(null);
+    if (!(await confirm({ title: 'Limpar fila', message: 'Tem certeza que deseja limpar toda a fila de motoristas (isso apagará os eventos importados hoje)?', danger: true }))) return;
+    setLoading(true);
+    try {
+      const startISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { error } = await supabase
+        .from('driver_events')
+        .delete()
+        .eq('platform_id', platformId)
+        .gte('ocorrido_em', startISO);
+      if (error) throw error;
+      await reloadDrivers();
+      setLoadStats(null);
+      setStatusKind('idle');
+      setStatusMsg('Fila limpa. Aguardando nova planilha.');
+      localStorage.removeItem('mn_sheet_loaded_at');
+      setSheetLoadedAt(null);
+      setSheetAgeMin(null);
+    } catch (err) {
+      console.warn('[Monitor] Erro ao limpar fila:', err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetFilters = () => setFilters({ empresa: '', comportamento: '', turno: '', prioridade: '', busca: '' });
@@ -616,7 +652,21 @@ export default function Monitor() {
           </div>
         ))}
         {activeTab !== 'historico' && activeList.length > 0 && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => handleExpandAll(activeList)}
+              title="Expandir todos os detalhes"
+            >
+              <i className="ti ti-layout-navbar-expand"></i> Expandir tudo
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={handleCollapseAll}
+              title="Ocultar todos os detalhes"
+            >
+              <i className="ti ti-layout-navbar-collapse"></i> Colapsar tudo
+            </button>
             <button
               className="btn btn-sm btn-ghost"
               onClick={exportActiveTab}
@@ -625,7 +675,7 @@ export default function Monitor() {
               <i className="ti ti-download"></i> Exportar
             </button>
             <button
-              className="btn btn-sm"
+              className="btn btn-sm btn-danger"
               onClick={bulkDiscard}
               disabled={loading}
               title={`Descartar todos os ${activeList.length} alerta(s) visíveis na aba`}
@@ -650,7 +700,7 @@ export default function Monitor() {
                     </div>
                   );
                 }
-                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />);
+                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />);
                 return acc;
               }, [])}
             </div>
@@ -662,7 +712,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
               {paginate(reportarList).map(d => (
-                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />
+                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />
               ))}
             </div>
       )}
@@ -673,7 +723,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum evento técnico isolado" />
           : <div className="driver-list">
               {paginate(tecList).map(d => (
-                <DriverCard key={d.placa} d={d} type="tecnicos" handlers={handlers} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} />
+                <DriverCard key={d.placa} d={d} type="tecnicos" handlers={handlers} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />
               ))}
             </div>
       )}

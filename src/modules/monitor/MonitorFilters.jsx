@@ -26,13 +26,6 @@ export default function MonitorFilters({
 
   return (
     <>
-      {/* Operador */}
-      <div className="operator-bar">
-        <label><i className="ti ti-user"></i> Operador:</label>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{profile?.nome}</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{profile?.cargo} · {profile?.email}</span>
-      </div>
-
       {/* Filtros fila */}
       <div className="filter-bar">
         <div className="filter-group"><label><i className="ti ti-filter"></i> Filtros:</label></div>

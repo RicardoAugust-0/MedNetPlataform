@@ -59,100 +59,104 @@ export default function UploadArea({
 
   return (
     <>
-      {/* Status bar */}
-      <div className="status-bar" style={{ marginBottom: 12 }}>
-        <div
-          className={`dot ${statusKind === "active" ? "active" : statusKind === "error" ? "error" : ""}`}
-        ></div>
-        <div className="status-text">
-          {statusMsg}
-          {loading && " — a processar…"}
-        </div>
-        {sheetAgeMin !== null && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 11,
-              padding: "2px 10px",
-              borderRadius: 99,
-              fontWeight: 600,
-              flexShrink: 0,
-              background: sheetAgeColor + "22",
-              color: sheetAgeColor,
-            }}
-          >
-            <i className="ti ti-clock" style={{ fontSize: 10 }}></i>
-            {sheetAgeLabel}
-          </span>
-        )}
-
-
-        {/* Seletor de plataforma: aparece sempre que há mais de uma cadastrada */}
-        {platforms.length > 1 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
-              <i className="ti ti-stack-2" style={{ marginRight: 4 }}></i>Plataforma
-            </label>
-            <select
-              value={platform?.id || ""}
-              onChange={(e) => onPlatformChange?.(e.target.value)}
-              style={{ fontSize: 12, padding: "2px 6px" }}
-            >
-              {platforms.map((p) => (
-                <option key={p.id} value={p.id} disabled={p.status === "planned"}>
-                  {p.name}{p.status === "beta" ? " · beta" : ""}{p.status === "planned" ? " · em breve" : ""}
-                </option>
-              ))}
-            </select>
+      {/* Barra de Status e Ações */}
+      <div className="status-container" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        <div className="status-bar" style={{ flex: 1, marginBottom: 0 }}>
+          <div
+            className={`dot ${statusKind === "active" ? "active" : statusKind === "error" ? "error" : ""}`}
+          ></div>
+          <div className="status-text">
+            {statusMsg}
+            {loading && " — a processar…"}
           </div>
-        )}
+          {sheetAgeMin !== null && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                padding: "2px 10px",
+                borderRadius: 99,
+                fontWeight: 600,
+                flexShrink: 0,
+                background: sheetAgeColor + "22",
+                color: sheetAgeColor,
+              }}
+            >
+              <i className="ti ti-clock" style={{ fontSize: 10 }}></i>
+              {sheetAgeLabel}
+            </span>
+          )}
 
-        {historyAgeLabel && (
-          <span
-            title="Idade do histórico de atendimentos carregado"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontSize: 11, padding: '2px 10px', borderRadius: 99, fontWeight: 600,
-              flexShrink: 0, background: historyAgeColor + '22', color: historyAgeColor,
-            }}
-          >
-            <i className="ti ti-history" style={{ fontSize: 10 }}></i>
-            histórico {historyAgeLabel}
-          </span>
-        )}
+          {historyAgeLabel && (
+            <span
+              title="Idade do histórico de atendimentos carregado"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 11, padding: '2px 10px', borderRadius: 99, fontWeight: 600,
+                flexShrink: 0, background: historyAgeColor + '22', color: historyAgeColor,
+              }}
+            >
+              <i className="ti ti-history" style={{ fontSize: 10 }}></i>
+              histórico {historyAgeLabel}
+            </span>
+          )}
+        </div>
 
-        <button
-          className="btn btn-sm"
-          onClick={reloadHistory}
-          disabled={histLoading || !reloadHistory}
-          title="Recarregar histórico de atendimentos do banco"
-        >
-          <i className={`ti ${histLoading ? 'ti-loader-2' : 'ti-refresh'}`}></i> Recarregar histórico
-        </button>
+        <div className="status-actions-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          {/* Seletor de plataforma */}
+          {platforms.length > 1 && (
+            <div className="platform-select-container" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                <i className="ti ti-stack-2" style={{ marginRight: 4 }}></i>Plataforma
+              </label>
+              <select
+                value={platform?.id || ""}
+                onChange={(e) => onPlatformChange?.(e.target.value)}
+              >
+                {platforms.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.status === "planned"}>
+                    {p.name}{p.status === "beta" ? " · beta" : ""}{p.status === "planned" ? " · em breve" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        <button className="btn btn-sm btn-danger" onClick={clearQueue}>
-          <i className="ti ti-trash"></i> Limpar fila
-        </button>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <button
+              className="btn btn-sm"
+              onClick={reloadHistory}
+              disabled={histLoading || !reloadHistory}
+              title="Recarregar histórico de atendimentos do banco"
+            >
+              <i className={`ti ${histLoading ? 'ti-loader-2' : 'ti-refresh'}`}></i> Recarregar histórico
+            </button>
 
-        {portalUrl && (
-          <a
-            href={portalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-sm"
-            style={{ textDecoration: "none" }}
-          >
-            <i className="ti ti-external-link"></i> Abrir Portal {platform.name}
-          </a>
-        )}
+            <button className="btn btn-sm btn-danger" onClick={clearQueue}>
+              <i className="ti ti-trash"></i> Limpar fila
+            </button>
+
+            {portalUrl && (
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-sm"
+                style={{ textDecoration: "none" }}
+              >
+                <i className="ti ti-external-link"></i> Abrir Portal {platform.name}
+              </a>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Upload / Scraper */}
       {supportsUpload ? (
         <label
-          className="upload-area"
+          className={`upload-area${statusKind === 'active' ? ' collapsed' : ''}`}
           style={{ cursor: "pointer" }}
           onDragOver={(e) => {
             e.preventDefault();

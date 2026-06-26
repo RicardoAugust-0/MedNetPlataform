@@ -243,6 +243,17 @@
 [data-mode="plantao"] .topbar { border-bottom: 2px solid var(--danger-500); }
 [data-mode="plantao"] .status-pill { background: var(--danger-bg); color: var(--danger-600); font-weight: 600; }
 
+[data-mode="plantao"] .driver-item.is-gravissimo {
+  animation: pulse-critical-border-explosive 1.2s ease-in-out infinite;
+  border-left: 5px solid var(--danger-500) !important;
+  background: rgba(255, 59, 71, 0.05);
+}
+@keyframes pulse-critical-border-explosive {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 71, 0.25); background: rgba(255, 59, 71, 0.02); }
+  50%       { box-shadow: 0 0 16px 4px rgba(255, 59, 71, 0.6); background: rgba(255, 59, 71, 0.12); }
+}
+
+
 /* FOCO — todas páginas atenuadas e monocromáticas */
 [data-mode="foco"] .badge,
 [data-mode="foco"] .tag,
@@ -264,6 +275,17 @@
 [data-mode="foco"] .ws-page-card,
 [data-mode="foco"] .link-card,
 [data-mode="foco"] .template-card { background: var(--surface-1); }
+
+[data-mode="foco"] .driver-item {
+  opacity: 0.65;
+  filter: grayscale(0.2) saturate(0.5);
+  transition: all 0.2s ease;
+}
+[data-mode="foco"] .driver-item:hover {
+  opacity: 0.95;
+  filter: grayscale(0) saturate(0.8);
+}
+
 
 /* PLENO — sem ajustes específicos por página, baseline */
 
