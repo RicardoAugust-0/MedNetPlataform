@@ -224,4 +224,42 @@ describe('aggregate.js · aggregate', () => {
     expect(d.slaAgeMin).toBeCloseTo(45, 0); // mede pelo evento mais antigo
     expect(d.slaBreached).toBe(true);
   });
+
+  it('deve aplicar filtros de histórico específicos de bucket (incluindo técnico)', () => {
+    const events = [
+      {
+        platform_id: 'sascar',
+        placa: 'AAA1A11',
+        nome_evento: 'Bocejo',
+        categoria_bucket: 'intervencao',
+        ocorrido_em: '2026-06-26T10:00:00Z',
+      },
+      {
+        platform_id: 'sascar',
+        placa: 'AAA1A11',
+        nome_evento: 'Celular',
+        categoria_bucket: 'reportar',
+        ocorrido_em: '2026-06-26T10:00:00Z',
+      },
+      {
+        platform_id: 'sascar',
+        placa: 'AAA1A11',
+        nome_evento: 'Perda de vídeo',
+        categoria_bucket: 'tecnico',
+        ocorrido_em: '2026-06-26T10:00:00Z',
+      }
+    ];
+
+    // AAA1A11 tem descarte técnico em 10:10 (posterior ao evento técnico de 10:00)
+    const history = [
+      { placa: 'AAA1A11', tipo: 'descarte', bucket: 'tecnico', created_at: '2026-06-26T10:10:00Z' }
+    ];
+
+    const { drivers } = aggregate(events, history, mockPlatformSascar);
+    expect(drivers.length).toBe(1);
+    const d = drivers[0];
+    expect(d.alertas).toBe(1);      // Bocejo mantido (sem clear de intervencao)
+    expect(d.reportaveis).toBe(1);  // Celular mantido (sem clear de reportar)
+    expect(d.tecnicos).toBe(0);     // Perda de vídeo limpo pelo descarte técnico
+  });
 });

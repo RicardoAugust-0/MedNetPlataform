@@ -356,6 +356,7 @@ export default function Monitor() {
           placa: item.placa,
           transportadora: item.transportadora,
           tipo: 'descarte',
+          bucket: 'reportar',
           obs: `Auto-descarte · ${item.motivo || platform.name} · ${item.count} evento(s)`,
         }).catch(console.warn);
       }
@@ -375,7 +376,7 @@ export default function Monitor() {
   const attend = async (d) => {
     if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
     const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', obs });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', bucket: 'intervencao', obs });
     const now = new Date();
     const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const data = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -399,7 +400,7 @@ export default function Monitor() {
 
   const reportar = async (d) => {
     if (!(await confirm({ title: 'Registrar notificação', message: `Registrar notificação para a empresa: ${d.nome}?` }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', bucket: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
   };
 
   const deleteAlert = (d, tipo = 'intervencao') => {
@@ -417,6 +418,7 @@ export default function Monitor() {
     await registrar({
       motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
       tipo: 'descarte',
+      bucket: tipo,
       obs: `Alerta descartado · ${countStr} · Motivo: ${reason}`,
     });
   };
@@ -440,9 +442,11 @@ export default function Monitor() {
                        : tab === 'reportar'    ? `Descarte em massa · ${d.reportaveis} evento(s) reportáveis`
                        :                         `Descarte em massa · ${d.tecnicos} evento(s) técnicos`;
 
+    const targetBucket = tab === 'intervencao' ? 'intervencao' : tab === 'reportar' ? 'reportar' : 'tecnico';
+
     const results = await Promise.allSettled(list.map(d => registrar({
       motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
-      tipo: 'descarte', obs: obsFor(d),
+      tipo: 'descarte', bucket: targetBucket, obs: obsFor(d),
     })));
     const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
     const fail = list.length - ok;

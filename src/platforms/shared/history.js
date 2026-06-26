@@ -19,13 +19,19 @@ export function buildClearMap(history) {
     if (!h.placa || !h.created_at) continue;
     const at = new Date(h.created_at);
     if (isNaN(at.getTime())) continue;
-    const clearsIntervencao = h.tipo === 'intervencao' || h.tipo === 'descarte';
-    const clearsReportar    = h.tipo === 'reportar';
-    if (!clearsIntervencao && !clearsReportar) continue;
+
+    // Se houver bucket específico, usa. Senão cai no fallback legado
+    const bucket = h.bucket;
+    const clearsIntervencao = bucket ? (bucket === 'intervencao') : (h.tipo === 'intervencao' || h.tipo === 'descarte');
+    const clearsReportar    = bucket ? (bucket === 'reportar')    : (h.tipo === 'reportar');
+    const clearsTecnico     = bucket ? (bucket === 'tecnico')     : false;
+
+    if (!clearsIntervencao && !clearsReportar && !clearsTecnico) continue;
     if (!map[h.placa]) map[h.placa] = {};
     const entry = map[h.placa];
     if (clearsIntervencao && (!entry.lastIntervencao || at > entry.lastIntervencao)) entry.lastIntervencao = at;
     if (clearsReportar    && (!entry.lastReportar    || at > entry.lastReportar))    entry.lastReportar    = at;
+    if (clearsTecnico     && (!entry.lastTecnico     || at > entry.lastTecnico))     entry.lastTecnico     = at;
   }
   return map;
 }
@@ -57,7 +63,7 @@ export function applyHistoryFilter(drivers, history) {
 
   const filtered = drivers.map(d => {
     const clear = clearMap[d.placa] || {};
-    let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar } = d;
+    let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, tecnicos, tiposTecnico } = d;
 
     let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
       ...e, ts: e.ts ? new Date(e.ts) : null,
@@ -67,11 +73,12 @@ export function applyHistoryFilter(drivers, history) {
       // Filtro granular: cada evento tem seu próprio timestamp
       const evI = eventosDetalhados.filter(e => e.bucket === 'intervencao' && isAfterClear(e.ts, clear.lastIntervencao));
       const evR = eventosDetalhados.filter(e => e.bucket === 'reportar'    && isAfterClear(e.ts, clear.lastReportar));
-      const evT = eventosDetalhados.filter(e => e.bucket === 'tecnico');
+      const evT = eventosDetalhados.filter(e => e.bucket === 'tecnico'     && isAfterClear(e.ts, clear.lastTecnico));
 
       filtradosPorHistorico +=
         eventosDetalhados.filter(e => e.bucket === 'intervencao').length - evI.length +
-        eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length;
+        eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length +
+        eventosDetalhados.filter(e => e.bucket === 'tecnico').length     - evT.length;
 
       alertas              = evI.length;
       tipos                = [...new Set(evI.map(e => e.tipo))];
@@ -79,6 +86,15 @@ export function applyHistoryFilter(drivers, history) {
       reportaveis          = evR.length;
       tiposReportar        = [...new Set(evR.map(e => e.tipo))];
       ultimoEventoReportar = maxTs(evR);
+      tecnicos             = evT.length;
+
+      const nextTiposTecnico = {};
+      evT.forEach(e => {
+        const t = e.tipo || '—';
+        nextTiposTecnico[t] = (nextTiposTecnico[t] || 0) + 1;
+      });
+      tiposTecnico = nextTiposTecnico;
+
       eventosDetalhados    = [...evI, ...evR, ...evT];
     } else {
       // Filtro conservador: usa o timestamp mais recente do bucket
@@ -92,9 +108,13 @@ export function applyHistoryFilter(drivers, history) {
         filtradosPorHistorico += reportaveis;
         reportaveis = 0; tiposReportar = []; ultimoEventoReportar = null;
       }
+      if (clear.lastTecnico) {
+        filtradosPorHistorico += tecnicos;
+        tecnicos = 0; tiposTecnico = {};
+      }
     }
 
-    return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, eventosDetalhados };
+    return { ...d, alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, tecnicos, tiposTecnico, eventosDetalhados };
   }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
 
   return { drivers: filtered, filtradosPorHistorico };

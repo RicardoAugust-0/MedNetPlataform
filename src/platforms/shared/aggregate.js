@@ -164,11 +164,12 @@ export function aggregate(events, history, platform, options = {}) {
     // Filtro granular
     const evI = eventosDetalhados.filter(e => e.bucket === 'intervencao' && isAfterClear(e.ts, clear.lastIntervencao));
     const evR = eventosDetalhados.filter(e => e.bucket === 'reportar'    && isAfterClear(e.ts, clear.lastReportar));
-    const evT = eventosDetalhados.filter(e => e.bucket === 'tecnico');
+    const evT = eventosDetalhados.filter(e => e.bucket === 'tecnico'     && isAfterClear(e.ts, clear.lastTecnico));
 
     filtradosPorHistorico +=
       eventosDetalhados.filter(e => e.bucket === 'intervencao').length - evI.length +
-      eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length;
+      eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length +
+      eventosDetalhados.filter(e => e.bucket === 'tecnico').length     - evT.length;
 
     alertas              = evI.length;
     tipos                = [...new Set(evI.map(e => e.tipo))];
@@ -176,6 +177,15 @@ export function aggregate(events, history, platform, options = {}) {
     reportaveis          = evR.length;
     tiposReportar        = [...new Set(evR.map(e => e.tipo))];
     ultimoEventoReportar = maxTsFromDateObj(evR);
+    tecnicos             = evT.length;
+
+    const nextTiposTecnico = {};
+    evT.forEach(e => {
+      const t = e.tipo || '—';
+      nextTiposTecnico[t] = (nextTiposTecnico[t] || 0) + 1;
+    });
+    tiposTecnico = nextTiposTecnico;
+
     eventosDetalhados    = [...evI, ...evR, ...evT];
 
     return {
@@ -186,6 +196,8 @@ export function aggregate(events, history, platform, options = {}) {
       reportaveis,
       tiposReportar,
       ultimoEventoReportar,
+      tecnicos,
+      tiposTecnico,
       eventosDetalhados,
     };
   }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
