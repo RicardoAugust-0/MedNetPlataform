@@ -5,6 +5,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 // não mais um estado local — a URL passa a refletir a aba ativa.
 const ADMIN_TABS = [
   { to: 'analytics',   label: 'Analytics',        icon: 'ti-chart-pie' },
+  { to: 'chat',        label: 'Chat IA',          icon: 'ti-messages' },
   { to: 'auditoria',   label: 'Auditoria',        icon: 'ti-history' },
   { to: 'equipe',      label: 'Equipe & Acessos', icon: 'ti-users' },
   { to: 'integracoes', label: 'Integrações',      icon: 'ti-api' },

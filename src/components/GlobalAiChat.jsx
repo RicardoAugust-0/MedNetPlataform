@@ -17,22 +17,44 @@ import {
   Legend
 } from 'recharts';
 
+const WELCOME_MESSAGE = {
+  id: 'welcome',
+  role: 'assistant',
+  text: 'Olá! Sou seu Assistente IA MedNet. Tenho acesso administrativo completo para monitorar, criar, editar ou excluir configurações e dados da plataforma. Como posso ajudar você hoje?'
+};
+
 export default function GlobalAiChat() {
   const { profile } = useAuth();
   const { theme } = useApp();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      text: 'Olá! Sou seu Assistente IA MedNet. Tenho acesso administrativo completo para monitorar, criar, editar ou excluir configurações e dados da plataforma. Como posso ajudar você hoje?'
-    }
-  ]);
+  const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   const isAdmin = profile?.role === 'admin';
+
+  const fetchHistory = async () => {
+    try {
+      const res = await apiFetch('/api/ai/chat/history');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          setMessages(data);
+        } else {
+          setMessages([WELCOME_MESSAGE]);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar histórico da IA:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      fetchHistory();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -91,6 +113,18 @@ export default function GlobalAiChat() {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!confirm('Deseja limpar todo o histórico de conversas com a IA?')) return;
+    try {
+      const res = await apiFetch('/api/ai/chat/history', { method: 'DELETE' });
+      if (res.ok) {
+        setMessages([WELCOME_MESSAGE]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <>
       {/* Botão flutuante da IA */}
@@ -112,9 +146,14 @@ export default function GlobalAiChat() {
               <span className="badge badge-danger" style={{ fontSize: 9, padding: '2px 4px' }}>ADMIN CONEXÃO</span>
             </div>
           </div>
-          <button className="btn btn-icon-only btn-ghost" onClick={() => setOpen(false)}>
-            <i className="ti ti-x"></i>
-          </button>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button className="btn btn-icon-only btn-ghost btn-sm" onClick={handleClearHistory} title="Limpar conversa">
+              <i className="ti ti-trash"></i>
+            </button>
+            <button className="btn btn-icon-only btn-ghost btn-sm" onClick={() => setOpen(false)}>
+              <i className="ti ti-x"></i>
+            </button>
+          </div>
         </div>
 
         <div className="ai-drawer-messages">

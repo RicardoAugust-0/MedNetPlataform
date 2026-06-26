@@ -94,7 +94,8 @@ Aqui está o esquema do banco de dados para sua referência:
 Instruções Importantes:
 1. Sempre verifique e leia os dados antes de fazer alterações se não tiver certeza.
 2. Ao realizar mutações (criar, atualizar, deletar), confirme ao usuário o que foi feito com clareza.
-3. Se o usuário pedir um gráfico, relatório estatístico ou análise visual dos dados, inclua no final de sua resposta um bloco JSON de visualização exatamente no seguinte formato formatado como markdown \`\`\`json ... \`\`\`:
+3. Use a ferramenta 'save_generated_report' para salvar relatórios importantes na galeria de relatórios administrativa quando o usuário pedir para gerar, salvar ou arquivar uma análise.
+4. Se o usuário pedir um gráfico, relatório estatístico ou análise visual dos dados, inclua no final de sua resposta um bloco JSON de visualização exatamente no seguinte formato formatado como markdown \`\`\`json ... \`\`\`:
 {
   "type": "visualization",
   "chartType": "bar", // 'bar' | 'line' | 'pie'
@@ -197,6 +198,22 @@ const ANTHROPIC_TOOLS = [
       },
       required: ['table_name', 'filters']
     }
+  },
+  {
+    name: 'save_generated_report',
+    description: 'Saves a structured report or document (markdown text and optional chart) to the administrative reports gallery so the user can access and download it later.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Título claro do relatório, ex: "Relatório de Reincidência de Fadiga - Junho 2026"' },
+        content: { type: 'string', description: 'Conteúdo do relatório formatado em Markdown.' },
+        chart_payload: {
+          type: 'object',
+          description: 'Estrutura JSON do gráfico Recharts associado (opcional), contendo chartType, title, subtitle, xAxisKey, yAxisKey e data.'
+        }
+      },
+      required: ['title', 'content']
+    }
   }
 ];
 
@@ -288,6 +305,22 @@ const GEMINI_TOOLS = [
           },
           required: ['table_name', 'filters']
         }
+      },
+      {
+        name: 'save_generated_report',
+        description: 'Saves a structured report or document (markdown text and optional chart) to the administrative reports gallery so the user can access and download it later.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING', description: 'Título claro do relatório, ex: "Relatório de Reincidência de Fadiga - Junho 2026"' },
+            content: { type: 'STRING', description: 'Conteúdo do relatório formatado em Markdown.' },
+            chart_payload: {
+              type: 'OBJECT',
+              description: 'Estrutura JSON do gráfico Recharts associado (opcional), contendo chartType, title, subtitle, xAxisKey, yAxisKey e data.'
+            }
+          },
+          required: ['title', 'content']
+        }
       }
     ]
   }
@@ -377,8 +410,19 @@ async function delete_database_record(supabase, { table_name, filters }) {
   return deleted;
 }
 
+async function save_generated_report(supabase, userId, { title, content, chart_payload }) {
+  const { data, error } = await supabase.from('ai_generated_reports').insert({
+    created_by: userId,
+    title,
+    content,
+    chart_payload
+  }).select();
+  if (error) throw new Error(error.message);
+  return { success: true, message: `Relatório "${title}" foi salvo com sucesso na galeria.`, report: data[0] };
+}
+
 // Executador de ferramentas unificado
-async function executeTool(supabase, name, args) {
+async function executeTool(supabase, userId, name, args) {
   console.log(`[AI Agent Tool] Calling ${name} with args:`, JSON.stringify(args));
   switch (name) {
     case 'query_database_records':
@@ -389,21 +433,32 @@ async function executeTool(supabase, name, args) {
       return await update_database_record(supabase, args);
     case 'delete_database_record':
       return await delete_database_record(supabase, args);
+    case 'save_generated_report':
+      return await save_generated_report(supabase, userId, args);
     default:
       throw new Error(`Tool ${name} not found.`);
   }
 }
 
 // Loop de ferramentas com Gemini
-async function runGemini(apiKey, model, userMessage, supabase) {
+async function runGemini(apiKey, model, userMessage, history, supabase, userId) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  const contents = [
-    {
-      role: 'user',
-      parts: [{ text: userMessage }]
+  // Mapeia histórico para o formato do Gemini
+  const contents = [];
+  if (history && history.length > 0) {
+    for (const msg of history) {
+      contents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      });
     }
-  ];
+  }
+  // Adiciona a mensagem atual
+  contents.push({
+    role: 'user',
+    parts: [{ text: userMessage }]
+  });
 
   let loopCount = 0;
   const maxLoops = 6;
@@ -458,7 +513,7 @@ async function runGemini(apiKey, model, userMessage, supabase) {
     for (const fc of functionCalls) {
       const { name, args } = fc.functionCall;
       try {
-        const result = await executeTool(supabase, name, args);
+        const result = await executeTool(supabase, userId, name, args);
         functionResponses.push({
           functionResponse: {
             name,
@@ -487,15 +542,24 @@ async function runGemini(apiKey, model, userMessage, supabase) {
 }
 
 // Loop de ferramentas com Anthropic
-async function runAnthropic(apiKey, model, userMessage, supabase) {
+async function runAnthropic(apiKey, model, userMessage, history, supabase, userId) {
   const url = 'https://api.anthropic.com/v1/messages';
 
-  const messages = [
-    {
-      role: 'user',
-      content: userMessage
+  // Mapeia histórico para o formato do Anthropic
+  const messages = [];
+  if (history && history.length > 0) {
+    for (const msg of history) {
+      messages.push({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      });
     }
-  ];
+  }
+  // Adiciona a mensagem atual
+  messages.push({
+    role: 'user',
+    content: userMessage
+  });
 
   let loopCount = 0;
   const maxLoops = 6;
@@ -546,7 +610,7 @@ async function runAnthropic(apiKey, model, userMessage, supabase) {
     for (const tu of toolUses) {
       const { id, name, input } = tu;
       try {
-        const result = await executeTool(supabase, name, input);
+        const result = await executeTool(supabase, userId, name, input);
         toolResults.push({
           type: 'tool_result',
           tool_use_id: id,
@@ -593,6 +657,36 @@ function extractChartAndCleanText(text) {
 
 // Registro das rotas no Express
 export function registerAiChatRoutes(app, supabase) {
+  // 1. Obter histórico de mensagens
+  app.get('/api/ai/chat/history', requireRole(supabase, 'admin'), async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('ai_chat_messages')
+        .select('*')
+        .eq('user_id', req.authUser.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Limpar histórico de mensagens
+  app.delete('/api/ai/chat/history', requireRole(supabase, 'admin'), async (req, res) => {
+    try {
+      const { error } = await supabase
+        .from('ai_chat_messages')
+        .delete()
+        .eq('user_id', req.authUser.id);
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Enviar mensagem para a IA (com histórico/memória e salvamento automático)
   app.post('/api/ai/chat', requireRole(supabase, 'admin'), async (req, res) => {
     const { message } = req.body;
     if (!message || typeof message !== 'string') {
@@ -600,7 +694,24 @@ export function registerAiChatRoutes(app, supabase) {
     }
 
     try {
-      // 1. Carrega configurações do provedor
+      // Carrega histórico recente do banco para alimentar a memória da IA (últimas 10 mensagens)
+      const { data: dbHistory, error: histErr } = await supabase
+        .from('ai_chat_messages')
+        .select('*')
+        .eq('user_id', req.authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      const history = dbHistory ? [...dbHistory].reverse() : [];
+
+      // Salva a mensagem do usuário no banco
+      await supabase.from('ai_chat_messages').insert({
+        user_id: req.authUser.id,
+        role: 'user',
+        text: message
+      });
+
+      // Carrega configurações do provedor
       const { data: cfgRow } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
       const aiCfg = cfgRow?.value || {};
 
@@ -609,31 +720,91 @@ export function registerAiChatRoutes(app, supabase) {
         ? (aiCfg.google_model || 'gemini-2.5-flash') 
         : (aiCfg.anthropic_model || 'claude-sonnet-4-6');
 
-      // 2. Carrega credencial
+      // Carrega credencial
       const { data: credRow } = await supabase.from('ai_credentials').select('api_key').eq('provider', provider).maybeSingle();
       if (!credRow?.api_key) {
         return res.status(400).json({
-          error: `Provedor de IA (${provider}) selecionado, mas nenhuma chave de API foi configurada. Acesse Admin → Inteligência Artificial para configurar.`
+          error: `Provedor de IA (${provider}) selecionado, mas nenhuma chave de API foi configurada. Acesse Admin → IA & Parsing para configurar.`
         });
       }
 
       const apiKey = credRow.api_key;
       let rawResponse = '';
 
-      // 3. Roda o loop do agente baseado no provedor configurado
+      // Roda o loop do agente baseado no provedor configurado
       if (provider === 'google') {
-        rawResponse = await runGemini(apiKey, model, message, supabase);
+        rawResponse = await runGemini(apiKey, model, message, history, supabase, req.authUser.id);
       } else {
-        rawResponse = await runAnthropic(apiKey, model, message, supabase);
+        rawResponse = await runAnthropic(apiKey, model, message, history, supabase, req.authUser.id);
       }
 
-      // 4. Limpa e processa retorno de gráfico
+      // Limpa e processa retorno de gráfico
       const { text, chart } = extractChartAndCleanText(rawResponse);
+
+      // Salva a resposta da IA no banco
+      await supabase.from('ai_chat_messages').insert({
+        user_id: req.authUser.id,
+        role: 'assistant',
+        text,
+        chart
+      });
 
       return res.status(200).json({ text, chart });
     } catch (err) {
       console.error('[AI Chat API Router Error]:', err);
       return res.status(500).json({ error: `Erro interno no assistente: ${err.message || err}` });
+    }
+  });
+
+  // 4. Obter todos os relatórios gerados
+  app.get('/api/ai/reports', requireRole(supabase, 'admin'), async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('ai_generated_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Salvar relatório manualmente
+  app.post('/api/ai/reports', requireRole(supabase, 'admin'), async (req, res) => {
+    const { title, content, chart_payload } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Título e Conteúdo são obrigatórios.' });
+    }
+    try {
+      const { data, error } = await supabase
+        .from('ai_generated_reports')
+        .insert({
+          created_by: req.authUser.id,
+          title,
+          content,
+          chart_payload
+        })
+        .select();
+      if (error) throw error;
+      return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 6. Deletar um relatório
+  app.delete('/api/ai/reports/:id', requireRole(supabase, 'admin'), async (req, res) => {
+    const { id } = req.params;
+    try {
+      const { error } = await supabase
+        .from('ai_generated_reports')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
   });
 }
