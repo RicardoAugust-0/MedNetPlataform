@@ -1535,3 +1535,29 @@
   50% { transform: scale(1.15); opacity: 1; color: var(--accent-400); text-shadow: 0 0 8px rgba(158, 26, 69, 0.4); }
   100% { transform: scale(1); opacity: 0.8; }
 }
+
+/* Hover styles for Chat IA elements */
+.thread-item-hover:hover {
+  background-color: var(--surface-1) !important;
+  border-color: var(--border) !important;
+}
+
+.report-item-hover:hover {
+  border-color: var(--accent-500) !important;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-trash-thread {
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.thread-item-hover:hover .btn-trash-thread {
+  opacity: 0.7;
+}
+
+.btn-trash-thread:hover {
+  opacity: 1 !important;
+  color: var(--danger-500) !important;
+}
