@@ -69,7 +69,8 @@ export async function parse(file, { history = [] } = {}) {
     wb = XLSX.read(text, { type: 'string', FS: ';' });
   } else {
     const buf = await file.arrayBuffer();
-    wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const data = new Uint8Array(buf);
+    wb = XLSX.read(data, { type: 'array', cellDates: true });
   }
 
   const sheet = wb.Sheets[wb.SheetNames[0]];

@@ -309,7 +309,8 @@ export default function Monitor() {
         aoa = parseCSV(fileData);
       } else {
         const XLSX = await import('xlsx');
-        const wb = XLSX.read(fileData, { type: 'array', cellDates: true });
+        const data = new Uint8Array(fileData);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       }

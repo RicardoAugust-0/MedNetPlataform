@@ -341,7 +341,8 @@ export default function CrossCheck() {
       const xlsxModule = await import('xlsx');
       const XLSX = xlsxModule.default || xlsxModule;
       const data = await file.arrayBuffer();
-      const wb   = XLSX.read(data, { type: 'array' });
+      const arrayData = new Uint8Array(data);
+      const wb   = XLSX.read(arrayData, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows  = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       const plateKeys    = ['Identificador/Placa', 'Placa', 'Plate', 'Veiculo', 'Identificador', 'Placa / Empurrador'];
