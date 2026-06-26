@@ -18,7 +18,7 @@ import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
 import { supabase } from '../supabase.js';
-import { detect, toDate, toNum, normCrit, normClf, parseCSV, readHeaders } from '../utils/fatigueParser.js';
+import { detect, parseCSV, readHeaders, buildImportRows } from '../utils/fatigueParser.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -43,41 +43,7 @@ function getOrCreatePlatformAdapter(platformId) {
   }
 }
 
-function parseUniversal(headers, dataRows, platformId, mapping) {
-  const getVal = (row, k) => {
-    const idx = mapping[k] ? headers.indexOf(mapping[k]) : -1;
-    return idx > -1 ? row[idx] : null;
-  };
-  const rows = [];
-  for (const row of dataRows) {
-    const dt = toDate(getVal(row, 'datetime'));
-    if (!dt) continue;
-    const speedVal = toNum(getVal(row, 'speed'));
-    const classificationRaw = getVal(row, 'classification');
-    const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
-    const plateVal = String(getVal(row, 'plate') || '').trim();
-    const typeVal = String(getVal(row, 'type') || '').trim();
-    const severidade = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
-    
-    rows.push({
-      platform_id: platformId,
-      placa: plateVal || 'SEM_PLACA',
-      nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
-      nome_evento: typeVal || 'Fadiga',
-      severidade,
-      analise_ia_plataforma: classificationNorm,
-      velocidade_kmh: speedVal,
-      localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
-      frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
-      descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
-      ocorrido_em: dt.toISOString(),
-      evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
-      inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
-      fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
-    });
-  }
-  return rows;
-}
+
 
 
 
@@ -125,7 +91,6 @@ export default function Monitor() {
     registrar,
     loadByRange,
     loadDriverHistory,
-    loadAtendimentosForFilter,
   } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
@@ -324,7 +289,6 @@ export default function Monitor() {
       const detectedPlatId = detection.platform;
       
       let rawEventRows = [];
-      const filterHistory = await loadAtendimentosForFilter(90);
       
       let operatorEmail = 'hevilyntfzero@gmail.com';
       try {
@@ -340,16 +304,28 @@ export default function Monitor() {
         console.warn('[Monitor] Erro ao obter omnilink_config:', err);
       }
 
-      if (['sascar', 'maxtrack', 'omnilink'].includes(detectedPlatId)) {
-        const adapter = getPlatform(detectedPlatId);
-        const parsed = await adapter.spreadsheet.parse(file, {
-          history: filterHistory,
-          operatorEmail
+      const stage = {
+        platformId: detectedPlatId,
+        headers,
+        dataRows,
+        mapping: detection.mapping,
+      };
+
+      const { rows, stats } = buildImportRows(stage, operatorEmail);
+      rawEventRows = rows || [];
+
+      if (stats) {
+        setLoadStats({
+          total: stats.importadas || 0,
+          comIntervencao: rawEventRows.filter(r => r.categoria_bucket === 'intervencao').length,
+          soReportar: rawEventRows.filter(r => r.categoria_bucket === 'reportar').length,
+          soTecnico: rawEventRows.filter(r => r.categoria_bucket === 'tecnico').length,
+          falsosPositivos: 0,
+          filtradosPorVelocidade: stats.velocidade || 0,
+          totalNaFila: rawEventRows.length,
+          novas: rawEventRows.length,
+          atualizadas: 0
         });
-        rawEventRows = parsed.rawEventRows || [];
-      } else {
-        // Fallback to universal parser function
-        rawEventRows = parseUniversal(headers, dataRows, detectedPlatId, detection.mapping);
       }
 
       const hash = await hashFile(file);

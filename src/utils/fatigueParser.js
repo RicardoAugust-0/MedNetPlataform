@@ -188,7 +188,7 @@ export function toDate(v) {
 export function toNum(v) {
   if (v == null || v === '') return null;
   if (typeof v === 'number') return v;
-  let s = String(v).replace(/[^\d,.\-]/g, '');
+  let s = String(v).replace(/[^\d,.-]/g, '');
   if (s.indexOf(',') > -1 && s.indexOf('.') > -1) s = s.replace(/\./g, '').replace(',', '.');
   else s = s.replace(',', '.');
   const n = parseFloat(s); return isNaN(n) ? null : n;
@@ -538,7 +538,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
   const velMed = median(velAll);
 
   const labelFn = filterMonth
-    ? (tk) => { const [y, m, d] = tk.split('-'); return d + '/' + m; }
+    ? (tk) => { const [, m, d] = tk.split('-'); return d + '/' + m; }
     : (tk) => { const [y, m] = tk.split('-'); return MESES[+m - 1] + '/' + y.slice(2); };
   
   const labels = sortedKeys.map(labelFn);
@@ -584,4 +584,85 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
 
 function fmtD(d) {
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+}
+
+export function buildImportRows(stage, operatorEmail) {
+  const getVal = (row, k) => {
+    const headerIdx = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
+    return headerIdx > -1 ? row[headerIdx] : null;
+  };
+
+  const isOmnilink = stage.platformId === 'omnilink';
+  const tratadoPorIdx = stage.headers.findIndex((h) => norm(h) === 'tratado por');
+  const metodoProcIdx = stage.headers.findIndex((h) => {
+    const nh = norm(h);
+    return nh === 'metodo de processamento' || nh === 'metodoprocessamento';
+  });
+  const statusIdx = stage.headers.findIndex((h) => norm(h) === 'status');
+  const tipoClfIdx = stage.headers.findIndex((h) => {
+    const nh = norm(h);
+    return nh === 'tipo de classificacao' || nh === 'tipo classificacao';
+  });
+
+  const rows = [];
+  const stats = { lidas: stage.dataRows.length, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 };
+
+  for (const row of stage.dataRows) {
+    const dt = toDate(getVal(row, 'datetime'));
+    if (!dt) { stats.semData++; continue; }
+
+    // Filtro OmniLink: só eventos tratados pelo operador configurado.
+    if (isOmnilink && tratadoPorIdx > -1) {
+      const tratadoPor = String(row[tratadoPorIdx] || '').trim().toLowerCase();
+      if (tratadoPor !== operatorEmail.toLowerCase()) { stats.operador++; continue; }
+    }
+
+    // Filtro de velocidade < 10 km/h (mínimo de veículo em movimento).
+    const speedVal = toNum(getVal(row, 'speed'));
+    if (speedVal !== null && speedVal < 10) { stats.velocidade++; continue; }
+
+    const classificationRaw = getVal(row, 'classification');
+    const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
+    const plateVal = String(getVal(row, 'plate') || '').trim();
+    const typeVal = String(getVal(row, 'type') || '').trim();
+
+    // Para OmniLink, "Método de processamento" tem prioridade sobre "Status".
+    let resolvedClassification = (isOmnilink && metodoProcIdx > -1 && row[metodoProcIdx])
+      ? normClf(row[metodoProcIdx])
+      : classificationNorm;
+
+    if (stage.platformId === 'maxtrack' && resolvedClassification === 'Não classificado') {
+      const statusRaw = statusIdx > -1 ? String(row[statusIdx] || '').trim() : '';
+      const tipoClfRaw = tipoClfIdx > -1 ? String(row[tipoClfIdx] || '').trim() : '';
+      if (statusRaw.startsWith('Auto Finalizado')) {
+        resolvedClassification = 'Não classificado - Auto Finalizado';
+      } else if (statusRaw === 'Finalizado' && tipoClfRaw === 'Imagem não visível') {
+        resolvedClassification = 'Não classificado - Imagem não visível';
+      }
+    }
+
+    const severidade = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
+    // "Leve" é salvo (entra em rows) mas não entra na análise (excluído no servidor).
+    if (severidade === 'Leve') stats.leves++;
+
+    rows.push({
+      platform_id: stage.platformId,
+      placa: plateVal || 'SEM_PLACA',
+      nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
+      nome_evento: typeVal || 'Fadiga',
+      severidade,
+      analise_ia_plataforma: resolvedClassification,
+      velocidade_kmh: speedVal,
+      localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
+      frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
+      descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
+      ocorrido_em: dt.toISOString(),
+      evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
+      inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
+      fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
+    });
+  }
+
+  stats.importadas = rows.length;
+  return { rows, stats };
 }
