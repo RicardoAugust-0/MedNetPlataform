@@ -356,9 +356,18 @@ export default function Monitor() {
       if (rawEventRows && rawEventRows.length > 0) {
         const validEvents = rawEventRows.filter(r => r.ocorrido_em);
         if (validEvents.length > 0) {
+          // Deduplica dentro do próprio batch (planilhas podem ter linhas repetidas)
+          // antes do upsert para evitar o erro "ON CONFLICT DO UPDATE cannot affect row a second time".
+          const seen = new Set();
+          const deduped = validEvents.filter(r => {
+            const key = `${r.platform_id}|${r.placa}|${r.ocorrido_em}|${r.nome_evento}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
           const { error: evInsertErr } = await supabase
             .from('driver_events')
-            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: false });
+            .upsert(deduped, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: false });
           if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
         }
       }
