@@ -586,6 +586,26 @@ function fmtD(d) {
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
 }
 
+// Resolve categoria_bucket a partir do tipo de evento e da taxonomia da plataforma.
+// Usa a taxonomia quando disponível; cai no reconhecimento por palavras-chave como fallback.
+const BUCKET_RE_TECNICO   = /camera|obstrucao|obstrução|perda de video|perda de vídeo|sem motorista|falha tecnica|falha técnica|sensor|sem imagem|nao identificado|não identificado|camera obstruida|câmera obstruída/;
+const BUCKET_RE_REPORTAR  = /celular|fumando|fumo|cinto|distracao|distração|uso indevido|whatsapp|telefone|cigarro|alimentando|bebendo|uso do celular/;
+
+function getBucket(nomeEvento, taxonomy) {
+  const tipo = norm(nomeEvento || '');
+  if (taxonomy) {
+    for (const [bucket, tipos] of Object.entries(taxonomy)) {
+      if ((tipos || []).some(t => {
+        const nt = norm(t);
+        return nt === tipo || tipo.includes(nt) || nt.includes(tipo);
+      })) return bucket;
+    }
+  }
+  if (BUCKET_RE_TECNICO.test(tipo))  return 'tecnico';
+  if (BUCKET_RE_REPORTAR.test(tipo)) return 'reportar';
+  return 'intervencao';
+}
+
 export function buildImportRows(stage, operatorEmail) {
   const getVal = (row, k) => {
     const headerIdx = stage.mapping[k] ? stage.headers.indexOf(stage.mapping[k]) : -1;
@@ -650,6 +670,7 @@ export function buildImportRows(stage, operatorEmail) {
       placa: plateVal || 'SEM_PLACA',
       nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
       nome_evento: typeVal || 'Fadiga',
+      categoria_bucket: getBucket(typeVal, stage.taxonomy),
       severidade,
       analise_ia_plataforma: resolvedClassification,
       velocidade_kmh: speedVal,

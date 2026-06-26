@@ -304,11 +304,13 @@ export default function Monitor() {
         console.warn('[Monitor] Erro ao obter omnilink_config:', err);
       }
 
+      const platAdapter = getOrCreatePlatformAdapter(detectedPlatId);
       const stage = {
         platformId: detectedPlatId,
         headers,
         dataRows,
         mapping: detection.mapping,
+        taxonomy: platAdapter.taxonomy || {},
       };
 
       const { rows, stats } = buildImportRows(stage, operatorEmail);
@@ -356,7 +358,7 @@ export default function Monitor() {
         if (validEvents.length > 0) {
           const { error: evInsertErr } = await supabase
             .from('driver_events')
-            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: true });
+            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: false });
           if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
         }
       }

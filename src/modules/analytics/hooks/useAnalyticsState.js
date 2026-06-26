@@ -356,7 +356,7 @@ export function useAnalyticsState() {
       if (compare) {
         setSources(data.sources || []);
       } else {
-        const platformName = PLATFORMS.find(p => p.id === targetPlatformId)?.name || targetPlatformId;
+        const platformName = PLATFORMS.find(p => p.id === targetPlatformId)?.name || (targetPlatformId === 'auto' ? 'Automático' : targetPlatformId);
         const singleSource = {
           id: 'src-' + targetPlatformId,
           platformId: targetPlatformId,
@@ -469,7 +469,7 @@ export function useAnalyticsState() {
         return {
           id: 'src-' + pid,
           platformId: pid,
-          platformName: platform ? platform.name : pid,
+          platformName: platform ? platform.name : (pid === 'auto' ? 'Automático' : pid),
           rows: platformCounts[pid]
         };
       });
