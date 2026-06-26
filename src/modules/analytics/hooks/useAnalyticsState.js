@@ -473,103 +473,44 @@ export function useAnalyticsState() {
     return exportHTMLUtil(d);
   };
 
-  const onImportConfirm = async (rowsToInsert, platformId, platformName) => {
+  const onImportConfirm = async (files, platformId, platformName, mapping, operatorEmail) => {
     setSaving(true);
     try {
-      const uniqueRows = [];
-      const seenKeys = new Set();
-      for (const r of rowsToInsert) {
-        const key = `${r.platform_id}|${r.placa}|${r.ocorrido_em}|${r.nome_evento}`;
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          uniqueRows.push(r);
-        }
+      toast('Enviando planilhas e iniciando processamento no servidor...', 'info');
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file);
+      }
+      formData.append('platformId', platformId);
+      formData.append('platformName', platformName);
+      formData.append('mapping', JSON.stringify(mapping));
+      formData.append('operatorEmail', operatorEmail);
+
+      const response = await apiFetch('/api/analytics/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `Erro no servidor (Código HTTP: ${response.status})`);
       }
 
-      const dupsFiltered = rowsToInsert.length - uniqueRows.length;
-      console.log(`[Import] De ${rowsToInsert.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais ignorados.`);
-
-      let chunkSize = 3000;
-      let i = 0;
-      const totalRows = uniqueRows.length;
-      let lastReportedProgress = 0;
-
-      while (i < totalRows) {
-        const chunk = uniqueRows.slice(i, i + chunkSize);
-        
-        try {
-          const { error: upsertError } = await supabase
-            .from('driver_events')
-            .upsert(chunk, {
-              onConflict: 'platform_id,placa,ocorrido_em,nome_evento',
-              ignoreDuplicates: true,
-            });
-
-          if (upsertError) {
-            throw upsertError;
-          }
-
-          i += chunk.length;
-
-          // Recupera gradualmente o tamanho do lote em caso de sucesso
-          if (chunkSize < 3000) {
-            chunkSize = Math.min(3000, chunkSize + 300);
-          }
-
-          const progress = Math.min(Math.round((i / totalRows) * 100), 100);
-          if (progress - lastReportedProgress >= 10 || progress === 100) {
-            lastReportedProgress = progress;
-            toast(`Gravando dados: ${progress}% concluído (${i.toLocaleString('pt-BR')}/${totalRows.toLocaleString('pt-BR')})...`, 'info');
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 60));
-        } catch (err) {
-          const errCodeStr = String(err?.code || '');
-          const errMessageStr = String(err?.message || err || '').toLowerCase();
-          const errStatus = err?.status;
-
-          if ((errCodeStr === '57014' || 
-               errMessageStr.includes('timeout') || 
-               errMessageStr.includes('failed to fetch') ||
-               errStatus === 500 || errStatus === 504) && chunkSize > 25) {
-            const oldSize = chunkSize;
-            chunkSize = Math.max(25, Math.floor(chunkSize / 2));
-            console.warn(`[Import] Instabilidade/Timeout detectado com lote de ${oldSize}. Reduzindo lote para ${chunkSize} e retentando...`, err);
-            toast(`Ajustando velocidade do banco (lote reduzido para ${chunkSize})...`, 'warning');
-            
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-          } else {
-            throw err;
-          }
-        }
-      }
-
-      try {
-        await apiFetch('/api/clear-cache', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platformId }),
-        });
-      } catch (cacheErr) {
-        console.warn('[MedNet] Falha ao limpar cache no backend:', cacheErr);
-      }
+      const resData = await response.json();
+      const { uniqueSavedCount, dupsFiltered } = resData;
 
       setModalOpen(false);
       toast(
-        `Planilha processada · ${platformName} · ${uniqueRows.length.toLocaleString(
-          'pt-BR'
-        )} registros únicos salvos${dupsFiltered > 0 ? ` (${dupsFiltered.toLocaleString('pt-BR')} duplicados locais filtrados)` : ''}.`,
+        `Importação concluída com sucesso! · ${platformName} · ${uniqueSavedCount.toLocaleString('pt-BR')} registros salvos no banco${dupsFiltered > 0 ? ` (${dupsFiltered.toLocaleString('pt-BR')} duplicados ignorados)` : ''}.`,
         'success'
       );
 
       await loadFromDatabase(platformId);
     } catch (err) {
-      console.error('Erro ao salvar no banco:', err);
+      console.error('Erro ao realizar importação no backend:', err);
       const errMsg = err?.message || String(err);
-      const errDetails = err?.details ? ` | Detalhes: ${err.details}` : '';
-      const errHint = err?.hint ? ` | Dica: ${err.hint}` : '';
-      const errCode = err?.code ? ` (Código: ${err.code})` : '';
-      toast(`Erro ao salvar no banco de dados: ${errMsg}${errDetails}${errHint}${errCode}`, 'error');
+      toast(`Falha na importação: ${errMsg}`, 'error');
     } finally {
       setSaving(false);
     }

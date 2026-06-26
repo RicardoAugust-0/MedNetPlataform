@@ -1,5 +1,6 @@
 import { aggregate, PLATFORMS, normClf } from '../src/utils/fatigueParser.js';
 import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets } from './analytics-rpc.js';
+import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 
 // In-memory caches
 const rawEventsCache = {};
@@ -569,5 +570,19 @@ export function registerAnalyticsRoutes(app, supabase) {
     }
 
     res.json({ success: true, message: platformId ? `Cache limpo para ${platformId}` : 'Todo o cache foi limpo' });
+  });
+
+  // 5. Importação de planilhas gigantes no backend
+  app.post('/api/analytics/import', requireAdmin, uploadMiddleware, (req, res) => {
+    const clearCache = (platformId) => {
+      if (platformId) {
+        delete rawEventsCache[platformId];
+      } else {
+        Object.keys(rawEventsCache).forEach(k => delete rawEventsCache[k]);
+      }
+      resultCache.clear();
+      console.log(`[MedNet Backend] Cache limpo após importação para platformId: ${platformId}`);
+    };
+    handleImportEvents(supabase, req, res, clearCache);
   });
 }

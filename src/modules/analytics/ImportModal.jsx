@@ -118,6 +118,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
   const [platformHint, setPlatformHint] = useState('auto');
   const [stage, setStage] = useState(null); // { fileName, headers, dataRows, platformId, platformName, mapping }
   const [operatorEmail, setOperatorEmail] = useState(DEFAULT_OPERATOR_EMAIL);
+  const [rawFiles, setRawFiles] = useState([]);
 
   const fileInputRef = useRef(null);
 
@@ -131,6 +132,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
       setPlatformHint('auto');
       setStage(null);
       setOperatorEmail(DEFAULT_OPERATOR_EMAIL);
+      setRawFiles([]);
     }
   }, [modalOpen]);
 
@@ -171,6 +173,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
     if (!files.length) return;
     setParsing(true);
     setError(null);
+    setRawFiles(files);
 
     try {
       const parsedFiles = [];
@@ -182,16 +185,22 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
           const reader = new FileReader();
           reader.onload = (ev) => resolve(ev.target.result);
           reader.onerror = () => reject(new Error(`Falha ao ler o arquivo: ${f.name}`));
-          if (isCsv) reader.readAsText(f, 'UTF-8');
+          if (isCsv) {
+            // Ler apenas os primeiros 150KB para evitar carregar arquivos gigantes na memória do preview
+            const sliceBlob = f.slice(0, 150 * 1024);
+            reader.readAsText(sliceBlob, 'UTF-8');
+          }
           else reader.readAsArrayBuffer(f);
         });
 
         let aoa;
         if (isCsv) {
           aoa = parseCSV(fileData);
+          if (aoa.length > 100) aoa = aoa.slice(0, 100);
         } else {
           const data = new Uint8Array(fileData);
-          const wb = XLSX.read(data, { type: 'array', cellDates: true });
+          // Passar sheetRows: 100 para o parser ler apenas o cabeçalho e as primeiras linhas de preview
+          const wb = XLSX.read(data, { type: 'array', cellDates: true, sheetRows: 100 });
           const ws = wb.Sheets[wb.SheetNames[0]];
           aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         }
@@ -364,19 +373,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
       }
     }
 
-    const { rows, stats } = buildImportRows(stage, opEmail);
-
-    if (rows.length === 0) {
-      const partes = [];
-      if (stats.semData) partes.push(`${stats.semData} sem data/hora válida`);
-      if (stats.operador) partes.push(`${stats.operador} de outro operador`);
-      if (stats.velocidade) partes.push(`${stats.velocidade} com velocidade < 10 km/h`);
-      const detalhe = partes.length ? ` De ${stats.lidas} linhas: ${partes.join(', ')}.` : '';
-      setError('Nenhuma linha entrou na importação.' + detalhe);
-      return;
-    }
-
-    onImportConfirm(rows, stage.platformId, stage.platformName);
+    onImportConfirm(rawFiles, stage.platformId, stage.platformName, stage.mapping, opEmail);
   };
 
   const fieldRows = stage
