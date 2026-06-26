@@ -20,12 +20,42 @@ export async function getAuthHeaders() {
 /**
  * fetch autenticado para a API de analytics. `path` deve começar com '/'.
  * Injeta o header de auth preservando quaisquer headers passados em options.
+ *
+ * Resiliência a 401: logo após um F5, a sessão do Supabase pode ainda estar
+ * sendo restaurada/renovada — o token vem nulo ou expirado e o backend rejeita
+ * com 401. Nesse caso, renovamos a sessão e repetimos a request UMA vez.
+ * É seguro reenviar: um 401 significa que a request não foi processada.
  */
 export async function apiFetch(path, options = {}) {
   const auth = await getAuthHeaders();
-  return fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: { ...(options.headers || {}), ...auth },
+  });
+
+  if (res.status !== 401) return res;
+
+  // Tenta renovar a sessão e repetir uma única vez.
+  let refreshed = null;
+  try {
+    const { data } = await supabase.auth.refreshSession();
+    refreshed = data?.session?.access_token || null;
+  } catch {
+    refreshed = null;
+  }
+  if (!refreshed) {
+    // fallback: relê a sessão (pode ter terminado de restaurar nesse meio-tempo)
+    const retryAuth = await getAuthHeaders();
+    if (!retryAuth.Authorization) return res; // sem token: devolve o 401 original
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...(options.headers || {}), ...retryAuth },
+    });
+  }
+
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...(options.headers || {}), Authorization: `Bearer ${refreshed}` },
   });
 }
 

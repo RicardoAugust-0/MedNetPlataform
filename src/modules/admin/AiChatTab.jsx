@@ -142,6 +142,18 @@ export default function AiChatTab() {
         chart: data.chart
       };
 
+      // O bot limpou o histórico: refletir em tempo real (não apenas após F5).
+      if (data.history_cleared) {
+        // Mostra só a confirmação; 'all' volta para o estado de nova conversa.
+        setMessages([WELCOME_MESSAGE, assistantMessage]);
+        if (data.history_cleared === 'all') {
+          setActiveThreadId(null);
+        }
+        fetchThreads();
+        fetchReports();
+        return;
+      }
+
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Se uma nova thread foi criada, selecionar e atualizar lista
