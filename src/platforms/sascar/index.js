@@ -5,11 +5,8 @@
 // Lógica do parser e regras de negócio: ./parser.js
 // Mapeamento de colunas e taxonomia: ./columns.js
 
-import { TAXONOMY, DINON_CARRIERS_NORM } from './columns.js';
+import { TAXONOMY } from './columns.js';
 import { parse, detect } from './parser.js';
-import { normalize } from '../shared/normalize.js';
-
-const isFumo = tipo => /\bfum(o|ando|ante|ar)\b/i.test(tipo);
 
 const sascar = {
   // ── Metadata ──
@@ -44,34 +41,7 @@ const sascar = {
   },
 
   api: null,
-
-  // ── Modo scraper removido (pull automático descontinuado) ──
-  // Ingestão Sascar agora é só via upload de planilha (spreadsheet acima).
   scraper: null,
-
-  // ── Regra Dinon: auto-descarte de eventos de fumo para transportadoras Dinon.
-  // Chamado pelo Monitor após o filtro de histórico, antes de exibir a fila.
-  postProcess(drivers) {
-    const autoDescartes = [];
-    const result = drivers.map(d => {
-      const tNorm = normalize(d.transportadora || '');
-      if (!DINON_CARRIERS_NORM.some(n => tNorm.includes(n))) return d;
-
-      const fumoEvs = (d.eventosDetalhados || []).filter(e => e.bucket === 'reportar' && isFumo(e.tipo));
-      if (fumoEvs.length === 0) return d;
-
-      autoDescartes.push({
-        nome: d.nome, placa: d.placa, transportadora: d.transportadora,
-        count: fumoEvs.length, motivo: 'Regra Dinon · eventos de fumo',
-      });
-      const reportaveis      = Math.max(0, d.reportaveis - fumoEvs.length);
-      const tiposReportar    = (d.tiposReportar || []).filter(t => !isFumo(t));
-      const eventosDetalhados = (d.eventosDetalhados || []).filter(e => !(e.bucket === 'reportar' && isFumo(e.tipo)));
-      return { ...d, reportaveis, tiposReportar, eventosDetalhados };
-    }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
-
-    return { drivers: result, autoDescartes };
-  },
 };
 
 export default sascar;

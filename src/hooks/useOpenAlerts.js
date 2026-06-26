@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getPlatform } from '../platforms';
 import { aggregate } from '../platforms/shared/aggregate.js';
+import { applyCustomRules } from '../platforms/shared/customRules.js';
 
 const SEV_LEVELS = { 'Gravíssimo': 3, 'Grave': 2, 'Médio': 1, 'Normal': 0, 'Leve': -1 };
 function maxSeveridade(list) {
@@ -93,6 +94,7 @@ export function useOpenAlerts() {
   const { profile } = useAuth();
   const [events, setEvents] = useState([]);
   const [history, setHistory] = useState([]);
+  const [customRules, setCustomRules] = useState([]);
   const [overrideEmail, setOverrideEmail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
@@ -135,8 +137,15 @@ export function useOpenAlerts() {
 
       if (histErr) throw histErr;
 
+      // 4. Carregar regras customizadas de descarte
+      const { data: rulesData } = await supabase
+        .from('custom_rules')
+        .select('*')
+        .eq('ativa', true);
+
       setEvents(evData || []);
       setHistory(histData || []);
+      setCustomRules(rulesData || []);
       setLoadedAt(new Date().toISOString());
     } catch (err) {
       console.warn('[useOpenAlerts] Erro ao carregar alertas/atendimentos:', err.message);
@@ -212,8 +221,14 @@ export function useOpenAlerts() {
 
     for (const [pid, platEvents] of Object.entries(eventsByPlatform)) {
       const platAdapter = getOrCreatePlatformAdapter(pid);
-      const { drivers: platDrivers, stats: platStats } = aggregate(platEvents, history, platAdapter, { operatorEmail });
-      
+      let { drivers: platDrivers, stats: platStats } = aggregate(platEvents, history, platAdapter, { operatorEmail });
+
+      // Aplica regras customizadas do banco (substitui hardcodes de plataforma)
+      const { drivers: ruledDrivers, autoDescartes: ruleDescartes } = applyCustomRules(platDrivers, customRules, pid);
+      platDrivers = ruledDrivers;
+      if (platStats.autoDescartes) platStats.autoDescartes.push(...ruleDescartes);
+      else platStats.autoDescartes = ruleDescartes;
+
       allDrivers.push(...platDrivers);
 
       totalStats.totalEventos += platStats.totalEventos || 0;
@@ -243,7 +258,7 @@ export function useOpenAlerts() {
     totalStats.soTecnico = mergedDrivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length;
 
     return { drivers: mergedDrivers, stats: totalStats };
-  }, [events, history, operatorEmail]);
+  }, [events, history, customRules, operatorEmail]);
 
   // Calcula reativamente a data da planilha mais recente carregada baseando-se no importado_em de eventos ativos
   const lastImportedAt = useMemo(() => {

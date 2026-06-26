@@ -30,11 +30,6 @@ export const TECNICO_EVENTOS = ['Perda de vídeo', 'Sem motorista'];
 // Eventos abaixo deste limite são ignorados (motorista parado não fadiga).
 export const MIN_MOVING_SPEED_KMH = 10;
 
-// Transportadoras com regra especial de auto-descarte (case e acento insensitive).
-// Sascar/Dinon: eventos de fumo são descartados automaticamente, registrados
-// como atendimento "descarte" no histórico em vez de virem para a fila.
-export const DINON_CARRIERS_NORM = ['dinon'];
-
 // Status que indica falso positivo — eventos com este status são descartados.
 export const STATUS_FALSO_POSITIVO = 'Falso positivo';
 
