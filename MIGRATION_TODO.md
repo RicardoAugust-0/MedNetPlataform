@@ -26,36 +26,42 @@
 
 ## ⬜ FALTA FAZER (amanhã)
 
-### 1. Migrar tabelas que ficaram pra trás  ← COMEÇAR POR AQUI (rápido)
-Script já pronto e idempotente (com paginação, não corta em 1000):
-```
-node migrate_rest2.mjs
-```
-Migra: `templates` (12), `links` (16), `reminders` (1), `ws_pages` (8),
-`intervencoes_sheet` (2516), `automations` (2), `automation_logs` (70).
-- ⚠️ Se `automations`/`automation_logs` derem erro **"table not found"**, é porque o schema
-  delas não está na VPS → criar as tabelas na VPS primeiro (pegar o `CREATE TABLE` das
-  migrações em `supabase/migrations/`) e rodar o script de novo.
+### 1. Migrar tabelas que ficaram pra trás  ✅ FEITO (2026-06-26)
+Rodado `migrate_rest2.mjs`: `templates`(12), `links`(16), `reminders`(1), `ws_pages`(8),
+`intervencoes_sheet`(2516), `automations`(2), `automation_logs`(70) — todas batendo.
+- `automations`/`automation_logs` não existiam na VPS → criadas via `supabase/migration_automations.sql`
+  (Studio SQL Editor). O seed do arquivo criou 2 automações + 2 logs de exemplo que viraram
+  duplicata; removidas (eram `Bot_Maxtrack`/`Bot_HorizonScraping`, IDs `b0a9…`/`c1b9…`).
+- `drivers_queue` estava 0 na VPS (apesar do doc dizer que estava feito) → re-migrada (38/38).
+- Auditoria `_audit.mjs` confirma: tudo OK exceto o esperado (driver_events/analytics_daily
+  vazios até reimportar; get_distinct_transportadoras e get_cloud_users são RPCs).
 
 ### 2. Reimportar `driver_events`  (você, pelo app)
 Só tem 1.000 das 429k linhas na VPS. Reimporte as planilhas pela tela de Analytics.
 A tabela `analytics_daily` (rollup) se reconstrói sozinha a partir disso.
 
-### 3. Edge Functions na VPS  ← MAIOR PEDAÇO RESTANTE
-As 6 funções **não foram deployadas** na VPS. Enquanto isso, esses recursos quebram:
-convidar usuário, gerar relatório/dossiê, integrações de planilha e SASCAR.
-- Funções: `invite-user`, `generate-report`, `generate-dossier-report`,
-  `read-sheet`, `append-sheet`, `pull-sascar` (em `supabase/functions/`).
-- Rodam no runtime de Edge Functions (Deno) do Supabase **self-hosted** — descobrir como o
-  template do Coolify serve functions (volume montado vs `supabase functions deploy`).
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` são injetadas
-  automaticamente. Os **segredos externos** precisam ser configurados na VPS:
-  credenciais Google (read-sheet/append-sheet), credenciais SASCAR (pull-sascar),
-  e o **`TRIGGER_SECRET`** do `append-sheet` (estava pendente desde antes — ver memória).
+### 3. Edge Functions na VPS  ✅ DEPLOYADAS (2026-06-26) — falta 1 segredo
+As **5** funções foram copiadas via `scp` pro volume do runtime na VPS
+(`/data/coolify/services/lo4522vm3cwytmy8bk5s5mbu/volumes/functions/<nome>/index.ts`)
+e **bootam OK** (OPTIONS→200, POST sem auth→401). O runtime Deno já estava ativo e
+exposto pelo Kong; só faltava o código. `SUPABASE_URL/ANON/SERVICE_ROLE` são injetadas
+automaticamente (confirmado — funções retornam 401 limpo, não 500).
+- ✅ `generate-report`, `generate-dossier-report` → funcionam (leem chave IA da `ai_credentials`).
+- ✅ `invite-user` → cria usuário; só precisa de **SMTP no GoTrue** pra enviar o e-mail de convite.
+- ✅ `read-sheet`, `append-sheet` → **FUNCIONANDO** (2026-06-26). `GOOGLE_SERVICE_ACCOUNT` setado
+  em Coolify (conta de serviço NOVA `ais-gemini-key-...@927372921452.iam.gserviceaccount.com`,
+  compartilhada como Editor na planilha). Coolify injetou a var no container (confirmado:
+  `PRESENTE 2358 chars`). Bloqueio final era a **Google Sheets API desabilitada** no projeto
+  `927372921452` → habilitada via console. Importar e espelhar OK.
+- `pull-sascar` foi **removida do escopo** (decisão do usuário — não deployada). A feature SASCAR
+  no frontend vai quebrar se usada; remover do front depois se confirmar que não usa mais.
+- `append-sheet` (espelhamento automático): o gatilho `trigger_espelhamento_sheets_fn` monta a URL
+  pelo host da requisição → já aponta pra VPS sozinho. Depende de **`pg_net` ativo** na VPS
+  (verificar) + `GOOGLE_SERVICE_ACCOUNT`. `TRIGGER_SECRET` é opcional (tem fallback legado).
 
-### 4. Verificar Realtime (websockets)
-O app usa realtime (`wss://.../realtime/v1/websocket`). Confirmar no console do navegador
-que conecta na VPS sem erro. Se falhar, ajustar Kong/Realtime no Coolify.
+### 4. Verificar Realtime (websockets)  ✅ FEITO (2026-06-26)
+Handshake `wss://www.mednetsupabase.duckdns.org/realtime/v1/websocket` retorna
+`HTTP 101 Switching Protocols` (Server: Cowboy, via kong/3.9.1). Realtime OK na VPS.
 
 ### 5. Limpar a integração Supabase no Vercel
 As vars "Added May 15" (`POSTGRES_*`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`) apontam pro

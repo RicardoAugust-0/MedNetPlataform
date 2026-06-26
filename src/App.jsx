@@ -35,7 +35,6 @@ const Templates = lazy(() => import("./modules/Templates.jsx"));
 const Automacoes = lazy(() => import("./modules/Automacoes.jsx"));
 const Workspace = lazy(() => import("./modules/Workspace.jsx"));
 const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
-import { supabase } from "./supabase.js";
 import { applyAccent } from "./utils.js";
 import { ROLE_LEVEL } from "./data.js";
 
@@ -106,43 +105,6 @@ function ReminderNotifier() {
   return null;
 }
 
-function SascarTokenHandler() {
-  const { profile, updateProfile } = useAuth();
-  const toast = useToast();
-
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (!hash.includes("sascar-token=")) return;
-
-    const raw = hash.replace(/^#/, "");
-    const param = new URLSearchParams(raw);
-    const token = param.get("sascar-token");
-    if (!token || !profile?.id) return;
-
-    window.history.replaceState(null, "", window.location.pathname);
-
-    const savedAt = new Date().toISOString();
-    supabase
-      .from("profiles")
-      .update({ sascar_token: token, sascar_token_saved_at: savedAt })
-      .eq("id", profile.id)
-      .then(({ error }) => {
-        if (!error) {
-          updateProfile({
-            sascar_token: token,
-            sascar_token_saved_at: savedAt,
-          });
-          toast(
-            "Token Sascar atualizado. Pode buscar os eventos agora.",
-            "success",
-          );
-        }
-      });
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return null;
-}
-
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
@@ -170,7 +132,6 @@ function AppShell() {
       <DataProvider>
         <div id="app">
           <ReminderNotifier />
-          <SascarTokenHandler />
           <Sidebar />
           <div className="main-area">
             <Topbar />

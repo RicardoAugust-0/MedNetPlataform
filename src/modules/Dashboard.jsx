@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useApp } from "../context";
 import { useAtendimentos } from "../hooks/useAtendimentos";
-import { useAutoSync } from "../hooks/useAutoSync";
 import { useCarrierAliases } from "../hooks/useCarrierAliases";
 import { useProfiles } from "../hooks/useProfiles.jsx";
-import sascar from "../platforms/sascar/index.js";
 import { applyAccent, fmtDate } from "../utils";
 import PlatformBadge from "./PlatformBadge";
 import { supabase, isSupabaseConfigured } from "../supabase.js";
@@ -51,11 +49,6 @@ export default function Dashboard() {
   const { profiles } = useProfiles();
   const { profile: me } = useAuth();
   const isAdmin = me?.role === "admin";
-  const scSync = useAutoSync({
-    platform: sascar,
-    isEnabled: !!me?.sascar_token,
-    storageKey: "sascar",
-  });
 
   const drivers = driversReal;
   const atHistory = atHistoryReal;
@@ -430,66 +423,6 @@ export default function Dashboard() {
 
                 <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">Atualização automática</label>
-                  {!!me?.sascar_token && (
-                    <div style={{ marginBottom: 6 }}>
-                      <div className="dg-tweaks-toggles">
-                        <button
-                          className={`dg-tweaks-toggle${scSync.autoSync ? " on" : ""}`}
-                          onClick={() => scSync.setAutoSync((v) => !v)}
-                        >
-                          <span className="knob"></span>
-                          <span className="txt">
-                            Buscar Sascar automaticamente
-                          </span>
-                        </button>
-                      </div>
-                      {scSync.autoSync && (
-                        <div className="dg-tweaks-sla" style={{ marginTop: 6 }}>
-                          <button
-                            onClick={() =>
-                              scSync.setSyncIntervalMin((v) =>
-                                Math.max(2, v - 1),
-                              )
-                            }
-                            title="-1 min"
-                          >
-                            <i className="ti ti-minus"></i>
-                          </button>
-                          <input
-                            type="number"
-                            min="2"
-                            max="60"
-                            step="1"
-                            value={scSync.syncIntervalMin}
-                            onChange={(e) =>
-                              scSync.setSyncIntervalMin(
-                                Number(e.target.value) || 5,
-                              )
-                            }
-                          />
-                          <button
-                            onClick={() =>
-                              scSync.setSyncIntervalMin((v) =>
-                                Math.min(60, v + 1),
-                              )
-                            }
-                            title="+1 min"
-                          >
-                            <i className="ti ti-plus"></i>
-                          </button>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "var(--text-muted)",
-                              marginLeft: 4,
-                            }}
-                          >
-                            min
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <div style={{ marginBottom: 6 }}>
                     <div className="dg-tweaks-toggles">
                       <button
@@ -695,32 +628,6 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {!!me?.sascar_token && scSync.autoSync && (
-            <button
-              className={`dg-btn dg-btn-ghost${scSync.syncError ? " dg-sync-error" : ""}`}
-              title={
-                scSync.syncError ||
-                (scSync.lastSyncAt
-                  ? `Sascar — último sync: ${scSync.lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                  : "Sascar — aguardando primeiro sync")
-              }
-              onClick={() => !scSync.syncing && scSync.doSync()}
-              disabled={scSync.syncing}
-            >
-              <i
-                className={`ti ti-refresh${scSync.syncing ? " dg-spin" : ""}`}
-              ></i>
-              {" Sascar "}
-              {scSync.syncing
-                ? "…"
-                : scSync.lastSyncAt
-                  ? scSync.lastSyncAt.toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "Auto"}
-            </button>
-          )}
           {sheetAutoSync && (
             <button
               className={`dg-btn dg-btn-ghost${sheetHistory.error ? " dg-sync-error" : ""}`}

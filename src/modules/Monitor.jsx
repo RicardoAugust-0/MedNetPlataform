@@ -1,5 +1,5 @@
 // deno-lint-ignore-file
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context';
 import { useAuth } from '../auth/AuthContext';
@@ -181,19 +181,6 @@ export default function Monitor() {
     return () => clearInterval(id);
   }, [historyLoadedAt]);
 
-  const [autoRefresh, setAutoRefresh] = useState(() => localStorage.getItem('mn_auto_refresh') === 'true');
-  const [autoRefreshMin, setAutoRefreshMin] = useState(() => parseInt(localStorage.getItem('mn_auto_refresh_min') || '5'));
-
-
-  // Ref sempre atualizado com a versão mais recente de handleScrape (evita closure stale no setInterval)
-  const handleScrapeRef = useRef(null);
-
-  useEffect(() => {
-    if (!autoRefresh || !platform?.scraper?.pull) return;
-    const id = setInterval(() => { if (!loading) handleScrapeRef.current?.(); }, autoRefreshMin * 60 * 1000);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, autoRefreshMin, platform?.id]);
 
   /* ── Filtros fila ── */
   const buscaNorm = useMemo(() => normalizeText(filters.busca).trim(), [filters.busca]);
@@ -348,88 +335,6 @@ export default function Monitor() {
     e.preventDefault(); e.currentTarget.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
-  };
-
-  /* ── Scraper (Maxtrack e futuras plataformas com modo 'scraper') ── */
-  const handleScrape = async () => {
-    if (!platform.scraper?.pull) return;
-    setLoading(true); setStatusKind('idle'); setStatusMsg(`Buscando eventos em ${platform.name}…`);
-    try {
-      const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.scraper.pull();
-      const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
-      const postProcessed = platform.postProcess?.(histFiltered);
-      const newDrivers    = postProcessed?.drivers    ?? histFiltered;
-      const autoDescartes = postProcessed?.autoDescartes ?? [];
-      const stats = recomputeStats(rawStats, newDrivers, filtradosPorHistorico, autoDescartes);
-      const loadedAt = new Date().toISOString();
-      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
-      const existingPlacas = new Set(drivers.map(d => d.placa));
-      const newPlacas = new Set(timestamped.map(d => d.placa));
-      const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
-      const atualizadas = timestamped.length - novas;
-      const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
-
-      // Persiste eventos brutos na tabela de histórico permanente
-      if (rawEventRows && rawEventRows.length > 0) {
-        const validEvents = rawEventRows.filter(r => r.ocorrido_em);
-        if (validEvents.length > 0) {
-          const { error: evInsertErr } = await supabase
-            .from('driver_events')
-            .upsert(validEvents, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: true });
-          if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
-        }
-      }
-
-      replaceDrivers(timestamped, platform.id);
-      localStorage.setItem('mn_sheet_loaded_at', loadedAt);
-      const platRawData = {
-        total: stats.totalFechados || 0,
-        platform: platform.id,
-        date: new Date(loadedAt).toDateString(),
-      };
-      localStorage.setItem('mn_plat_raw_total', JSON.stringify(platRawData));
-      if (isSupabaseConfigured) {
-        supabase
-          .from('app_settings')
-          .upsert({
-            key: 'plat_raw_total',
-            value: platRawData,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'key' })
-          .then(({ error }) => {
-            if (error) console.warn('[Monitor] Erro ao sincronizar plat_raw_total:', error.message);
-          });
-      }
-      setSheetLoadedAt(loadedAt);
-      setSheetAgeMin(0);
-      setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
-      setStatusKind('active');
-      const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
-      const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
-      const autoDescMsg   = (stats.autoDescartes || []).length > 0 ? ` · ${stats.autoDescartes.reduce((s, x) => s + x.count, 0)} auto-descartado(s)` : '';
-      const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
-      setStatusMsg(`${platform.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
-      navigate('/monitor/intervencao', { replace: true });
-      notificarCriticos(merged.filter(d => d.alertas >= 5));
-      for (const item of (stats.autoDescartes || [])) {
-        registrar({
-          motorista: item.nome, placa: item.placa, transportadora: item.transportadora,
-          tipo: 'descarte',
-          obs: `Auto-descarte · ${item.motivo || platform.name} · ${item.count} evento(s)`,
-        }).catch(console.warn);
-      }
-    } catch (err) {
-      setStatusKind('error');
-      if (err.code === 'TOKEN_EXPIRED') {
-        setStatusMsg(`Token Sascar expirado. Clique no Favorito Sascar no portal para renovar e tente novamente.`);
-      } else if (err.code === 'NO_TOKEN') {
-        setStatusMsg(`Token Sascar não configurado. Acesse Meu Perfil → Integrações → Sascar.`);
-        navigate('/perfil');
-      } else {
-        setStatusMsg(`Erro ao buscar ${platform.name}: ${err.message}`);
-      }
-    } finally { setLoading(false); }
   };
 
   /* ── Ações ── */
@@ -640,9 +545,6 @@ export default function Monitor() {
     navigate(`/automacoes?name=${encodeURIComponent(d.transportadora)}`);
   };
 
-  // Mantém ref sincronizado com a versão atual de handleScrape
-  useEffect(() => { handleScrapeRef.current = handleScrape; });
-
   const handlers = useMemo(
     () => ({ openDossie, openTemplate, attend, deleteAlert, reportar, openWhatsappChat, openWhatsappCarrier }),
     [openDossie, openTemplate, attend, deleteAlert, reportar, navigate],
@@ -673,14 +575,9 @@ export default function Monitor() {
       <UploadArea
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
-        clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} handleScrape={handleScrape} loadStats={loadStats}
-        hasSascarToken={!!profile?.sascar_token} sascarTokenSavedAt={profile?.sascar_token_saved_at || null}
-        onNavigateToPerfil={() => navigate('/perfil')}
+        clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
         platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
         historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
-        autoRefresh={autoRefresh} autoRefreshMin={autoRefreshMin}
-        onAutoRefreshChange={(v) => { setAutoRefresh(v); localStorage.setItem('mn_auto_refresh', String(v)); }}
-        onAutoRefreshMinChange={(v) => { setAutoRefreshMin(v); localStorage.setItem('mn_auto_refresh_min', String(v)); }}
 
       />
 

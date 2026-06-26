@@ -33,9 +33,6 @@ export default function UploadArea({
   clearQueue,
   handleDrop,
   handleFile,
-  handleScrape,
-  hasSascarToken,
-  sascarTokenSavedAt,
   loadStats,
   platform,
   platforms = [],
@@ -43,11 +40,6 @@ export default function UploadArea({
   historyAgeMin,
   reloadHistory,
   histLoading,
-  onNavigateToPerfil,
-  autoRefresh,
-  autoRefreshMin,
-  onAutoRefreshChange,
-  onAutoRefreshMinChange,
 }) {
   const historyAgeLabel = historyAgeMin == null ? null
     : historyAgeMin < 1  ? 'agora'
@@ -58,7 +50,6 @@ export default function UploadArea({
     : historyAgeMin < 30 ? 'var(--warning-500)'
     : 'var(--danger-500)';
   const spreadsheet    = platform?.spreadsheet;
-  const supportsScraper = !!platform?.scraper;
   const supportsUpload = !!spreadsheet;
   const accept       = spreadsheet?.accept      || ".xlsx,.xls,.csv";
   const uploadTitle  = spreadsheet?.uploadTitle || `Solte aqui o relatório da plataforma ${platform?.name || ""}`.trim();
@@ -158,73 +149,6 @@ export default function UploadArea({
         )}
       </div>
 
-      {/* Busca automática Sascar (quando token configurado) */}
-      {platform?.id === 'sascar' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 14px',
-          background: hasSascarToken ? 'rgba(34,197,94,0.07)' : 'rgba(245,158,11,0.07)',
-          border: `1px solid ${hasSascarToken ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}`,
-          borderRadius: 'var(--radius-md)', marginBottom: 12, fontSize: 12.5,
-        }}>
-          <i className={`ti ${hasSascarToken ? 'ti-refresh' : 'ti-bookmark'}`}
-             style={{ color: hasSascarToken ? 'var(--success-600,#16a34a)' : 'var(--warning-500)', fontSize: 15 }}></i>
-          {hasSascarToken ? (
-            <>
-              <span style={{ flex: 1 }}>
-                Busca automática disponível — sem precisar fazer upload da planilha.
-                {sascarTokenSavedAt && (
-                  <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                    Token capturado em {new Date(sascarTokenSavedAt).toLocaleString('pt-BR', {
-                      timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                    })}.
-                  </span>
-                )}
-              </span>
-
-              {/* Auto-refresh controls */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={!!autoRefresh}
-                  onChange={e => onAutoRefreshChange?.(e.target.checked)}
-                  style={{ accentColor: 'var(--success-600,#16a34a)' }}
-                />
-                Auto a cada
-              </label>
-              <select
-                value={autoRefreshMin}
-                onChange={e => onAutoRefreshMinChange?.(Number(e.target.value))}
-                disabled={!autoRefresh}
-                style={{ fontSize: 12, padding: '2px 4px' }}
-              >
-                {[5, 10, 15, 30].map(m => <option key={m} value={m}>{m} min</option>)}
-              </select>
-
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleScrape}
-                disabled={loading}
-              >
-                <i className={`ti ${loading ? 'ti-loader-2' : 'ti-refresh'}`}></i>
-                {loading ? ' Buscando…' : ' Buscar eventos agora'}
-              </button>
-            </>
-          ) : (
-            <>
-              <span style={{ flex: 1 }}>
-                <strong>Dica:</strong> instale o <strong>Favorito Sascar</strong> para buscar eventos automaticamente — sem upload de planilha.
-              </span>
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => onNavigateToPerfil?.()}
-              >
-                <i className="ti ti-settings"></i> Configurar
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Upload / Scraper */}
       {supportsUpload ? (
         <label
@@ -251,47 +175,6 @@ export default function UploadArea({
             onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
           />
         </label>
-      ) : supportsScraper ? (
-        <div className="upload-area" style={{ cursor: "default", textAlign: "center" }}>
-          <div className="upload-icon">
-            <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}
-               style={loading ? { animation: "spin 1s linear infinite" } : {}}></i>
-          </div>
-          <div className="upload-text">
-            <div className="upload-title">
-              Integração automática com {platform?.name}
-            </div>
-            <div className="upload-hint">
-              Os eventos são buscados diretamente da plataforma — sem upload manual
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-primary"
-              onClick={handleScrape}
-              disabled={loading}
-            >
-              <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`}></i>
-              {loading ? " Buscando…" : " Buscar eventos agora"}
-            </button>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
-              <input
-                type="checkbox"
-                checked={!!autoRefresh}
-                onChange={e => onAutoRefreshChange?.(e.target.checked)}
-              />
-              Auto a cada
-            </label>
-            <select
-              value={autoRefreshMin}
-              onChange={e => onAutoRefreshMinChange?.(Number(e.target.value))}
-              disabled={!autoRefresh}
-              style={{ fontSize: 12, padding: '2px 4px' }}
-            >
-              {[5, 10, 15, 30].map(m => <option key={m} value={m}>{m} min</option>)}
-            </select>
-          </div>
-        </div>
       ) : (
         <div className="empty-state">
           <i className="ti ti-plug-connected"></i>
