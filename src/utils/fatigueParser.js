@@ -16,7 +16,7 @@ const norm = (s) =>
 // ── Plataformas suportadas (assinaturas leves p/ auto-detecção) ──
 export const PLATFORMS = [
   { id: 'maxtrack', name: 'MaxTrack', sig: ['maxtrack', 'max track'] },
-  { id: 'sascar',   name: 'Sascar',   sig: ['sascar'] },
+  { id: 'sascar',   name: 'Sascar',   sig: ['sascar', 'detalhesdeeevento', 'detalhes de evento', 'smart camera', 'smartcamera'] },
   { id: 'sascar_jd',name: 'Sascar JD',sig: ['sascar jd', 'sascar_jd', 'jornada digital'] },
   { id: 'sighra',   name: 'Sighra',   sig: ['sighra'] },
   { id: 'horizon',  name: 'Horizon',  sig: ['horizon'] },
@@ -136,6 +136,8 @@ export const PLATFORM_COLUMN_MAPS = {
 const PLATFORM_HEADER_SIGS = [
   { id: 'maxtrack', need: ['identificador/placa'], anyOf: ['criticidade original', 'tipo de operacao', 'matricula do motorista'] },
   { id: 'sighra',   need: ['id alerta', 'quantidade eventos'] },
+  // "hora do evento" é exclusiva da Sascar — nenhuma outra plataforma usa esse nome de coluna.
+  { id: 'sascar',   need: ['hora do evento'], anyOf: ['categoria', 'severidade', 'evento'] },
   { id: 'horizon',  need: [], anyOf: ['placa / empurrador', 'transportadora / empresa de navegacao', 'abono motorista'] },
   { id: 'omnilink', need: ['metodo de processamento', 'tratado por'] },
 ];
