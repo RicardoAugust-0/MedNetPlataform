@@ -13,6 +13,11 @@ function systemWithContext() {
 CONTEXTO TEMPORAL (IMPORTANTE): A data de hoje é ${iso}. Use SEMPRE esta data como referência para "hoje", "este mês", "último mês", "últimos 30 dias", "este ano" etc. NUNCA invente datas de outros anos. Se não tiver certeza do intervalo de datas existente nos dados, DESCUBRA consultando os registros (ex.: 'query_database_records' em driver_events ordenando por 'ocorrido_em' desc e asc para ver o intervalo real) antes de afirmar que "não há dados" no período.`;
 }
 
+// Mensagens usadas quando o modelo insiste em devolver um turno vazio — para o
+// usuário nunca ver o "(sem resposta)" cru.
+const EMPTY_TURN_NUDGE = 'Sua última resposta veio vazia. Escreva agora, em texto, a resposta final para o usuário com base no que já foi apurado. Não chame mais ferramentas — apenas redija a resposta.';
+const EMPTY_TURN_FALLBACK = 'Desculpe, me embolei para concluir essa resposta agora. 🙏 Pode reenviar a pergunta ou reformulá-la um pouco? Já volto a funcionar normalmente.';
+
 // Loop de ferramentas com Gemini
 async function runGemini(apiKey, model, userMessage, history, supabase, userId, ctx = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -34,6 +39,7 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
   });
 
   let loopCount = 0;
+  let emptyRetried = false;
   const maxLoops = 6;
 
   while (loopCount < maxLoops) {
@@ -47,7 +53,7 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
       },
       tools: GEMINI_TOOLS,
       generationConfig: {
-        maxOutputTokens: 2048
+        maxOutputTokens: 4096
       }
     };
 
@@ -68,17 +74,30 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
     const modelContent = candidate?.content;
     const modelParts = modelContent?.parts || [];
 
+    const functionCalls = modelParts.filter(p => p.functionCall);
+    const textPart = modelParts.find(p => p.text && p.text.trim());
+
+    // Turno vazio (sem texto e sem ferramenta): cutuca o modelo uma vez antes de
+    // desistir — o usuário nunca deve ver "(sem resposta)".
+    if (functionCalls.length === 0 && !textPart) {
+      if (!emptyRetried) {
+        emptyRetried = true;
+        contents.push({ role: 'model', parts: [{ text: 'Um momento.' }] });
+        contents.push({ role: 'user', parts: [{ text: EMPTY_TURN_NUDGE }] });
+        continue;
+      }
+      return EMPTY_TURN_FALLBACK;
+    }
+
     // Push the model's turn to history
     contents.push({
       role: 'model',
       parts: modelParts
     });
 
-    // Check for function calls
-    const functionCalls = modelParts.filter(p => p.functionCall);
+    // Sem function calls → resposta final em texto
     if (functionCalls.length === 0) {
-      const textPart = modelParts.find(p => p.text);
-      return textPart ? textPart.text : '*(sem resposta)*';
+      return textPart.text;
     }
 
     // Process all function calls
@@ -135,6 +154,7 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
   });
 
   let loopCount = 0;
+  let emptyRetried = false;
   const maxLoops = 6;
 
   while (loopCount < maxLoops) {
@@ -150,7 +170,7 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
       },
       body: JSON.stringify({
         model,
-        max_tokens: 2048,
+        max_tokens: 4096,
         system: systemWithContext(),
         tools: ANTHROPIC_TOOLS,
         messages
@@ -164,18 +184,32 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
     }
 
     const resJson = await res.json();
+    const content = resJson.content || [];
+
+    const toolUses = content.filter(c => c.type === 'tool_use');
+    const textContent = content.filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+
+    // Turno vazio (sem texto e sem ferramenta): cutuca o modelo uma vez antes de
+    // desistir — o usuário nunca deve ver "(sem resposta)".
+    if (toolUses.length === 0 && !textContent) {
+      if (!emptyRetried) {
+        emptyRetried = true;
+        messages.push({ role: 'assistant', content: 'Um momento.' });
+        messages.push({ role: 'user', content: EMPTY_TURN_NUDGE });
+        continue;
+      }
+      return EMPTY_TURN_FALLBACK;
+    }
 
     // Add assistant's response to history
     messages.push({
       role: 'assistant',
-      content: resJson.content
+      content
     });
 
-    // Check if the response requested any tool use
-    const toolUses = resJson.content.filter(c => c.type === 'tool_use');
+    // Sem tool use → resposta final em texto
     if (toolUses.length === 0) {
-      const textContent = resJson.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
-      return textContent || '*(sem resposta)*';
+      return textContent;
     }
 
     // Process all tool uses
