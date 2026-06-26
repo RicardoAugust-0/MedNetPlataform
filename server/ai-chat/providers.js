@@ -3,6 +3,16 @@ import { SYSTEM_PROMPT } from './prompt.js';
 import { ANTHROPIC_TOOLS, GEMINI_TOOLS } from './tool-schemas.js';
 import { executeTool } from './tool-handlers.js';
 
+// O modelo não tem noção da data atual por conta própria — sem isto, "último mês"
+// / "hoje" viram chutes do treino (ex.: 2023). Injetamos a data real do servidor a
+// cada requisição e orientamos a descobrir o intervalo dos dados em vez de presumir.
+function systemWithContext() {
+  const iso = new Date().toISOString().slice(0, 10);
+  return `${SYSTEM_PROMPT}
+
+CONTEXTO TEMPORAL (IMPORTANTE): A data de hoje é ${iso}. Use SEMPRE esta data como referência para "hoje", "este mês", "último mês", "últimos 30 dias", "este ano" etc. NUNCA invente datas de outros anos. Se não tiver certeza do intervalo de datas existente nos dados, DESCUBRA consultando os registros (ex.: 'query_database_records' em driver_events ordenando por 'ocorrido_em' desc e asc para ver o intervalo real) antes de afirmar que "não há dados" no período.`;
+}
+
 // Loop de ferramentas com Gemini
 async function runGemini(apiKey, model, userMessage, history, supabase, userId, ctx = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -33,7 +43,7 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
     const requestBody = {
       contents,
       systemInstruction: {
-        parts: [{ text: SYSTEM_PROMPT }]
+        parts: [{ text: systemWithContext() }]
       },
       tools: GEMINI_TOOLS,
       generationConfig: {
@@ -141,7 +151,7 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
       body: JSON.stringify({
         model,
         max_tokens: 2048,
-        system: SYSTEM_PROMPT,
+        system: systemWithContext(),
         tools: ANTHROPIC_TOOLS,
         messages
       }),
