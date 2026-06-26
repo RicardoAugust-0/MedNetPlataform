@@ -13,7 +13,7 @@ const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
-  const { drivers, loading: driversLoading, loadedAt: driversLoadedAt, reload: reloadDrivers } = useOpenAlerts(platformId);
+  const { drivers, loading: driversLoading, loadedAt: driversLoadedAt, reload: reloadDrivers, lastImportedAt } = useOpenAlerts();
   const sheetHistory = useSheetHistory();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));
@@ -34,7 +34,7 @@ export function AppProvider({ children }) {
 
   // Sem useMemo no value, todo consumer de useApp() re-renderiza a cada render do Provider.
   const value = useMemo(() => ({
-    drivers, driversLoading, driversLoadedAt, reloadDrivers,
+    drivers, driversLoading, driversLoadedAt, reloadDrivers, lastImportedAt,
     filters, setFilters,
     platformId, setPlatformId,
     theme, setTheme,
@@ -45,7 +45,7 @@ export function AppProvider({ children }) {
     rhythm, setRhythm,
     sheetHistory,
   }), [
-    drivers, driversLoading, driversLoadedAt, reloadDrivers,
+    drivers, driversLoading, driversLoadedAt, reloadDrivers, lastImportedAt,
     filters, setFilters,
     platformId, setPlatformId,
     theme, setTheme,

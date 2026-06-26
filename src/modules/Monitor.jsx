@@ -19,12 +19,66 @@ import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { detect, toDate, toNum, normCrit, normClf, parseCSV, readHeaders } from '../utils/fatigueParser.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
 
 const normalizeSev  = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function getOrCreatePlatformAdapter(platformId) {
+  try {
+    return getPlatform(platformId);
+  } catch {
+    return {
+      id: platformId,
+      name: platformId ? platformId.toUpperCase() : 'Desconhecido',
+      sistema: platformId ? platformId.toUpperCase() : 'SASCAR',
+      rules: { slaLimitMin: 30, criticalAlertsCount: 5, minMovingSpeedKmh: 10 },
+      taxonomy: {
+        intervencao: ['Fadiga', 'Distração', 'Bocejo', 'Olho Fechado'],
+        tecnico: ['Câmera Obstruída', 'Falha Técnico', 'Perda de Vídeo'],
+      }
+    };
+  }
+}
+
+function parseUniversal(headers, dataRows, platformId, mapping) {
+  const getVal = (row, k) => {
+    const idx = mapping[k] ? headers.indexOf(mapping[k]) : -1;
+    return idx > -1 ? row[idx] : null;
+  };
+  const rows = [];
+  for (const row of dataRows) {
+    const dt = toDate(getVal(row, 'datetime'));
+    if (!dt) continue;
+    const speedVal = toNum(getVal(row, 'speed'));
+    const classificationRaw = getVal(row, 'classification');
+    const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';
+    const plateVal = String(getVal(row, 'plate') || '').trim();
+    const typeVal = String(getVal(row, 'type') || '').trim();
+    const severidade = getVal(row, 'criticality') ? normCrit(getVal(row, 'criticality')) : 'Médio';
+    
+    rows.push({
+      platform_id: platformId,
+      placa: plateVal || 'SEM_PLACA',
+      nome: getVal(row, 'driver') ? String(getVal(row, 'driver')).trim() : null,
+      nome_evento: typeVal || 'Fadiga',
+      severidade,
+      analise_ia_plataforma: classificationNorm,
+      velocidade_kmh: speedVal,
+      localidade: getVal(row, 'location') ? String(getVal(row, 'location')).trim() : null,
+      frota: getVal(row, 'fleet') ? String(getVal(row, 'fleet')).trim() : null,
+      descricao: getVal(row, 'description') ? String(getVal(row, 'description')).trim() : null,
+      ocorrido_em: dt.toISOString(),
+      evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
+      inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
+      fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
+    });
+  }
+  return rows;
+}
 
 // Reconstrói os campos derivados de stats após filtro de histórico e postProcess.
 function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes) {
@@ -83,14 +137,12 @@ export default function Monitor() {
   const { tab: activeTab = 'intervencao' } = useParams();
   const [searchParams] = useSearchParams();
 
-  const { drivers, driversLoading, reloadDrivers, filters, setFilters, platformId, setPlatformId } = useApp();
+  const { drivers, driversLoading, reloadDrivers, filters, setFilters, lastImportedAt } = useApp();
   const { profile } = useAuth();
-  const { history, loading: histLoading, error: histError, historyLoadedAt, registrar, reload: reloadHistory, loadByRange, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
+  const { history, historyLoadedAt, registrar, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
-  const platform       = useMemo(() => getPlatform(platformId), [platformId]);
-  const allPlatforms   = useMemo(() => listPlatforms({ includePlanned: true }), []);
   const { resolveAlias } = useCarrierAliases();
   const sheetHistory   = useSheetHistory();
 
@@ -192,11 +244,18 @@ export default function Monitor() {
     }
   }, [drivers.length, driversLoading]);
 
-  const [sheetLoadedAt, setSheetLoadedAt] = useState(() => localStorage.getItem('mn_sheet_loaded_at'));
-  const [sheetAgeMin,   setSheetAgeMin]   = useState(() => {
-    const ts = localStorage.getItem('mn_sheet_loaded_at');
-    return ts ? Math.floor((Date.now() - new Date(ts)) / 60000) : null;
-  });
+  const [sheetLoadedAt, setSheetLoadedAt] = useState(null);
+  const [sheetAgeMin,   setSheetAgeMin]   = useState(null);
+
+  useEffect(() => {
+    if (lastImportedAt) {
+      setSheetLoadedAt(lastImportedAt);
+      setSheetAgeMin(Math.floor((Date.now() - new Date(lastImportedAt)) / 60000));
+    } else {
+      setSheetLoadedAt(null);
+      setSheetAgeMin(null);
+    }
+  }, [lastImportedAt]);
 
   useEffect(() => {
     if (!sheetLoadedAt) return;
@@ -234,6 +293,13 @@ export default function Monitor() {
   const reportarList    = useMemo(() => filtered.filter(d => d.alertas === 0 && d.reportaveis > 0).sort((a, b) => b.reportaveis - a.reportaveis), [filtered]);
   const tecList         = useMemo(() => filtered.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0), [filtered]);
   const transps         = useMemo(() => [...new Set(drivers.map(d => d.transportadora))].sort(), [drivers]);
+  const comportamentos  = useMemo(() => {
+    return [...new Set(drivers.flatMap(d => [
+      ...(d.tipos || []),
+      ...(d.tiposReportar || []),
+      ...Object.keys(d.tiposTecnico || {})
+    ]))].sort();
+  }, [drivers]);
 
   /* ── Upload ── */
   const hashFile = async (file) => {
@@ -247,9 +313,62 @@ export default function Monitor() {
   const handleFile = async (file) => {
     setLoading(true); setStatusKind('idle'); setStatusMsg(`Processando ${file.name}…`);
     try {
-      if (!platform.spreadsheet?.parse) {
-        throw new Error(`Plataforma "${platform.name}" não suporta upload de planilha.`);
+      const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+      const fileData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(new Error(`Falha ao ler o arquivo: ${file.name}`));
+        if (isCsv) reader.readAsText(file, 'UTF-8');
+        else reader.readAsArrayBuffer(file);
+      });
+
+      let aoa;
+      if (isCsv) {
+        aoa = parseCSV(fileData);
+      } else {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.read(fileData, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       }
+
+      const { headers, dataRows } = readHeaders(aoa);
+      if (!headers.length || !dataRows.length) {
+        throw new Error('Não foi possível identificar o cabeçalho ou as linhas de dados.');
+      }
+
+      const detection = detect(headers, 'auto', file.name);
+      const detectedPlatId = detection.platform;
+      
+      let rawEventRows = [];
+      const filterHistory = await loadAtendimentosForFilter(90);
+      
+      let operatorEmail = 'hevilyntfzero@gmail.com';
+      try {
+        const { data: configData } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'omnilink_config')
+          .maybeSingle();
+        if (configData?.value?.operator_email) {
+          operatorEmail = configData.value.operator_email;
+        }
+      } catch (err) {
+        console.warn('[Monitor] Erro ao obter omnilink_config:', err);
+      }
+
+      if (['sascar', 'maxtrack', 'omnilink'].includes(detectedPlatId)) {
+        const adapter = getPlatform(detectedPlatId);
+        const parsed = await adapter.spreadsheet.parse(file, {
+          history: filterHistory,
+          operatorEmail
+        });
+        rawEventRows = parsed.rawEventRows || [];
+      } else {
+        // Fallback to universal parser function
+        rawEventRows = parseUniversal(headers, dataRows, detectedPlatId, detection.mapping);
+      }
+
       const hash = await hashFile(file);
       if (hash) {
         let recent = [];
@@ -271,39 +390,6 @@ export default function Monitor() {
         const updated = [{ hash, name: file.name, at: new Date().toISOString() }, ...recent.filter(r => r.hash !== hash)].slice(0, 10);
         try { localStorage.setItem('mn_sheet_hashes', JSON.stringify(updated)); } catch { /* storage não crítico */ }
       }
-      let operatorEmail = 'hevilyntfzero@gmail.com';
-      if (platform.id === 'omnilink') {
-        try {
-          const { data: configData } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'omnilink_config')
-            .maybeSingle();
-          if (configData?.value?.operator_email) {
-            operatorEmail = configData.value.operator_email;
-          }
-        } catch (err) {
-          console.warn('[Monitor] Erro ao obter omnilink_config:', err);
-        }
-      }
-
-      const filterHistory = await loadAtendimentosForFilter(90);
-      const { drivers: rawDrivers, stats: rawStats, rawEventRows } = await platform.spreadsheet.parse(file, { 
-        history: filterHistory,
-        operatorEmail: operatorEmail
-      });
-      const { drivers: histFiltered, filtradosPorHistorico } = applyHistoryFilter(rawDrivers, filterHistory);
-      const postProcessed = platform.postProcess?.(histFiltered);
-      const newDrivers    = postProcessed?.drivers    ?? histFiltered;
-      const autoDescartes = postProcessed?.autoDescartes ?? [];
-      const stats = recomputeStats(rawStats, newDrivers, filtradosPorHistorico, autoDescartes);
-      const loadedAt = new Date().toISOString();
-      const timestamped = newDrivers.map(d => ({ ...d, _loadedAt: loadedAt, _platformId: platform.id }));
-      const existingPlacas = new Set(drivers.map(d => d.placa));
-      const newPlacas = new Set(timestamped.map(d => d.placa));
-      const novas = timestamped.filter(d => !existingPlacas.has(d.placa)).length;
-      const atualizadas = timestamped.length - novas;
-      const merged = [...drivers.filter(d => !newPlacas.has(d.placa)), ...timestamped];
 
       // Persiste eventos brutos na tabela de histórico permanente
       if (rawEventRows && rawEventRows.length > 0) {
@@ -317,49 +403,10 @@ export default function Monitor() {
       }
 
       await reloadDrivers();
-      localStorage.setItem('mn_sheet_loaded_at', loadedAt);
-      const platRawData = {
-        total: stats.totalFechados || 0,
-        platform: platform.id,
-        date: new Date(loadedAt).toDateString(),
-      };
-      localStorage.setItem('mn_plat_raw_total', JSON.stringify(platRawData));
-      if (isSupabaseConfigured) {
-        supabase
-          .from('app_settings')
-          .upsert({
-            key: 'plat_raw_total',
-            value: platRawData,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'key' })
-          .then(({ error }) => {
-            if (error) console.warn('[Monitor] Erro ao sincronizar plat_raw_total:', error.message);
-          });
-      }
-      setSheetLoadedAt(loadedAt);
-      setSheetAgeMin(0);
-      setLoadStats({ ...stats, totalNaFila: merged.length, novas, atualizadas });
+      
       setStatusKind('active');
-      const filtroMsg     = stats.filtradosPorHistorico > 0 ? ` · ${stats.filtradosPorHistorico} eventos pré-atendimento ignorados` : '';
-      const velocidadeMsg = stats.filtradosPorVelocidade > 0 ? ` · ${stats.filtradosPorVelocidade} eventos abaixo de 10 km/h ignorados` : '';
-      const autoDesc      = stats.autoDescartes || [];
-      const autoDescMsg   = autoDesc.length > 0 ? ` · ${autoDesc.reduce((s, x) => s + x.count, 0)} evento(s) auto-descartados` : '';
-      const mergeMsg      = existingPlacas.size > 0 ? ` · ${novas} nova(s) · ${atualizadas} atualizada(s) · ${merged.length} na fila` : '';
-      setStatusMsg(`${file.name} · ${stats.comIntervencao} para intervenção · ${stats.soReportar} para reportar · ${stats.falsosPositivos} falsos positivos removidos${velocidadeMsg}${filtroMsg}${autoDescMsg}${mergeMsg}`);
+      setStatusMsg(`${file.name} (${detection.platformName}) processada. Fila atualizada.`);
       navigate('/monitor/intervencao', { replace: true });
-      notificarCriticos(merged.filter(d => d.alertas >= 5));
-
-      // Auto-register platform-specific discards silently in the background
-      for (const item of autoDesc) {
-        registrar({
-          motorista: item.nome,
-          placa: item.placa,
-          transportadora: item.transportadora,
-          tipo: 'descarte',
-          bucket: 'reportar',
-          obs: `Auto-descarte · ${item.motivo || platform.name} · ${item.count} evento(s)`,
-        }).catch(console.warn);
-      }
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);
@@ -383,10 +430,13 @@ export default function Monitor() {
     const sev = d.severidade || 'Normal';
     const criticidade = sev === 'Gravíssimo' ? 'GRAVÍSSIMO' : sev === 'Grave' ? 'GRAVE' : 'MÉDIO';
     const classificacao = (sev === 'Gravíssimo' || sev === 'Grave') ? 'IMEDIATA' : 'PREVENTIVA';
+    
+    const targetPlat = d._platformId ? getOrCreatePlatformAdapter(d._platformId) : { sistema: 'SASCAR' };
+    
     postToSheets({
       data,
       empresa:         resolveAlias(d.transportadora || ''),
-      sistema:         platform.sistema,
+      sistema:         targetPlat.sistema,
       colaborador:     d.nome,
       placa:           d.placa || '',
       frota:           d.frota || '',
@@ -466,16 +516,12 @@ export default function Monitor() {
       const { error } = await supabase
         .from('driver_events')
         .delete()
-        .eq('platform_id', platformId)
         .gte('ocorrido_em', startISO);
       if (error) throw error;
       await reloadDrivers();
       setLoadStats(null);
       setStatusKind('idle');
       setStatusMsg('Fila limpa. Aguardando nova planilha.');
-      localStorage.removeItem('mn_sheet_loaded_at');
-      setSheetLoadedAt(null);
-      setSheetAgeMin(null);
     } catch (err) {
       console.warn('[Monitor] Erro ao limpar fila:', err.message);
     } finally {
@@ -616,15 +662,13 @@ export default function Monitor() {
         statusKind={statusKind} statusMsg={statusMsg} loading={loading}
         sheetAgeMin={sheetAgeMin} sheetAgeColor={sheetAgeColor} sheetAgeLabel={sheetAgeLabel}
         clearQueue={clearQueue} handleDrop={handleDrop} handleFile={handleFile} loadStats={loadStats}
-        platform={platform} platforms={allPlatforms} onPlatformChange={setPlatformId}
-        historyAgeMin={historyAgeMin} reloadHistory={reloadHistory} histLoading={histLoading}
-
+        historyAgeMin={historyAgeMin}
       />
 
       <MonitorFilters
         profile={profile} filters={filters} setFilters={setFilters}
         transps={transps} resetFilters={resetFilters}
-        platform={platform}
+        comportamentos={comportamentos}
         presets={presets} onSavePreset={savePreset} onLoadPreset={loadPreset} onDeletePreset={deletePreset}
       />
 

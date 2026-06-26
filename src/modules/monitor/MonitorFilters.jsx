@@ -1,19 +1,17 @@
 import { useState } from 'react';
 
 export default function MonitorFilters({
-  profile,
   filters,
   setFilters,
   transps,
   resetFilters,
-  platform,
+  comportamentos = [],
   presets,
   onSavePreset,
   onLoadPreset,
   onDeletePreset,
 }) {
-  const taxonomy    = platform?.taxonomy    || { intervencao: [], reportar: [], tecnico: [] };
-  const severidades = platform?.severidades || ['Gravíssimo', 'Grave', 'Normal'];
+  const severidades = ['Gravíssimo', 'Grave', 'Normal'];
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetName, setPresetName] = useState('');
 
@@ -67,21 +65,7 @@ export default function MonitorFilters({
           <label>Evento</label>
           <select value={filters.comportamento} onChange={e => setFilters({ ...filters, comportamento: e.target.value })}>
             <option value="">Todos</option>
-            {taxonomy.intervencao.length > 0 && (
-              <optgroup label="— Intervenção —">
-                {taxonomy.intervencao.map(ev => <option key={ev} value={ev}>{ev}</option>)}
-              </optgroup>
-            )}
-            {taxonomy.reportar.length > 0 && (
-              <optgroup label="— Reportar —">
-                {taxonomy.reportar.map(ev => <option key={ev} value={ev}>{ev}</option>)}
-              </optgroup>
-            )}
-            {taxonomy.tecnico.length > 0 && (
-              <optgroup label="— Técnico —">
-                {taxonomy.tecnico.map(ev => <option key={ev} value={ev}>{ev}</option>)}
-              </optgroup>
-            )}
+            {comportamentos.map(ev => <option key={ev} value={ev}>{ev}</option>)}
           </select>
         </div>
         <button className="btn btn-sm" onClick={resetFilters} disabled={!filters.turno && !filters.prioridade && !filters.empresa && !filters.comportamento && !filters.busca}>
