@@ -154,6 +154,10 @@ function AppShell() {
                     path="/crosscheck"
                     element={<RoleGuard min="lider"><CrossCheck /></RoleGuard>}
                   />
+                  <Route
+                    path="/chat"
+                    element={<AdminGuard><AdminAiChat /></AdminGuard>}
+                  />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/automacoes" element={<Automacoes />} />
                   <Route path="/workspace" element={<Workspace />} />
@@ -176,7 +180,6 @@ function AppShell() {
                   >
                     <Route index element={<Navigate to="analytics" replace />} />
                     <Route path="analytics" element={<Analytics />} />
-                    <Route path="chat" element={<AdminAiChat />} />
                     <Route path="equipe" element={<AdminEquipe />} />
                     <Route path="integracoes" element={<AdminIntegracoes />}>
                       <Route index element={<Navigate to="credenciais" replace />} />
@@ -189,7 +192,6 @@ function AppShell() {
                       <Route path="manutencao" element={<AdminManutencao />} />
                       <Route path="limpeza" element={<AdminLimpeza />} />
                     </Route>
-                    <Route path="auditoria" element={<AdminAuditoria />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>

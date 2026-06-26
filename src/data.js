@@ -23,6 +23,7 @@ export const NAV_ITEMS = [
   // GESTÃO — ferramentas avançadas (Líder+); fora do menu do operador comum
   { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Gestão',       path: '/crosscheck',  minRole: 'lider' },
   { id: 'automacoes', label: 'Automações',       icon: 'ti-webhook',         group: 'Gestão',       path: '/automacoes',  minRole: 'lider' },
+  { id: 'aichat',     label: 'Chat IA',          icon: 'ti-messages',        group: 'Gestão',       path: '/chat',        minRole: 'admin' },
   { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Gestão',       path: '/admin',       minRole: 'admin' },
   // CONTA
   { id: 'perfil',     label: 'Meu Perfil',       icon: 'ti-user-circle',     group: 'Conta',        path: '/perfil' },
