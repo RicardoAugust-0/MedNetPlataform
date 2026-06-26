@@ -16,6 +16,7 @@ export function useAnalyticsState() {
   const [availableMonths, setAvailableMonths] = useState([]);
   const [availableCompanies, setAvailableCompanies] = useState([]);
   const [availableTypes, setAvailableTypes] = useState([]);
+  const [availableUfs, setAvailableUfs] = useState([]);
 
   // Restaura a fonte ativa direto no estado inicial
   const [activeId, setActiveId] = useState(() => {
@@ -174,6 +175,13 @@ export function useAnalyticsState() {
       return '';
     }
   });
+  const [selectedUf, setSelectedUf] = useState(() => {
+    try {
+      return localStorage.getItem('mednet_analytics_uf') || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem('mednet_analytics_severity', selectedSeverity);
@@ -190,6 +198,14 @@ export function useAnalyticsState() {
       localStorage.removeItem('mednet_analytics_type');
     }
   }, [selectedType]);
+
+  useEffect(() => {
+    if (selectedUf) {
+      localStorage.setItem('mednet_analytics_uf', selectedUf);
+    } else {
+      localStorage.removeItem('mednet_analytics_uf');
+    }
+  }, [selectedUf]);
 
   useEffect(() => {
     if (startDate) {
@@ -211,6 +227,7 @@ export function useAnalyticsState() {
     setSelectedCompany('');
     setSelectedClassification('all');
     setSelectedType('');
+    setSelectedUf('');
     setActiveKpi(null);
   }, [activeId, compare]);
 
@@ -309,6 +326,7 @@ export function useAnalyticsState() {
         severity: selectedSeverity,
         classification: selectedClassification,
         eventType: selectedType,
+        uf: selectedUf,
       });
 
       const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal });
@@ -323,6 +341,7 @@ export function useAnalyticsState() {
       setAvailableMonths(data.availableMonths || []);
       setAvailableCompanies(data.availableCompanies || []);
       setAvailableTypes(data.availableTypes || []);
+      setAvailableUfs(data.availableUfs || []);
 
       const monthsList = data.availableMonths || [];
       if (monthsList.length > 0) {
@@ -414,7 +433,8 @@ export function useAnalyticsState() {
     compareCompanies,
     selectedSeverity,
     selectedClassification,
-    selectedType
+    selectedType,
+    selectedUf
   ]);
 
   useEffect(() => {
@@ -465,6 +485,7 @@ export function useAnalyticsState() {
       selectedSeverity,
       selectedClassification,
       selectedType,
+      selectedUf,
       toast
     });
   };
@@ -632,6 +653,7 @@ export function useAnalyticsState() {
     availableMonths,
     availableCompanies,
     availableTypes,
+    availableUfs,
     activeId,
     setActiveId,
     activeKpi,
@@ -676,6 +698,8 @@ export function useAnalyticsState() {
     setSelectedClassification,
     selectedType,
     setSelectedType,
+    selectedUf,
+    setSelectedUf,
     activeSource,
     sourcesList,
     noData,

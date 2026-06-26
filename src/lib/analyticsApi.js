@@ -49,6 +49,7 @@ export function buildAnalyticsQuery({
   severity = '',
   classification = '',
   eventType = '',
+  uf = '',
 } = {}) {
   const params = new URLSearchParams();
 
@@ -60,6 +61,7 @@ export function buildAnalyticsQuery({
   } else {
     if (platformId) params.set('platformId', platformId);
     if (company) params.set('company', company);
+    if (uf) params.set('uf', uf);
   }
 
   if (month) params.set('month', month);

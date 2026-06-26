@@ -12,6 +12,7 @@ export const exportToCSV = async ({
   selectedSeverity,
   selectedClassification,
   selectedType,
+  selectedUf,
   toast,
 }) => {
   if (!activeSource) return;
@@ -25,6 +26,7 @@ export const exportToCSV = async ({
     severity: selectedSeverity,
     classification: selectedClassification,
     eventType: selectedType,
+    uf: selectedUf,
   });
 
   try {

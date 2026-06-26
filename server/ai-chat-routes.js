@@ -97,6 +97,23 @@ Suas capacidades incluem ler, configurar, atualizar e excluir dados da plataform
    - ativa (booleano)
    - created_at (timestamptz)
 
+6. Configuração de IA (em 'app_settings', chave 'ai_config'): define qual provedor e modelo de IA a plataforma usa.
+   - provider (texto: 'anthropic' ou 'google')
+   - anthropic_model (texto: 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7')
+   - google_model (texto: 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro')
+
+7. Tabela 'ai_credentials': chaves de API dos provedores de IA.
+   - provider (texto, chave primária: 'anthropic' ou 'google')
+   - api_key (texto)
+
+CAPACIDADES ADMINISTRATIVAS (MUITO IMPORTANTE):
+Você TEM total permissão e capacidade para executar tarefas administrativas da plataforma. NUNCA recuse uma tarefa dizendo que ela está "além das suas capacidades", que é uma "tarefa do sistema" ou que o usuário deve "entrar em contato com o suporte técnico". Você É o administrador e o suporte da MedNet. Execute o que o usuário pedir usando suas ferramentas. Suas capacidades administrativas incluem:
+- Configurar o provedor e o modelo de IA ativos da plataforma (ferramenta 'configure_ai_provider').
+- Salvar ou substituir as chaves de API dos provedores de IA (ferramenta 'set_ai_api_key'). Depois de salvar, confirme o sucesso, mas NUNCA repita, exiba ou ecoe o valor da chave de volta ao usuário.
+- Limpar o histórico de conversas do chat (ferramenta 'clear_chat_history').
+- Ler, criar, atualizar e excluir qualquer dado de negócio da plataforma com as ferramentas de banco de dados.
+Sempre confirme ao usuário, em linguagem natural e amigável, exatamente o que foi realizado.
+
 Instruções Importantes:
 1. Sempre verifique e leia os dados antes de fazer alterações se não tiver certeza.
 2. Ao realizar mutações (criar, atualizar, deletar), confirme ao usuário o que foi feito com clareza.
@@ -220,6 +237,40 @@ const ANTHROPIC_TOOLS = [
       },
       required: ['title', 'content']
     }
+  },
+  {
+    name: 'configure_ai_provider',
+    description: 'Configura o provedor e/ou modelo de IA ativos da plataforma. Use quando o usuário pedir para trocar o provedor (anthropic/google) ou o modelo usado. Envie apenas os campos que devem mudar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', description: "Provedor ativo: 'anthropic' ou 'google'." },
+        anthropic_model: { type: 'string', description: "Modelo Anthropic, ex: 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-7'." },
+        google_model: { type: 'string', description: "Modelo Google, ex: 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'." }
+      }
+    }
+  },
+  {
+    name: 'set_ai_api_key',
+    description: 'Salva ou substitui a chave de API (API key) de um provedor de IA. Use quando o usuário fornecer uma chave de API para configurar. Faz upsert, então funciona tanto para criar quanto para substituir.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', description: "Provedor: 'anthropic' ou 'google'." },
+        api_key: { type: 'string', description: 'A chave de API a ser salva.' }
+      },
+      required: ['provider', 'api_key']
+    }
+  },
+  {
+    name: 'clear_chat_history',
+    description: 'Limpa o histórico de mensagens do chat do usuário atual. Sem thread_id, apaga TODAS as conversas do usuário; com thread_id, apaga apenas as mensagens daquela conversa.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        thread_id: { type: 'string', description: 'ID da conversa específica a limpar (opcional). Omita para limpar todo o histórico.' }
+      }
+    }
   }
 ];
 
@@ -327,6 +378,40 @@ const GEMINI_TOOLS = [
           },
           required: ['title', 'content']
         }
+      },
+      {
+        name: 'configure_ai_provider',
+        description: 'Configura o provedor e/ou modelo de IA ativos da plataforma. Use quando o usuário pedir para trocar o provedor (anthropic/google) ou o modelo usado. Envie apenas os campos que devem mudar.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            provider: { type: 'STRING', description: "Provedor ativo: 'anthropic' ou 'google'." },
+            anthropic_model: { type: 'STRING', description: "Modelo Anthropic, ex: 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-7'." },
+            google_model: { type: 'STRING', description: "Modelo Google, ex: 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'." }
+          }
+        }
+      },
+      {
+        name: 'set_ai_api_key',
+        description: 'Salva ou substitui a chave de API (API key) de um provedor de IA. Use quando o usuário fornecer uma chave de API para configurar. Faz upsert, então funciona tanto para criar quanto para substituir.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            provider: { type: 'STRING', description: "Provedor: 'anthropic' ou 'google'." },
+            api_key: { type: 'STRING', description: 'A chave de API a ser salva.' }
+          },
+          required: ['provider', 'api_key']
+        }
+      },
+      {
+        name: 'clear_chat_history',
+        description: 'Limpa o histórico de mensagens do chat do usuário atual. Sem thread_id, apaga TODAS as conversas do usuário; com thread_id, apaga apenas as mensagens daquela conversa.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            thread_id: { type: 'STRING', description: 'ID da conversa específica a limpar (opcional). Omita para limpar todo o histórico.' }
+          }
+        }
       }
     ]
   }
@@ -427,6 +512,58 @@ async function save_generated_report(supabase, userId, { title, content, chart_p
   return { success: true, message: `Relatório "${title}" foi salvo com sucesso na galeria.`, report: data[0] };
 }
 
+const AI_CONFIG_DEFAULT = { provider: 'anthropic', anthropic_model: 'claude-sonnet-4-6', google_model: 'gemini-2.5-flash' };
+
+// Configura provedor/modelo de IA ativos (app_settings.ai_config). Mescla com a config atual.
+async function configure_ai_provider(supabase, userId, { provider, anthropic_model, google_model }) {
+  if (provider && !['anthropic', 'google'].includes(provider)) {
+    throw new Error("provider deve ser 'anthropic' ou 'google'.");
+  }
+  const { data: cfgRow } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
+  const next = { ...AI_CONFIG_DEFAULT, ...(cfgRow?.value || {}) };
+  if (provider) next.provider = provider;
+  if (anthropic_model) next.anthropic_model = anthropic_model;
+  if (google_model) next.google_model = google_model;
+
+  const { error } = await supabase.from('app_settings').upsert(
+    { key: 'ai_config', value: next, updated_at: new Date().toISOString() },
+    { onConflict: 'key' }
+  );
+  if (error) throw new Error(error.message);
+  return { success: true, message: 'Configuração de IA atualizada.', ai_config: next };
+}
+
+// Salva/substitui a chave de API de um provedor (upsert em ai_credentials).
+async function set_ai_api_key(supabase, userId, { provider, api_key }) {
+  if (!['anthropic', 'google'].includes(provider)) {
+    throw new Error("provider deve ser 'anthropic' ou 'google'.");
+  }
+  if (!api_key || !String(api_key).trim()) {
+    throw new Error('api_key é obrigatória.');
+  }
+  const { error } = await supabase.from('ai_credentials').upsert(
+    { provider, api_key: String(api_key).trim(), updated_at: new Date().toISOString(), updated_by: userId },
+    { onConflict: 'provider' }
+  );
+  if (error) throw new Error(error.message);
+  // Não retorna a chave; apenas confirma.
+  return { success: true, provider, message: `Chave de API do provedor ${provider} salva com sucesso.` };
+}
+
+// Limpa o histórico de mensagens do usuário (todas ou de uma thread). Não remove as threads.
+async function clear_chat_history(supabase, userId, { thread_id } = {}) {
+  let query = supabase.from('ai_chat_messages').delete().eq('user_id', userId);
+  if (thread_id) query = query.eq('thread_id', thread_id);
+  const { error } = await query;
+  if (error) throw new Error(error.message);
+  return {
+    success: true,
+    message: thread_id
+      ? 'O histórico desta conversa foi limpo.'
+      : 'Todo o histórico de conversas foi limpo com sucesso.'
+  };
+}
+
 // Executador de ferramentas unificado
 async function executeTool(supabase, userId, name, args) {
   console.log(`[AI Agent Tool] Calling ${name} with args:`, JSON.stringify(args));
@@ -441,6 +578,12 @@ async function executeTool(supabase, userId, name, args) {
       return await delete_database_record(supabase, args);
     case 'save_generated_report':
       return await save_generated_report(supabase, userId, args);
+    case 'configure_ai_provider':
+      return await configure_ai_provider(supabase, userId, args);
+    case 'set_ai_api_key':
+      return await set_ai_api_key(supabase, userId, args);
+    case 'clear_chat_history':
+      return await clear_chat_history(supabase, userId, args);
     default:
       throw new Error(`Tool ${name} not found.`);
   }

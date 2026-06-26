@@ -156,6 +156,7 @@ export default function Analytics() {
               selectedCompany={state.selectedCompany}
               selectedSeverity={state.selectedSeverity}
               selectedType={state.selectedType}
+              selectedUf={state.selectedUf}
               activeId={state.activeId}
               compare={state.compare}
               comparePlatformIds={state.comparePlatformIds}
@@ -193,6 +194,9 @@ export default function Analytics() {
             selectedCompany={state.selectedCompany}
             setSelectedCompany={state.setSelectedCompany}
             availableCompanies={state.availableCompanies}
+            selectedUf={state.selectedUf}
+            setSelectedUf={state.setSelectedUf}
+            availableUfs={state.availableUfs}
             compare={state.compare}
           />
         )}

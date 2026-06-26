@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { fmt, kf, _ax } from './ChartUtils.js';
 
-export function DistribuicaoUfCard({ d, noData }) {
+export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelectedUf, availableUfs = [] }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -52,10 +52,42 @@ export function DistribuicaoUfCard({ d, noData }) {
 
   return (
     <div data-card className="card" style={{ padding: '16px 18px' }}>
-      <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Distribuição por UF</h4>
-      <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-        Estado onde o alerta foi registrado.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+        <div>
+          <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Distribuição por UF</h4>
+          <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+            Estado onde o alerta foi registrado.
+          </p>
+        </div>
+        {!compare && availableUfs.length > 0 && (
+          <div>
+            <select
+              value={selectedUf}
+              onChange={(e) => setSelectedUf(e.target.value)}
+              style={{
+                padding: '4px 8px',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                background: 'var(--surface-1, rgba(255,255,255,0.05))',
+                cursor: 'pointer',
+                outline: 'none',
+                fontFamily: 'inherit',
+                maxWidth: '180px',
+              }}
+            >
+              <option value="">Todos os estados</option>
+              {availableUfs.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
       <div style={{ position: 'relative', width: '100%', height: '300px' }}>
         <canvas ref={canvasRef}></canvas>
         {noData && (

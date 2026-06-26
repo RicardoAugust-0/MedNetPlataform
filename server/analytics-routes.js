@@ -207,11 +207,15 @@ const MAPPING = {
   fleet: 'fleet', description: 'description', evidence: 'evidence', treatStart: 'treatStart', treatEnd: 'treatEnd'
 };
 
-function filterRows(rows, { company, severity, month, startDate, endDate, classification, eventType }) {
+function filterRows(rows, { company, severity, month, startDate, endDate, classification, eventType, uf }) {
   let filtered = rows;
 
   if (company) {
     filtered = filtered.filter(row => row[8] === company);
+  }
+
+  if (uf) {
+    filtered = filtered.filter(row => toUF(row[7]) === uf);
   }
 
   if (severity && severity !== 'all') {
@@ -307,7 +311,7 @@ export function registerAnalyticsRoutes(app, supabase) {
   app.get('/api/analytics', requireAdmin, async (req, res) => {
     const {
       platformId, compare, platformIds, month, startDate, endDate,
-      company, severity, classification, eventType
+      company, severity, classification, eventType, uf
     } = req.query;
 
     try {
@@ -332,7 +336,11 @@ export function registerAnalyticsRoutes(app, supabase) {
         return res.json(payload);
       };
 
-      if (engine === 'rpc' && !isCompare && targetPlatformIds.length === 1) {
+      // UF não faz parte do grão do rollup (é só um breakdown jsonb por linha do
+      // grão), então filtrar por UF na RPC corromperia as demais métricas. Quando
+      // há filtro de UF, caímos no caminho JS (eventos crus), que tem a UF por
+      // evento via toUF(localidade). O resultado segue cacheado por 5 min.
+      if (engine === 'rpc' && !isCompare && !uf && targetPlatformIds.length === 1) {
         try {
           const payload = await buildSingleAnalyticsViaRPC(
             supabase,
@@ -349,7 +357,7 @@ export function registerAnalyticsRoutes(app, supabase) {
       // Comparação via rollup. Aceita `sources` (JSON de [{platformId, company}])
       // — cobre tanto comparar plataformas quanto empresas da mesma plataforma.
       // Compat: sem `sources`, monta a partir de platformIds + company_<pid>.
-      if (engine === 'rpc' && isCompare) {
+      if (engine === 'rpc' && isCompare && !uf) {
         try {
           let sources;
           if (req.query.sources) {
@@ -382,6 +390,7 @@ export function registerAnalyticsRoutes(app, supabase) {
       const availableMonthsSet = new Set();
       const availableCompaniesSet = new Set();
       const availableTypesSet = new Set();
+      const availableUfsSet = new Set();
 
       for (const pid of targetPlatformIds) {
         const events = allEventsByPlatform[pid];
@@ -400,12 +409,17 @@ export function registerAnalyticsRoutes(app, supabase) {
           if (ev.nome_evento) {
             availableTypesSet.add(ev.nome_evento);
           }
+          const ufVal = toUF(ev.localidade);
+          if (ufVal) {
+            availableUfsSet.add(ufVal);
+          }
         }
       }
 
       const availableMonths = Array.from(availableMonthsSet).sort().reverse().slice(0, 12);
       const availableCompanies = Array.from(availableCompaniesSet).sort();
       const availableTypes = Array.from(availableTypesSet).sort();
+      const availableUfs = Array.from(availableUfsSet).sort();
 
       if (isCompare) {
         const combinedRawRows = [];
@@ -436,14 +450,14 @@ export function registerAnalyticsRoutes(app, supabase) {
           const platformCompanies = Array.from(platformCompaniesSet).sort();
           const platformCompany = req.query[`company_${pid}`] !== undefined ? req.query[`company_${pid}`] : company;
 
-          const filtered = filterRows(rawRows, { company: platformCompany, severity, month, startDate, endDate, classification, eventType });
+          const filtered = filterRows(rawRows, { company: platformCompany, severity, month, startDate, endDate, classification, eventType, uf });
           for (const row of filtered) {
             combinedRawRows.push(row);
           }
 
           let filteredPrev = [];
           if (prevMonthKey) {
-            filteredPrev = filterRows(rawRows, { company: platformCompany, severity, month: prevMonthKey, classification, eventType });
+            filteredPrev = filterRows(rawRows, { company: platformCompany, severity, month: prevMonthKey, classification, eventType, uf });
             for (const row of filteredPrev) {
               combinedRawRowsPrev.push(row);
             }
@@ -471,14 +485,14 @@ export function registerAnalyticsRoutes(app, supabase) {
         }
 
         return sendPayload({
-          availableMonths, availableCompanies, availableTypes, sources, d: combinedD, prevD: combinedPrevD
+          availableMonths, availableCompanies, availableTypes, availableUfs, sources, d: combinedD, prevD: combinedPrevD
         });
       } else {
         const pid = targetPlatformIds[0];
         const events = allEventsByPlatform[pid] || [];
         const rawRows = formatDataRows(events, aliases);
 
-        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
+        const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType, uf });
         const d = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
 
         let prevD = null;
@@ -491,12 +505,12 @@ export function registerAnalyticsRoutes(app, supabase) {
           const pm = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
           const prevMonthKey = `${py}-${pm}`;
 
-          const filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey, classification, eventType });
+          const filteredPrev = filterRows(rawRows, { company, severity, month: prevMonthKey, classification, eventType, uf });
           prevD = aggregate(HEADERS, filteredPrev, MAPPING, prevMonthKey);
         }
 
         return sendPayload({
-          availableMonths, availableCompanies, availableTypes, d, prevD
+          availableMonths, availableCompanies, availableTypes, availableUfs, d, prevD
         });
       }
     } catch (err) {
@@ -508,7 +522,7 @@ export function registerAnalyticsRoutes(app, supabase) {
   // 3. Export filtered data as CSV
   app.get('/api/analytics/csv', requireAdmin, async (req, res) => {
     const {
-      platformId, month, startDate, endDate, company, severity, classification, eventType
+      platformId, month, startDate, endDate, company, severity, classification, eventType, uf
     } = req.query;
 
     if (!platformId) {
@@ -520,7 +534,7 @@ export function registerAnalyticsRoutes(app, supabase) {
       const events = excludeLeve(await getRawEvents(supabase, platformId));
       const rawRows = formatDataRows(events, aliases);
 
-      let rowsToExport = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType });
+      let rowsToExport = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType, uf });
 
       if (month && month !== 'all' && month !== 'custom' && month.indexOf('-') > -1) {
         rowsToExport = rowsToExport.filter(row => {

@@ -20,6 +20,9 @@ export default function FadigaCharts({
   selectedCompany,
   setSelectedCompany,
   availableCompanies = [],
+  selectedUf,
+  setSelectedUf,
+  availableUfs = [],
   compare
 }) {
   const headerStyle = {
@@ -150,6 +153,10 @@ export default function FadigaCharts({
           <DistribuicaoUfCard
             d={d}
             noData={noData}
+            compare={compare}
+            selectedUf={selectedUf}
+            setSelectedUf={setSelectedUf}
+            availableUfs={availableUfs}
           />
           <FrotaBaseCard
             d={d}

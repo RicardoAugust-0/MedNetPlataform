@@ -24,6 +24,7 @@ export default function FadigaKPIsDrill({
   selectedCompany,
   selectedSeverity,
   selectedType,
+  selectedUf,
   activeId,
   compare,
   comparePlatformIds,
@@ -81,6 +82,7 @@ export default function FadigaKPIsDrill({
       severity: selectedSeverity,
       classification: targetClassification,
       eventType: selectedType,
+      uf: selectedUf,
     });
 
     apiFetch(`/api/analytics?${qs}`)
@@ -117,6 +119,7 @@ export default function FadigaKPIsDrill({
     compareCompanies,
     selectedSeverity,
     selectedType,
+    selectedUf,
     d,
   ]);
 

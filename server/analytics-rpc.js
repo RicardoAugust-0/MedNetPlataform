@@ -163,7 +163,11 @@ export async function buildSingleAnalyticsViaRPC(supabase, {
     resolveFrotaChart(prevD, resolveMonitorName, aliases);
   }
 
-  return { availableMonths, availableCompanies, availableTypes, d, prevD };
+  // availableUfs = todas as UFs presentes (não filtrado por UF — a RPC nunca roda
+  // com filtro de UF; quando há um, o caminho JS assume). d.uf já vem do rollup.
+  const availableUfs = (((d && d.uf && d.uf.labels) || []).slice()).sort();
+
+  return { availableMonths, availableCompanies, availableTypes, availableUfs, d, prevD };
 }
 
 async function callRollupMulti(supabase, params) {
@@ -278,5 +282,7 @@ export async function buildCompareViaRPC(supabase, {
     resolveFrotaChart(prevD, resolveMonitorName, aliases);
   }
 
-  return { availableMonths, availableCompanies, availableTypes, sources: outSources, d, prevD };
+  const availableUfs = (((d && d.uf && d.uf.labels) || []).slice()).sort();
+
+  return { availableMonths, availableCompanies, availableTypes, availableUfs, sources: outSources, d, prevD };
 }
