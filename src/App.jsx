@@ -30,7 +30,6 @@ const Links = lazy(() => import("./modules/Links.jsx"));
 const Monitor = lazy(() => import("./modules/Monitor.jsx"));
 const Notes = lazy(() => import("./modules/Notes.jsx"));
 const Profile = lazy(() => import("./modules/Profile.jsx"));
-const Reports = lazy(() => import("./modules/Reports.jsx"));
 const Templates = lazy(() => import("./modules/Templates.jsx"));
 const Automacoes = lazy(() => import("./modules/Automacoes.jsx"));
 const Workspace = lazy(() => import("./modules/Workspace.jsx"));
@@ -163,7 +162,7 @@ function AppShell() {
                   <Route path="/perfil" element={<Profile />} />
                   {/* Compat: rotas antigas redirecionam para o novo escopo /admin */}
                   <Route path="/analytics" element={<Navigate to="/admin/analytics" replace />} />
-                  <Route path="/relatorios" element={<Navigate to="/admin/relatorios" replace />} />
+                  <Route path="/relatorios" element={<Navigate to="/admin/analytics" replace />} />
 
                   {/* Administração: guard único no pai, sub-rotas reais via <Outlet/> */}
                   <Route
@@ -176,7 +175,6 @@ function AppShell() {
                   >
                     <Route index element={<Navigate to="analytics" replace />} />
                     <Route path="analytics" element={<Analytics />} />
-                    <Route path="relatorios" element={<Reports />} />
                     <Route path="equipe" element={<AdminEquipe />} />
                     <Route path="integracoes" element={<AdminIntegracoes />}>
                       <Route index element={<Navigate to="credenciais" replace />} />
