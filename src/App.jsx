@@ -37,6 +37,7 @@ const Workspace = lazy(() => import("./modules/Workspace.jsx"));
 const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
 import { applyAccent } from "./utils.js";
 import { ROLE_LEVEL } from "./data.js";
+import GlobalAiChat from "./components/GlobalAiChat.jsx";
 
 function AdminGuard({ children }) {
   const { profile } = useAuth();
@@ -220,6 +221,7 @@ function AppShell() {
               para admins)
             </div>
           )}
+          <GlobalAiChat />
         </div>
       </DataProvider>
     </RemindersProvider>
