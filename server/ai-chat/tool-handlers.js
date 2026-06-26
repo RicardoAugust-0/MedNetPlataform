@@ -51,7 +51,7 @@ function applyFilters(query, filters) {
 }
 
 // Operações CRUD do Supabase chamadas pela IA
-async function query_database_records(supabase, { table_name, select_fields = '*', filters, order_by, limit = 100 }) {
+async function query_database_records(supabase, { table_name, select_fields = '*', filters, order_by, limit = 500 }) {
   let query = supabase.from(table_name).select(select_fields);
   query = applyFilters(query, filters);
   if (order_by) {

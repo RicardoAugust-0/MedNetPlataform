@@ -263,20 +263,25 @@ export async function runProvider(provider, apiKey, model, message, history, sup
     : await runAnthropic(apiKey, model, message, history, supabase, userId, ctx);
 }
 
-// Extrai bloco JSON do gráfico do texto
+// Extrai bloco JSON (gráfico ou ação de navegação) do texto da IA.
+// Tenta ```json primeiro, depois ``` simples como fallback.
 export function extractChartAndCleanText(text) {
-  const regex = /```json\s*(\{[\s\S]*?\})\s*```/;
-  const match = text.match(regex);
-  if (match) {
+  const patterns = [
+    /```json\s*([\s\S]*?)\s*```/i,
+    /```\s*(\{[\s\S]*?\})\s*```/,
+  ];
+  for (const regex of patterns) {
+    const match = text.match(regex);
+    if (!match) continue;
+    const raw = match[1].trim();
+    // Só tenta parsear se parece um objeto JSON
+    if (!raw.startsWith('{')) continue;
     try {
-      const chartJson = JSON.parse(match[1]);
-      const cleanText = text.replace(regex, '').trim();
-      return {
-        text: cleanText,
-        chart: chartJson
-      };
+      const chartJson = JSON.parse(raw);
+      const cleanText = text.replace(match[0], '').trim();
+      return { text: cleanText, chart: chartJson };
     } catch (err) {
-      console.error('Failed to parse chart JSON:', err);
+      console.error('[extractChart] JSON inválido no bloco:', err.message, '| raw:', raw.slice(0, 120));
     }
   }
   return { text, chart: null };

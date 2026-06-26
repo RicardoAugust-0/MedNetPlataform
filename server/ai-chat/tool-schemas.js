@@ -23,7 +23,7 @@ export const ANTHROPIC_TOOLS = [
           }
         },
         order_by: { type: 'string', description: 'Order by column name, e.g. "created_at.desc"' },
-        limit: { type: 'integer', description: 'Limit records' }
+        limit: { type: 'integer', description: 'Max records to return (default 500). Use 1000+ when aggregating all driver events in a day.' }
       },
       required: ['table_name']
     }
@@ -177,7 +177,7 @@ export const GEMINI_TOOLS = [
               }
             },
             order_by: { type: 'STRING', description: 'Order by column name, e.g. "created_at desc"' },
-            limit: { type: 'INTEGER', description: 'Limit records' }
+            limit: { type: 'INTEGER', description: 'Max records to return (default 500). Use 1000+ when aggregating all driver events in a day.' }
           },
           required: ['table_name']
         }
