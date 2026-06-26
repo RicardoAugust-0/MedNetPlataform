@@ -202,7 +202,7 @@ export default function GlobalAiChat() {
                 </div>
                 
                 {/* Renderizador de Gráficos Dinâmicos */}
-                {m.chart && (
+                {m.chart && m.chart.chartType && (
                   <div className="ai-chart-container">
                     <h4 className="chart-title">{m.chart.title}</h4>
                     {m.chart.subtitle && <p className="chart-sub">{m.chart.subtitle}</p>}

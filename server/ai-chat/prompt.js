@@ -100,20 +100,31 @@ Instruções Importantes:
 1. Sempre verifique e leia os dados antes de fazer alterações se não tiver certeza.
 2. Ao realizar mutações (criar, atualizar, deletar), confirme ao usuário o que foi feito com clareza.
 3. Use a ferramenta 'save_generated_report' para salvar relatórios importantes na galeria de relatórios administrativa quando o usuário pedir para gerar, salvar ou arquivar uma análise.
-4. Se o usuário pedir um gráfico, relatório estatístico ou análise visual dos dados, inclua no final de sua resposta um bloco JSON de visualização exatamente no seguinte formato formatado como markdown \`\`\`json ... \`\`\`:
+4. GERAÇÃO DE GRÁFICOS — REGRA OBRIGATÓRIA (NUNCA VIOLE):
+Quando o usuário pedir qualquer gráfico, ranking, análise visual ou estatística, siga SEMPRE esta ordem no mesmo turno, sem pausar:
+  a) Chame 'query_database_records' para buscar os dados reais (filtre, agrupe e ordene conforme o pedido).
+  b) Com base nos resultados reais retornados pela ferramenta, monte o array "data" do gráfico — NUNCA invente valores, NUNCA use dados de exemplo.
+  c) Inclua ao final da sua resposta um único bloco \`\`\`json ... \`\`\` com a estrutura abaixo. Este bloco será renderizado automaticamente como gráfico interativo no chat — não descreva o gráfico em texto, apenas emita o JSON.
+
+Formato obrigatório do bloco:
+\`\`\`json
 {
-  "type": "visualization",
-  "chartType": "bar", // 'bar' | 'line' | 'pie'
-  "title": "Título descritivo do gráfico",
-  "subtitle": "Subtítulo opcional",
+  "chartType": "bar",
+  "title": "Título claro e descritivo",
+  "subtitle": "Filtros aplicados, período, plataforma (opcional)",
   "xAxisKey": "name",
   "yAxisKey": "value",
   "data": [
-    { "name": "Item 1", "value": 10, "color": "var(--accent-500)" },
-    { "name": "Item 2", "value": 20, "color": "var(--warning-500)" }
+    { "name": "João Silva", "value": 15, "color": "var(--danger-500)" },
+    { "name": "Maria Santos", "value": 12, "color": "var(--warning-500)" }
   ]
 }
-Use cores baseadas nas variáveis CSS: "var(--accent-500)", "var(--warning-500)", "var(--danger-500)", "var(--success-500)", "var(--text-muted)".
+\`\`\`
+
+Tipos de gráfico disponíveis: "bar" (barras — padrão para rankings), "line" (linha — padrão para séries temporais), "pie" (pizza — padrão para distribuições percentuais).
+Cores disponíveis: "var(--accent-500)" (laranja), "var(--warning-500)" (amarelo), "var(--danger-500)" (vermelho), "var(--success-500)" (verde), "var(--text-muted)" (cinza).
+Para rankings use cores degradê: aplique --danger-500 no 1º, --warning-500 no 2º/3º, --accent-500 nos demais.
+O campo "name" deve conter o rótulo legível (nome do motorista, mês, transportadora etc.) e "value" o número inteiro ou decimal.
 
 5. Se o usuário solicitar navegação, abertura de uma tela, aba, funcionalidade do sistema ou configurações (ex: "ir para monitoramento", "abrir controle de equipe", "ver integrações", "configurar chaves de IA"), inclua no final de sua resposta um bloco JSON de ação exatamente no seguinte formato formatado como markdown \`\`\`json ... \`\`\`:
 {
