@@ -43,6 +43,16 @@ registerAnalyticsRoutes(app, supabase);
 registerWhatsappRoutes(app, supabase);
 registerAiChatRoutes(app, supabase);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[MedNet Backend] Servidor rodando na porta ${PORT}`);
 });
+
+// Os endpoints de IA fazem várias chamadas sequenciais ao provedor (loop de
+// ferramentas) e podem levar minutos — sobretudo geração de PDF/dossiê.
+// Por padrão o Node fecha conexões keep-alive em 5s; quando esse valor é menor
+// que o idle do proxy (Coolify/Traefik), o proxy reusa uma conexão que o Node
+// está fechando e o front recebe "Failed to fetch". Alinhamos as janelas para
+// aguentar respostas longas. headersTimeout DEVE ser > keepAliveTimeout.
+server.keepAliveTimeout = 120000; // 120s
+server.headersTimeout = 125000;   // 125s
+server.requestTimeout = 300000;   // 5 min de teto por requisição

@@ -165,12 +165,19 @@ export default function AiChatTab() {
       fetchThreads();
       fetchReports();
     } catch (err) {
+      // "Failed to fetch" = a conexão caiu antes da resposta (a IA demorou e o
+      // proxy expirou). O trabalho pode ter sido concluído no servidor mesmo
+      // assim, então re-sincronizamos as conversas para refletir o estado real.
+      const isNetwork = err instanceof TypeError || /failed to fetch/i.test(err.message || '');
+      if (isNetwork) fetchThreads();
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          text: `⚠️ Erro: ${err.message || 'Falha ao processar comando.'}`
+          text: isNetwork
+            ? '⚠️ A IA demorou demais e a conexão expirou. A ação pode ter sido concluída mesmo assim — atualizei a lista de conversas ao lado. Se precisar, tente novamente.'
+            : `⚠️ Erro: ${err.message || 'Falha ao processar comando.'}`
         }
       ]);
     } finally {
