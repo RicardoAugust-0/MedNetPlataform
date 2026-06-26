@@ -17,6 +17,22 @@ import {
   Legend
 } from 'recharts';
 
+function RobotIcon() {
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: 'block', width: '85%', height: '85%' }}>
+      <rect x="46" y="10" width="8" height="15" rx="4" fill="#FF5E00" />
+      <rect x="0" y="45" width="10" height="30" rx="5" fill="#FF5E00" />
+      <rect x="90" y="45" width="10" height="30" rx="5" fill="#FF5E00" />
+      <rect x="15" y="25" width="70" height="60" rx="15" fill="#FF5E00" />
+      <circle cx="35" cy="50" r="8" fill="#FFFFFF" />
+      <circle cx="65" cy="50" r="8" fill="#FFFFFF" />
+      <rect x="30" y="70" width="10" height="5" rx="1" fill="#FFFFFF" />
+      <rect x="45" y="70" width="10" height="5" rx="1" fill="#FFFFFF" />
+      <rect x="60" y="70" width="10" height="5" rx="1" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
 const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'assistant',
@@ -160,7 +176,7 @@ export default function GlobalAiChat() {
           {messages.map((m) => (
             <div key={m.id} className={`ai-message-wrapper ${m.role}`}>
               <div className="ai-message-avatar">
-                {m.role === 'assistant' ? <i className="ti ti-sparkles"></i> : <i className="ti ti-user"></i>}
+                {m.role === 'assistant' ? <RobotIcon /> : <i className="ti ti-user"></i>}
               </div>
               <div className="ai-message-body">
                 <div className="ai-message-bubble">
@@ -222,8 +238,8 @@ export default function GlobalAiChat() {
           ))}
           {loading && (
             <div className="ai-message-wrapper assistant loading">
-              <div className="ai-message-avatar">
-                <i className="ti ti-sparkles pulse-glow"></i>
+              <div className="ai-message-avatar" style={{ animation: 'pulse-sparkle 2s infinite ease-in-out' }}>
+                <RobotIcon />
               </div>
               <div className="ai-message-body">
                 <div className="ai-message-bubble loading-bubble">
