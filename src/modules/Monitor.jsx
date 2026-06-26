@@ -6,8 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
-import { getPlatform, listPlatforms } from '../platforms';
-import { applyHistoryFilter } from '../platforms/shared/history.js';
+import { getPlatform } from '../platforms';
 
 // Monitor Subcomponents
 import { EmptyState, applyTemplate } from './monitor/utils';
@@ -18,7 +17,7 @@ import MonitorModals from './monitor/MonitorModals';
 import HistoryTab from './monitor/HistoryTab';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
-import { supabase, isSupabaseConfigured } from '../supabase.js';
+import { supabase } from '../supabase.js';
 import { detect, toDate, toNum, normCrit, normClf, parseCSV, readHeaders } from '../utils/fatigueParser.js';
 
 const normStr = s =>
@@ -80,18 +79,7 @@ function parseUniversal(headers, dataRows, platformId, mapping) {
   return rows;
 }
 
-// Reconstrói os campos derivados de stats após filtro de histórico e postProcess.
-function recomputeStats(rawStats, drivers, filtradosPorHistorico, autoDescartes) {
-  return {
-    ...rawStats,
-    total:                 drivers.length,
-    comIntervencao:        drivers.filter(d => d.alertas > 0).length,
-    soReportar:            drivers.filter(d => d.alertas === 0 && d.reportaveis > 0).length,
-    soTecnico:             drivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
-    filtradosPorHistorico,
-    autoDescartes,
-  };
-}
+
 
 /* ── Google Sheets via Supabase Table Insert (which triggers Edge Function) ── */
 async function postToSheets(payload) {
@@ -120,17 +108,7 @@ async function postToSheets(payload) {
   }
 }
 
-/* ── Push Notifications ── */
-async function notificarCriticos(criticos) {
-  if (!criticos.length || !('Notification' in window)) return;
-  if (Notification.permission === 'default') await Notification.requestPermission();
-  if (Notification.permission !== 'granted') return;
-  new Notification(`⚠️ ${criticos.length} motorista${criticos.length > 1 ? 's' : ''} em intervenção`, {
-    body: criticos.slice(0, 3).map(d => `${d.nome.split(' ')[0]} · ${d.alertas} evento${d.alertas > 1 ? 's' : ''}`).join('\n'),
-    icon: '/favicon.ico',
-    tag: 'alerta-intervencao',
-  });
-}
+
 
 export default function Monitor() {
   const navigate = useNavigate();
@@ -139,7 +117,16 @@ export default function Monitor() {
 
   const { drivers, driversLoading, reloadDrivers, filters, setFilters, lastImportedAt } = useApp();
   const { profile } = useAuth();
-  const { history, historyLoadedAt, registrar, loadDriverHistory, loadAtendimentosForFilter } = useAtendimentos();
+  const {
+    history,
+    loading: histLoading,
+    error: histError,
+    historyLoadedAt,
+    registrar,
+    loadByRange,
+    loadDriverHistory,
+    loadAtendimentosForFilter,
+  } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
 
@@ -224,14 +211,23 @@ export default function Monitor() {
   }, [templateModal]);
 
   const [currentPage, setCurrentPage] = useState(1);
-  useEffect(() => setCurrentPage(1), [activeTab]);
+  const [prevTab, setPrevTab] = useState(activeTab);
+  if (activeTab !== prevTab) {
+    setPrevTab(activeTab);
+    setCurrentPage(1);
+  }
+
   const [statusMsg,  setStatusMsg]  = useState('Aguardando carga de eventos ou planilha.');
   const [statusKind, setStatusKind] = useState('idle');
   const [loadStats,  setLoadStats]  = useState(null);
   const [loading,    setLoading]    = useState(false);
 
-  // Atualização reativa de status com base na fila
-  useEffect(() => {
+  const [prevDriversLength, setPrevDriversLength] = useState(drivers.length);
+  const [prevDriversLoading, setPrevDriversLoading] = useState(driversLoading);
+
+  if (drivers.length !== prevDriversLength || driversLoading !== prevDriversLoading) {
+    setPrevDriversLength(drivers.length);
+    setPrevDriversLoading(driversLoading);
     if (driversLoading) {
       setStatusKind('idle');
       setStatusMsg('Carregando fila de motoristas...');
@@ -242,37 +238,23 @@ export default function Monitor() {
       setStatusKind('idle');
       setStatusMsg('Fila limpa. Aguardando novos eventos ou planilha.');
     }
-  }, [drivers.length, driversLoading]);
+  }
 
-  const [sheetLoadedAt, setSheetLoadedAt] = useState(null);
-  const [sheetAgeMin,   setSheetAgeMin]   = useState(null);
-
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   useEffect(() => {
-    if (lastImportedAt) {
-      setSheetLoadedAt(lastImportedAt);
-      setSheetAgeMin(Math.floor((Date.now() - new Date(lastImportedAt)) / 60000));
-    } else {
-      setSheetLoadedAt(null);
-      setSheetAgeMin(null);
-    }
-  }, [lastImportedAt]);
-
-  useEffect(() => {
-    if (!sheetLoadedAt) return;
     const id = setInterval(() => {
-      setSheetAgeMin(Math.floor((Date.now() - new Date(sheetLoadedAt)) / 60000));
+      setCurrentTime(Date.now());
     }, 60000);
     return () => clearInterval(id);
-  }, [sheetLoadedAt]);
+  }, []);
 
-  const [historyAgeMin, setHistoryAgeMin] = useState(null);
-  useEffect(() => {
-    if (!historyLoadedAt) { setHistoryAgeMin(null); return; }
-    const tick = () => setHistoryAgeMin(Math.floor((Date.now() - new Date(historyLoadedAt)) / 60000));
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, [historyLoadedAt]);
+  const sheetAgeMin = lastImportedAt
+    ? Math.floor((currentTime - new Date(lastImportedAt)) / 60000)
+    : null;
+
+  const historyAgeMin = historyLoadedAt
+    ? Math.floor((currentTime - new Date(historyLoadedAt)) / 60000)
+    : null;
 
 
   /* ── Filtros fila ── */
@@ -461,7 +443,6 @@ export default function Monitor() {
     setDiscardModal(null);
     const isIntervencao = tipo === 'intervencao';
     const isReportar = tipo === 'reportar';
-    const isTecnico = tipo === 'tecnico';
     const countStr = isIntervencao ? `${d.alertas} evento(s)`
                    : isReportar   ? `${d.reportaveis} evento(s) reportáveis`
                    :                `${d.tecnicos} evento(s) técnicos`;
@@ -631,10 +612,7 @@ export default function Monitor() {
     navigate(`/automacoes?name=${encodeURIComponent(d.transportadora)}`);
   };
 
-  const handlers = useMemo(
-    () => ({ openDossie, openTemplate, attend, deleteAlert, reportar, openWhatsappChat, openWhatsappCarrier }),
-    [openDossie, openTemplate, attend, deleteAlert, reportar, navigate],
-  );
+  const handlers = { openDossie, openTemplate, attend, deleteAlert, reportar, openWhatsappChat, openWhatsappCarrier };
 
   const sheetAgeColor = sheetAgeMin === null ? null
     : sheetAgeMin < 30  ? 'var(--success-500, #22c55e)'
