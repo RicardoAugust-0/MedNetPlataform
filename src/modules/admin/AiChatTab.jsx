@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/analyticsApi.js';
 import { useApp } from '../../context.jsx';
 
@@ -17,10 +18,11 @@ import '../../styles/ai-chat.css';
 const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'assistant',
-  text: 'Olá! Sou o MedBot, seu Assistente IA MedNet. Tenho acesso administrativo completo para configurar a plataforma, gerenciar motoristas ou analisar e gerar relatórios executivos. Como posso ajudar você hoje?'
+  text: 'Olá! Sou o MedBot, seu Assistente IA MedNet. Tenho acesso administrative completo para configurar a plataforma, gerenciar motoristas ou analisar e gerar relatórios executivos. Como posso ajudar você hoje?'
 };
 
 export default function AiChatTab() {
+  const navigate = useNavigate();
   const { theme, setTheme } = useApp();
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
@@ -90,6 +92,7 @@ export default function AiChatTab() {
   useEffect(() => {
     fetchThreads(true);
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Scroll to bottom ──
@@ -125,7 +128,11 @@ export default function AiChatTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage.text,
-          thread_id: activeThreadId
+          thread_id: activeThreadId,
+          context: {
+            pathname: window.location.pathname,
+            pageTitle: document.title
+          }
         })
       });
 
@@ -155,6 +162,13 @@ export default function AiChatTab() {
       }
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Executar ações do Copiloto (navegação automática)
+      if (data.chart && data.chart.type === 'action') {
+        if (data.chart.action === 'navigate' && data.chart.payload?.path) {
+          navigate(data.chart.payload.path);
+        }
+      }
 
       // Se uma nova thread foi criada, selecionar e atualizar lista
       if (!activeThreadId && data.thread_id) {

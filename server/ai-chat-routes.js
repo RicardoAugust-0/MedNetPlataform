@@ -92,7 +92,7 @@ export function registerAiChatRoutes(app, supabase) {
 
   // 6. Enviar mensagem para a IA vinculando a um tópico
   app.post('/api/ai/chat', requireRole(supabase, 'admin'), async (req, res) => {
-    const { message, thread_id } = req.body;
+    const { message, thread_id, context } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Parâmetro "message" é obrigatório.' });
     }
@@ -122,13 +122,22 @@ export function registerAiChatRoutes(app, supabase) {
 
       const history = dbHistory ? [...dbHistory].reverse() : [];
 
-      // Salva a mensagem do usuário no banco
+      // Salva a mensagem do usuário no banco (mensagem limpa)
       await supabase.from('ai_chat_messages').insert({
         user_id: req.authUser.id,
         role: 'user',
         text: message,
         thread_id: activeThreadId
       });
+
+      // Se houver contexto de tela ativa, prepend na mensagem enviada à IA
+      let messageForAi = message;
+      if (context && typeof context === 'object') {
+        const { pathname, pageTitle } = context;
+        if (pathname) {
+          messageForAi = `[CONTEXTO DA TELA ATUAL: Rota: ${pathname}${pageTitle ? `, Título da Página: ${pageTitle}` : ''}]\n\n${message}`;
+        }
+      }
 
       // Carrega configurações do provedor
       const { data: cfgRow } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
@@ -154,7 +163,7 @@ export function registerAiChatRoutes(app, supabase) {
         }
         const model = modelForProvider(prov, aiCfg);
         try {
-          rawResponse = await runProvider(prov, apiKey, model, message, history, supabase, req.authUser.id, toolCtx);
+          rawResponse = await runProvider(prov, apiKey, model, messageForAi, history, supabase, req.authUser.id, toolCtx);
           if (prov !== primaryProvider) {
             console.warn(`[AI Chat] Provedor primário (${primaryProvider}) falhou; respondido via fallback (${prov}).`);
           }

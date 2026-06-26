@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { apiFetch } from '../lib/analyticsApi.js';
-import { useApp } from '../context.jsx';
+import renderMarkdown from '../modules/admin/ai-chat/renderMarkdown.js';
+import '../styles/ai-chat.css';
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,8 +15,7 @@ import {
   LineChart,
   Line,
   PieChart,
-  Pie,
-  Legend
+  Pie
 } from 'recharts';
 
 function RobotIcon() {
@@ -40,8 +41,8 @@ const WELCOME_MESSAGE = {
 };
 
 export default function GlobalAiChat() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const { theme } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
@@ -98,7 +99,13 @@ export default function GlobalAiChat() {
       const response = await apiFetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage.text })
+        body: JSON.stringify({
+          message: userMessage.text,
+          context: {
+            pathname: window.location.pathname,
+            pageTitle: document.title
+          }
+        })
       });
 
       if (!response.ok) {
@@ -115,6 +122,13 @@ export default function GlobalAiChat() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Executar ações do Copiloto (navegação automática)
+      if (data.chart && data.chart.type === 'action') {
+        if (data.chart.action === 'navigate' && data.chart.payload?.path) {
+          navigate(data.chart.payload.path);
+        }
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -180,7 +194,11 @@ export default function GlobalAiChat() {
               </div>
               <div className="ai-message-body">
                 <div className="ai-message-bubble">
-                  <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.text}</p>
+                  {m.role === 'user' ? (
+                    <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.text}</p>
+                  ) : (
+                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
+                  )}
                 </div>
                 
                 {/* Renderizador de Gráficos Dinâmicos */}
