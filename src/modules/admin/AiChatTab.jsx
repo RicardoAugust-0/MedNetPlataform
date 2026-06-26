@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../lib/analyticsApi.js';
+import { useApp } from '../../context.jsx';
 
 // Sub-components
 import AiChatSidebar from './ai-chat/AiChatSidebar.jsx';
@@ -20,6 +21,7 @@ const WELCOME_MESSAGE = {
 };
 
 export default function AiChatTab() {
+  const { theme, setTheme } = useApp();
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
@@ -262,6 +264,13 @@ export default function AiChatTab() {
                 {reports.length > 0 && (
                   <span className="count">{reports.length}</span>
                 )}
+              </button>
+              <button
+                className="ai-chat-theme-btn"
+                title="Alternar tema"
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              >
+                <i className={`ti ${theme === 'light' ? 'ti-moon' : 'ti-sun'}`} />
               </button>
             </div>
           </div>

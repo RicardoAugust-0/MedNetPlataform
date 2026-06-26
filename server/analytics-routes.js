@@ -1,4 +1,4 @@
-import { aggregate, PLATFORMS, normClf } from '../src/utils/fatigueParser.js';
+import { aggregate, PLATFORMS, normClf, toUF } from '../src/utils/fatigueParser.js';
 import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets } from './analytics-rpc.js';
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 

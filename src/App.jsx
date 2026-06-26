@@ -1,5 +1,5 @@
 import { useEffect, useRef, lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext.jsx";
 import LoginPage from "./auth/LoginPage.jsx";
 import SetPasswordPage from "./auth/SetPasswordPage.jsx";
@@ -110,6 +110,7 @@ function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
   const { maintenance, loading: maintLoading } = useMaintenance();
+  const location = useLocation();
 
   useEffect(() => {
     const r = document.documentElement;
@@ -128,15 +129,17 @@ function AppShell() {
     return <MaintenancePage message={maintenance.message} />;
   }
 
+  const isChat = location.pathname === "/chat";
+
   return (
     <RemindersProvider>
       <DataProvider>
-        <div id="app">
+        <div id="app" className={isChat ? "is-chat-page" : ""}>
           <ReminderNotifier />
           <Sidebar />
           <div className="main-area">
-            <Topbar />
-            <main className="content-area">
+            {!isChat && <Topbar />}
+            <main className={isChat ? "content-area chat-content-area" : "content-area"}>
               <Suspense fallback={null}>
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />

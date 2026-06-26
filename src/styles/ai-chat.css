@@ -14,31 +14,43 @@
   border-radius: var(--radius-lg);
 }
 
+/* ── Fullscreen override when Topbar is hidden ── */
+.chat-content-area {
+  padding: 0 !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+.chat-content-area .ai-chat-layout {
+  height: 100vh !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
 /* ── Left Sidebar (Threads) ── */
 .ai-sidebar {
-  width: 260px;
+  width: 220px;
   background: var(--surface-1);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 16px 12px;
+  padding: 12px 10px;
   flex-shrink: 0;
 }
 
 .btn-new-chat {
   width: 100%;
-  margin-bottom: 16px;
-  border-radius: 24px;
+  margin-bottom: 12px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-0);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 40px;
+  gap: 6px;
+  height: 34px;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -55,7 +67,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   padding-left: 8px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -73,10 +85,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
   transition: all 0.15s ease;
@@ -108,7 +120,7 @@
   gap: 8px;
 }
 .ai-thread-content i {
-  font-size: 14px;
+  font-size: 13px;
   opacity: 0.6;
   flex-shrink: 0;
 }
@@ -244,6 +256,24 @@
 .btn-reports-toggle:not(.active) .count {
   background: var(--accent-500);
   color: #fff;
+}
+
+.ai-chat-theme-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-0);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ai-chat-theme-btn:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-color: var(--border-md);
 }
 
 /* Message List */
