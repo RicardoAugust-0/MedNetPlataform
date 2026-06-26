@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { renderMarkdownToPdf } from './pdf-generator.js';
+
+// Bucket de Storage onde os PDFs gerados pela IA são guardados (privado; acesso via signed URL).
+const PDF_BUCKET = 'ai-reports';
 
 // Hierarquia de acesso (espelha src/data.js ROLE_LEVEL).
 const ROLE_LEVELS = { operador: 0, lider: 1, admin: 2 };
@@ -106,13 +110,30 @@ Suas capacidades incluem ler, configurar, atualizar e excluir dados da plataform
    - provider (texto, chave primária: 'anthropic' ou 'google')
    - api_key (texto)
 
+8. Tabela 'driver_health': ficha clínica/de saúde do motorista (use para laudos e dossiês).
+   - motorista_nome (texto, chave)
+   - escala_epworth (inteiro: 0-9 normal, 10-15 sonolência diurna, >=16 crítica)
+   - polissonografia (texto)
+   - historico_clinico (texto)
+   - ultimo_exame_em (data)
+   - placa, transportadora, frota, turno (texto)
+
 CAPACIDADES ADMINISTRATIVAS (MUITO IMPORTANTE):
 Você TEM total permissão e capacidade para executar tarefas administrativas da plataforma. NUNCA recuse uma tarefa dizendo que ela está "além das suas capacidades", que é uma "tarefa do sistema" ou que o usuário deve "entrar em contato com o suporte técnico". Você É o administrador e o suporte da MedNet. Execute o que o usuário pedir usando suas ferramentas. Suas capacidades administrativas incluem:
 - Configurar o provedor e o modelo de IA ativos da plataforma (ferramenta 'configure_ai_provider').
 - Salvar ou substituir as chaves de API dos provedores de IA (ferramenta 'set_ai_api_key'). Depois de salvar, confirme o sucesso, mas NUNCA repita, exiba ou ecoe o valor da chave de volta ao usuário.
 - Limpar o histórico de conversas do chat (ferramenta 'clear_chat_history').
+- Gerar documentos em PDF para download — dossiês/laudos de motoristas, relatórios, análises (ferramenta 'generate_pdf_report').
 - Ler, criar, atualizar e excluir qualquer dado de negócio da plataforma com as ferramentas de banco de dados.
 Sempre confirme ao usuário, em linguagem natural e amigável, exatamente o que foi realizado.
+
+GERAÇÃO DE PDF DE MOTORISTA (passo a passo obrigatório):
+Quando o usuário pedir um PDF/dossiê/laudo de um motorista, siga esta ordem:
+1. Use 'query_database_records' para buscar os dados do motorista: eventos de fadiga (driver_events), atendimentos (atendimentos) e a ficha clínica (driver_health).
+2. ESCREVA você mesmo o laudo completo em Markdown, com títulos (#, ##), análise integrada (fadiga + saúde), diagnóstico de risco e plano de ação.
+3. Chame 'generate_pdf_report' passando 'title', 'subtitle' e 'content' (o Markdown que você escreveu).
+4. Na sua resposta final, entregue o link de download SEMPRE em formato Markdown clicável, por exemplo: [Baixar PDF do dossiê](URL). O link é válido por 7 dias.
+Nunca diga que não consegue gerar PDFs — você consegue, através da ferramenta 'generate_pdf_report'.
 
 Instruções Importantes:
 1. Sempre verifique e leia os dados antes de fazer alterações se não tiver certeza.
@@ -271,6 +292,19 @@ const ANTHROPIC_TOOLS = [
         thread_id: { type: 'string', description: 'ID da conversa específica a limpar (opcional). Omita para limpar todo o histórico.' }
       }
     }
+  },
+  {
+    name: 'generate_pdf_report',
+    description: 'Gera um documento PDF para download a partir de conteúdo Markdown e retorna um link de download. Use para dossiês/laudos de motoristas e relatórios. IMPORTANTE: primeiro consulte os dados necessários (driver_events, atendimentos, driver_health) e ESCREVA o conteúdo completo do laudo em Markdown; depois passe esse texto no campo content.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Título do documento, ex: "Dossiê do Motorista — João da Silva".' },
+        content: { type: 'string', description: 'Conteúdo completo do documento em Markdown (títulos #, listas, negrito).' },
+        subtitle: { type: 'string', description: 'Subtítulo opcional, ex: "Placa ABC-1234 · Período: últimos 6 meses".' }
+      },
+      required: ['title', 'content']
+    }
   }
 ];
 
@@ -411,6 +445,19 @@ const GEMINI_TOOLS = [
           properties: {
             thread_id: { type: 'STRING', description: 'ID da conversa específica a limpar (opcional). Omita para limpar todo o histórico.' }
           }
+        }
+      },
+      {
+        name: 'generate_pdf_report',
+        description: 'Gera um documento PDF para download a partir de conteúdo Markdown e retorna um link de download. Use para dossiês/laudos de motoristas e relatórios. IMPORTANTE: primeiro consulte os dados necessários (driver_events, atendimentos, driver_health) e ESCREVA o conteúdo completo do laudo em Markdown; depois passe esse texto no campo content.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING', description: 'Título do documento, ex: "Dossiê do Motorista — João da Silva".' },
+            content: { type: 'STRING', description: 'Conteúdo completo do documento em Markdown (títulos #, listas, negrito).' },
+            subtitle: { type: 'STRING', description: 'Subtítulo opcional, ex: "Placa ABC-1234 · Período: últimos 6 meses".' }
+          },
+          required: ['title', 'content']
         }
       }
     ]
@@ -564,6 +611,60 @@ async function clear_chat_history(supabase, userId, { thread_id } = {}) {
   };
 }
 
+// Garante que o bucket de PDFs existe (idempotente).
+async function ensurePdfBucket(supabase) {
+  const { error } = await supabase.storage.createBucket(PDF_BUCKET, { public: false });
+  if (error && !/already exists|exists/i.test(error.message || '') && String(error.statusCode || '') !== '409') {
+    console.warn(`[PDF] Aviso ao criar bucket ${PDF_BUCKET}:`, error.message);
+  }
+}
+
+// Transforma um título em nome de arquivo seguro.
+function slugify(s) {
+  return String(s || 'relatorio')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 60) || 'relatorio';
+}
+
+// Renderiza Markdown em PDF, envia ao Storage e devolve um link de download assinado.
+async function generate_pdf_report(supabase, userId, { title, content, subtitle }) {
+  if (!title || !content) throw new Error('title e content são obrigatórios para gerar o PDF.');
+
+  const bytes = await renderMarkdownToPdf({ title, subtitle, content });
+  await ensurePdfBucket(supabase);
+
+  const filename = `${slugify(title)}-${Date.now()}.pdf`;
+  const path = `${userId}/${filename}`;
+
+  const { error: upErr } = await supabase.storage.from(PDF_BUCKET).upload(path, Buffer.from(bytes), {
+    contentType: 'application/pdf',
+    upsert: true
+  });
+  if (upErr) throw new Error('Falha ao enviar o PDF para o armazenamento: ' + upErr.message);
+
+  const EXPIRES = 60 * 60 * 24 * 7; // 7 dias
+  const { data: signed, error: signErr } = await supabase.storage.from(PDF_BUCKET).createSignedUrl(path, EXPIRES);
+  if (signErr) throw new Error('Falha ao gerar o link de download: ' + signErr.message);
+
+  // Em algumas versões a signedUrl é relativa; normaliza para URL absoluta.
+  let downloadUrl = signed.signedUrl;
+  if (downloadUrl && downloadUrl.startsWith('/')) {
+    const base = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    downloadUrl = base + downloadUrl;
+  }
+
+  return {
+    success: true,
+    filename,
+    download_url: downloadUrl,
+    expires_in: '7 dias',
+    message: `PDF "${title}" gerado com sucesso. Entregue ao usuário o link de download em formato Markdown clicável: [Baixar PDF](${downloadUrl})`
+  };
+}
+
 // Executador de ferramentas unificado
 async function executeTool(supabase, userId, name, args) {
   console.log(`[AI Agent Tool] Calling ${name} with args:`, JSON.stringify(args));
@@ -584,6 +685,8 @@ async function executeTool(supabase, userId, name, args) {
       return await set_ai_api_key(supabase, userId, args);
     case 'clear_chat_history':
       return await clear_chat_history(supabase, userId, args);
+    case 'generate_pdf_report':
+      return await generate_pdf_report(supabase, userId, args);
     default:
       throw new Error(`Tool ${name} not found.`);
   }
@@ -785,6 +888,26 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
   throw new Error('Excedeu o número máximo de iterações de ferramentas.');
 }
 
+// Resolve o modelo configurado para um provedor (com defaults).
+function modelForProvider(provider, aiCfg) {
+  return provider === 'google'
+    ? (aiCfg.google_model || 'gemini-2.5-flash')
+    : (aiCfg.anthropic_model || 'claude-sonnet-4-6');
+}
+
+// Lê a chave de API de um provedor (ou null se não configurada).
+async function getProviderKey(supabase, provider) {
+  const { data } = await supabase.from('ai_credentials').select('api_key').eq('provider', provider).maybeSingle();
+  return data?.api_key || null;
+}
+
+// Roda o loop do agente para um provedor específico.
+async function runProvider(provider, apiKey, model, message, history, supabase, userId) {
+  return provider === 'google'
+    ? await runGemini(apiKey, model, message, history, supabase, userId)
+    : await runAnthropic(apiKey, model, message, history, supabase, userId);
+}
+
 // Extrai bloco JSON do gráfico do texto
 function extractChartAndCleanText(text) {
   const regex = /```json\s*(\{[\s\S]*?\})\s*```/;
@@ -930,27 +1053,40 @@ export function registerAiChatRoutes(app, supabase) {
       const { data: cfgRow } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
       const aiCfg = cfgRow?.value || {};
 
-      const provider = aiCfg.provider || 'anthropic';
-      const model = provider === 'google' 
-        ? (aiCfg.google_model || 'gemini-2.5-flash') 
-        : (aiCfg.anthropic_model || 'claude-sonnet-4-6');
+      const primaryProvider = aiCfg.provider || 'anthropic';
+      const secondaryProvider = primaryProvider === 'google' ? 'anthropic' : 'google';
 
-      // Carrega credencial
-      const { data: credRow } = await supabase.from('ai_credentials').select('api_key').eq('provider', provider).maybeSingle();
-      if (!credRow?.api_key) {
-        return res.status(400).json({
-          error: `Provedor de IA (${provider}) selecionado, mas nenhuma chave de API foi configurada. Acesse Admin → IA & Parsing para configurar.`
-        });
+      // Fallback automático para o outro provedor se o primário falhar.
+      // Desative definindo "fallback": false em ai_config.
+      const fallbackEnabled = aiCfg.fallback !== false;
+      const candidates = fallbackEnabled ? [primaryProvider, secondaryProvider] : [primaryProvider];
+
+      let rawResponse = null;
+      const attemptErrors = [];
+
+      for (const prov of candidates) {
+        const apiKey = await getProviderKey(supabase, prov);
+        if (!apiKey) {
+          attemptErrors.push(`${prov}: chave de API não configurada`);
+          continue;
+        }
+        const model = modelForProvider(prov, aiCfg);
+        try {
+          rawResponse = await runProvider(prov, apiKey, model, message, history, supabase, req.authUser.id);
+          if (prov !== primaryProvider) {
+            console.warn(`[AI Chat] Provedor primário (${primaryProvider}) falhou; respondido via fallback (${prov}).`);
+          }
+          break;
+        } catch (err) {
+          console.error(`[AI Chat] Provedor ${prov} falhou:`, err.message);
+          attemptErrors.push(`${prov}: ${err.message}`);
+        }
       }
 
-      const apiKey = credRow.api_key;
-      let rawResponse = '';
-
-      // Roda o loop do agente baseado no provedor configurado
-      if (provider === 'google') {
-        rawResponse = await runGemini(apiKey, model, message, history, supabase, req.authUser.id);
-      } else {
-        rawResponse = await runAnthropic(apiKey, model, message, history, supabase, req.authUser.id);
+      if (rawResponse === null) {
+        return res.status(400).json({
+          error: `Não foi possível obter resposta da IA. ${attemptErrors.join(' | ')}. Verifique as chaves em Admin → IA & Parsing.`
+        });
       }
 
       // Limpa e processa retorno de gráfico
