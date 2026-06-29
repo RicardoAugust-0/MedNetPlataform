@@ -53,7 +53,7 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
       },
       tools: GEMINI_TOOLS,
       generationConfig: {
-        maxOutputTokens: 4096
+        maxOutputTokens: 8192
       }
     };
 
@@ -170,7 +170,7 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemWithContext(),
         tools: ANTHROPIC_TOOLS,
         messages

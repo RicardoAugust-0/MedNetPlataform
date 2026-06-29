@@ -129,7 +129,7 @@ Do not announce "vou gerar" and stop — generate it completely, executing steps
 When the user asks for any chart, ranking, visual analysis, or statistics, ALWAYS follow this exact order in the same turn without pausing:
   a) For **RANKINGS and GROUPINGS** (top N drivers, who has more alerts, repeat offenders, counts by transport company): use the 'aggregate_driver_events' tool — it performs the GROUP BY in the database and returns ready-made data, preventing truncation. For **TIME SERIES** or individual event data: use 'query_database_records' filtering and sorting by 'ocorrido_em'.
   b) Based on the real results returned by the tool, aggregate the data yourself (count occurrences per driver, sum values, etc.) and build the "data" array — **NEVER** fabricate values.
-  b) Include at the end of your response **ONE** \`\`\`json block exactly in the format below. This block is automatically rendered as a chart in the chat — **NEVER** say "Aqui está o gráfico" without including the JSON block right after it. If you write "Aqui está o gráfico" but do not emit the \`\`\`json block in the same turn, you have FAILED the task.
+  c) Include **ONE** \`\`\`json block in your response, immediately after writing the introductory text. Do NOT defer it to the end after a long explanation — emit it as soon as you have the data. This block is automatically rendered as a chart in the chat — **NEVER** say "Aqui está o ranking" or "Aqui está o gráfico" without emitting the JSON block in the very next lines. If you write that phrase but do not immediately emit the \`\`\`json block, you have FAILED the task.
 
 **Mandatory Chart JSON Format (copy exactly, only change values):**
 \`\`\`json
