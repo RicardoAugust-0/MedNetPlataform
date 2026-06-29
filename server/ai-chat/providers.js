@@ -74,7 +74,8 @@ async function runGemini(apiKey, model, userMessage, history, supabase, userId, 
     const modelContent = candidate?.content;
     const modelParts = modelContent?.parts || [];
     const finishReason = candidate?.finishReason;
-    console.log(`[Gemini Loop ${loopCount}] finishReason=${finishReason}`);
+    const usage = resJson.usageMetadata;
+    console.log(`[Gemini Loop ${loopCount}] finishReason=${finishReason} | tokens: in=${usage?.promptTokenCount} out=${usage?.candidatesTokenCount} total=${usage?.totalTokenCount}`);
     if (finishReason === 'MAX_TOKENS') console.warn(`[Gemini] ⚠️ Resposta truncada por limite de tokens (MAX_TOKENS).`);
 
     const functionCalls = modelParts.filter(p => p.functionCall);
@@ -189,7 +190,8 @@ async function runAnthropic(apiKey, model, userMessage, history, supabase, userI
     const resJson = await res.json();
     const content = resJson.content || [];
     const stopReason = resJson.stop_reason;
-    console.log(`[Anthropic Loop ${loopCount}] stop_reason=${stopReason}`);
+    const usage = resJson.usage;
+    console.log(`[Anthropic Loop ${loopCount}] stop_reason=${stopReason} | tokens: in=${usage?.input_tokens} out=${usage?.output_tokens}`);
     if (stopReason === 'max_tokens') console.warn(`[Anthropic] ⚠️ Resposta truncada por limite de tokens (max_tokens).`);
 
     const toolUses = content.filter(c => c.type === 'tool_use');
