@@ -161,6 +161,7 @@ export function registerAiChatRoutes(app, supabase) {
         },
         body: JSON.stringify({
           userId: req.authUser.id,
+          threadId: activeThreadId,
           message,
           history: history.map(h => ({ role: h.role, text: h.text, chart: h.chart })),
           context
