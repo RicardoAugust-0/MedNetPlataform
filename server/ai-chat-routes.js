@@ -1,12 +1,29 @@
-// Rotas Express do Chat IA (MedBot).
-// A lógica de prompt, ferramentas e provedores vive em ./ai-chat/*.
 import { requireRole } from './ai-chat/middleware.js';
-import {
-  modelForProvider,
-  getProviderKey,
-  runProvider,
-  extractChartAndCleanText,
-} from './ai-chat/providers.js';
+import { executeTool } from './ai-chat/tool-handlers.js';
+
+// Extrai bloco JSON (gráfico ou ação de navegação) do texto da IA.
+// Tenta ```json primeiro, depois ``` simples como fallback.
+function extractChartAndCleanText(text) {
+  const patterns = [
+    /```json\s*([\s\S]*?)\s*```/i,
+    /```\s*(\{[\s\S]*?\})\s*```/,
+  ];
+  for (const regex of patterns) {
+    const match = text.match(regex);
+    if (!match) continue;
+    const raw = match[1].trim();
+    // Só tenta parsear se parece um objeto JSON
+    if (!raw.startsWith('{')) continue;
+    try {
+      const chartJson = JSON.parse(raw);
+      const cleanText = text.replace(match[0], '').trim();
+      return { text: cleanText, chart: chartJson };
+    } catch (err) {
+      console.error('[extractChart] JSON inválido no bloco:', err.message, '| raw:', raw.slice(0, 120));
+    }
+  }
+  return { text, chart: null };
+}
 
 // Registro das rotas no Express
 export function registerAiChatRoutes(app, supabase) {
@@ -90,7 +107,7 @@ export function registerAiChatRoutes(app, supabase) {
     }
   });
 
-  // 6. Enviar mensagem para a IA vinculando a um tópico
+  // 6. Enviar mensagem para a IA vinculando a um tópico (Delegando ao n8n)
   app.post('/api/ai/chat', requireRole(supabase, 'admin'), async (req, res) => {
     const { message, thread_id, context } = req.body;
     if (!message || typeof message !== 'string') {
@@ -130,71 +147,48 @@ export function registerAiChatRoutes(app, supabase) {
         thread_id: activeThreadId
       });
 
-      // Se houver contexto de tela ativa, prepend na mensagem enviada à IA
-      let messageForAi = message;
-      if (context && typeof context === 'object') {
-        const { pathname, pageTitle } = context;
-        if (pathname) {
-          messageForAi = `[CONTEXTO DA TELA ATUAL: Rota: ${pathname}${pageTitle ? `, Título da Página: ${pageTitle}` : ''}]\n\n${message}`;
-        }
+      // Dispara a requisição para o Webhook do n8n
+      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/medbot-chat';
+      const internalKey = process.env.INTERNAL_API_KEY;
+
+      console.log(`[MedBot] Encaminhando mensagem ao n8n (${n8nWebhookUrl}) para usuário ${req.authUser.id}`);
+      
+      const n8nResponse = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(internalKey ? { 'x-internal-key': internalKey } : {})
+        },
+        body: JSON.stringify({
+          userId: req.authUser.id,
+          message,
+          history: history.map(h => ({ role: h.role, text: h.text, chart: h.chart })),
+          context
+        })
+      });
+
+      if (!n8nResponse.ok) {
+        const errText = await n8nResponse.text();
+        throw new Error(`n8n webhook respondeu com erro ${n8nResponse.status}: ${errText}`);
       }
 
-      // Carrega configurações do provedor
-      const { data: cfgRow } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
-      const aiCfg = cfgRow?.value || {};
-
-      const primaryProvider = aiCfg.provider || 'anthropic';
-      const secondaryProvider = primaryProvider === 'google' ? 'anthropic' : 'google';
-
-      // Fallback automático para o outro provedor se o primário falhar.
-      // Desative definindo "fallback": false em ai_config.
-      const fallbackEnabled = aiCfg.fallback !== false;
-      const candidates = fallbackEnabled ? [primaryProvider, secondaryProvider] : [primaryProvider];
-
-      let rawResponse = null;
-      const attemptErrors = [];
-      const toolCtx = {}; // acumula efeitos colaterais das ferramentas (ex: limpeza de histórico)
-
-      for (const prov of candidates) {
-        const apiKey = await getProviderKey(supabase, prov);
-        if (!apiKey) {
-          attemptErrors.push(`${prov}: chave de API não configurada`);
-          continue;
-        }
-        const model = modelForProvider(prov, aiCfg);
-        try {
-          rawResponse = await runProvider(prov, apiKey, model, messageForAi, history, supabase, req.authUser.id, toolCtx);
-          if (prov !== primaryProvider) {
-            console.warn(`[AI Chat] Provedor primário (${primaryProvider}) falhou; respondido via fallback (${prov}).`);
-          }
-          break;
-        } catch (err) {
-          console.error(`[AI Chat] Provedor ${prov} falhou:`, err.message);
-          attemptErrors.push(`${prov}: ${err.message}`);
-        }
-      }
-
-      if (rawResponse === null) {
-        return res.status(400).json({
-          error: `Não foi possível obter resposta da IA. ${attemptErrors.join(' | ')}. Verifique as chaves em Admin → IA & Parsing.`
-        });
-      }
+      const n8nData = await n8nResponse.json();
+      const botResponseText = n8nData.output || n8nData.response || n8nData.text || '';
+      const historyCleared = n8nData.history_cleared || null;
 
       // Limpa e processa retorno de gráfico
-      const { text, chart } = extractChartAndCleanText(rawResponse);
+      const { text, chart } = extractChartAndCleanText(botResponseText);
 
-      // Se o histórico foi limpo durante a conversa, NÃO regrava a resposta no banco
-      // (manteria o histórico "sujo") e sinaliza ao front para atualizar em tempo real.
-      if (toolCtx.historyCleared) {
-        if (toolCtx.historyCleared === 'all') {
-          // remove também as threads vazias para esvaziar a barra lateral
+      // Se o histórico foi limpo durante a conversa no n8n, reflete no banco e responde
+      if (historyCleared) {
+        if (historyCleared === 'all') {
           await supabase.from('ai_chat_threads').delete().eq('user_id', req.authUser.id);
         }
         return res.status(200).json({
           text,
           chart,
-          thread_id: toolCtx.historyCleared === 'all' ? null : activeThreadId,
-          history_cleared: toolCtx.historyCleared
+          thread_id: historyCleared === 'all' ? null : activeThreadId,
+          history_cleared: historyCleared
         });
       }
 
@@ -231,6 +225,29 @@ export function registerAiChatRoutes(app, supabase) {
     } catch (err) {
       console.error('[AI Chat API Router Error]:', err);
       return res.status(500).json({ error: `Erro interno no assistente: ${err.message || err}` });
+    }
+  });
+
+  // 6b. Endpoint interno para geração de relatórios em PDF (chamado pelo n8n)
+  app.post('/api/ai/internal/generate-pdf', async (req, res) => {
+    const internalKey = process.env.INTERNAL_API_KEY;
+    const incomingKey = req.headers['x-internal-key'];
+
+    if (internalKey && incomingKey !== internalKey) {
+      return res.status(401).json({ error: 'Não autorizado.' });
+    }
+
+    const { userId, title, content, subtitle } = req.body;
+    if (!userId || !title || !content) {
+      return res.status(400).json({ error: 'userId, title e content são obrigatórios.' });
+    }
+
+    try {
+      const result = await executeTool(supabase, userId, 'generate_pdf_report', { title, content, subtitle });
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('[Internal Generate PDF Error]:', err);
+      return res.status(500).json({ error: err.message });
     }
   });
 
