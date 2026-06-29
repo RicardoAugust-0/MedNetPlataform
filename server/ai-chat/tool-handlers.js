@@ -209,6 +209,17 @@ async function generate_pdf_report(supabase, userId, { title, content, subtitle 
   };
 }
 
+async function aggregate_driver_events(supabase, { platform_id, since_hours = 24, limit = 10, category }) {
+  const { data, error } = await supabase.rpc('aggregate_driver_events', {
+    p_platform_id: platform_id || null,
+    p_since_hours: since_hours,
+    p_limit: limit,
+    p_category: category || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // Executador de ferramentas unificado. `ctx` acumula efeitos colaterais (ex: limpeza de histórico).
 export async function executeTool(supabase, userId, name, args, ctx = {}) {
   console.log(`[AI Agent Tool] Calling ${name} with args:`, JSON.stringify(args));
@@ -231,6 +242,8 @@ export async function executeTool(supabase, userId, name, args, ctx = {}) {
       return await clear_chat_history(supabase, userId, args, ctx);
     case 'generate_pdf_report':
       return await generate_pdf_report(supabase, userId, args);
+    case 'aggregate_driver_events':
+      return await aggregate_driver_events(supabase, args);
     default:
       throw new Error(`Tool ${name} not found.`);
   }

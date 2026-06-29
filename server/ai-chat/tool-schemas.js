@@ -149,6 +149,19 @@ export const ANTHROPIC_TOOLS = [
       },
       required: ['title', 'content']
     }
+  },
+  {
+    name: 'aggregate_driver_events',
+    description: 'Retorna ranking de motoristas pré-agregado pelo banco (GROUP BY no PostgreSQL). Use SEMPRE que o usuário pedir "top N motoristas", "quais têm mais alertas", "ranking de reincidentes", "quantos eventos por motorista". Muito mais eficiente e confiável que query_database_records para agrupamentos — evita truncagem de dados.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        platform_id: { type: 'string', description: "Filtra por plataforma: 'sascar', 'maxtrack', 'omnilink', 'sighra', 'horizon'. Omita para todas as plataformas." },
+        since_hours: { type: 'integer', description: 'Janela de tempo em horas (padrão 24). Use 48 para 2 dias, 168 para 7 dias.' },
+        limit: { type: 'integer', description: 'Quantidade de motoristas no ranking (padrão 10).' },
+        category: { type: 'string', description: "Filtra por categoria de evento: 'intervencao', 'reportar', 'tecnico'. Omita para todas." }
+      }
+    }
   }
 ];
 
@@ -302,6 +315,19 @@ export const GEMINI_TOOLS = [
             subtitle: { type: 'STRING', description: 'Subtítulo opcional, ex: "Placa ABC-1234 · Período: últimos 6 meses".' }
           },
           required: ['title', 'content']
+        }
+      },
+      {
+        name: 'aggregate_driver_events',
+        description: 'Retorna ranking de motoristas pré-agregado pelo banco (GROUP BY no PostgreSQL). Use SEMPRE que o usuário pedir "top N motoristas", "quais têm mais alertas", "ranking de reincidentes", "quantos eventos por motorista". Muito mais eficiente e confiável que query_database_records para agrupamentos — evita truncagem de dados.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            platform_id: { type: 'STRING', description: "Filtra por plataforma: 'sascar', 'maxtrack', 'omnilink', 'sighra', 'horizon'. Omita para todas as plataformas." },
+            since_hours: { type: 'INTEGER', description: 'Janela de tempo em horas (padrão 24). Use 48 para 2 dias, 168 para 7 dias.' },
+            limit: { type: 'INTEGER', description: 'Quantidade de motoristas no ranking (padrão 10).' },
+            category: { type: 'STRING', description: "Filtra por categoria de evento: 'intervencao', 'reportar', 'tecnico'. Omita para todas." }
+          }
         }
       }
     ]
