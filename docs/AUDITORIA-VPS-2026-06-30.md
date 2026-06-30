@@ -27,7 +27,7 @@ Documento de handoff cobrindo as sessões de **2026-06-26** a **2026-06-30**. Re
 
 ---
 
-## 2. ⚠️ CRÍTICO — JWT_SECRET do Storage (links PDF quebrados)
+## 2. ✅ RESOLVIDO — JWT_SECRET do Storage (links PDF)
 
 ### Sintoma
 
@@ -110,12 +110,11 @@ curl -I "<URL_GERADA>"
 
 | # | Pendência | Onde | Ação |
 |---|---|---|---|
-| A | **JWT_SECRET do Storage** (seção 2 acima) | VPS / Coolify | Alinhar env do container Storage |
-| B | **Provisionar `TRIGGER_SECRET`** | Vault + Edge Function | Ver `AUDITORIA-2026-05-29.md` §AÇÃO MANUAL |
-| C | **Rotas WhatsApp sem auth** (`/api/whatsapp/*`) | `server/whatsapp-routes.js` | Aplicar `requireRole(supabase, 'operador')` igual ao Analytics |
-| D | **GOOGLE_SERVICE_ACCOUNT** não setado | Coolify → env edge functions | Setar chave nova do Google → Restart → validar `read-sheet`/`append-sheet` |
+| A | **Provisionar `TRIGGER_SECRET`** | Vault + Edge Function | Ver `AUDITORIA-2026-05-29.md` §AÇÃO MANUAL |
+| B | **Rotas WhatsApp sem auth** (`/api/whatsapp/*`) | `server/whatsapp-routes.js` | Aplicar `requireRole(supabase, 'operador')` igual ao Analytics |
+| C | **GOOGLE_SERVICE_ACCOUNT** não setado | Coolify → env edge functions | Setar chave nova do Google → Restart → validar `read-sheet`/`append-sheet` |
 
-> **B e D são pré-requisitos para funcionalidades já no ar** (Planilha Embedded e links PDF).
+> **A e C são pré-requisitos para funcionalidades já no ar** (Planilha Embedded). Storage JWT ✅ resolvido em 2026-06-30.
 
 ### 🟡 Média — Configuração VPS
 
@@ -149,7 +148,7 @@ curl -I "<URL_GERADA>"
 | Frontend (Vercel) | produção | ✅ apontando para VPS |
 | Edge Functions (5) | `append-sheet`, `read-sheet`, `invite-user`, `generate-report`, `generate-dossier-report` | ✅ OPTIONS 200 / POST 401 (autenticação funcionando) |
 | Realtime | `driver_events` publicado | ✅ |
-| Storage (bucket `ai-reports`) | signed URLs | ❌ `InvalidJWT` — pendência A acima |
+| Storage (bucket `ai-reports`) | signed URLs | ✅ funcionando (confirmado 2026-06-30) |
 
 ### Tabelas migradas (todas)
 
