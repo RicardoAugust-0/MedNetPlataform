@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useReminders } from '../hooks/useReminders';
 import { useConfirm } from '../hooks/useConfirm';
@@ -116,6 +116,91 @@ function EditModal({ reminder, onSave, onClose }) {
   );
 }
 
+function CalendarView({ reminders, onSelectDay, selectedDay }) {
+  const [calDate, setCalDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  const todayStr = today();
+  const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  const cells = useMemo(() => {
+    const year = calDate.getFullYear();
+    const month = calDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+    const result = [];
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, daysInPrev - i);
+      result.push({ date: d, current: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      result.push({ date: new Date(year, month, d), current: true });
+    }
+    const remaining = 42 - result.length;
+    for (let d = 1; d <= remaining; d++) {
+      result.push({ date: new Date(year, month + 1, d), current: false });
+    }
+    return result;
+  }, [calDate]);
+
+  const remindersByDay = useMemo(() => {
+    const map = {};
+    reminders.forEach(r => {
+      if (!map[r.date]) map[r.date] = [];
+      map[r.date].push(r);
+    });
+    return map;
+  }, [reminders]);
+
+  const toISO = (d) => {
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  };
+
+  const prevMonth = () => setCalDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const nextMonth = () => setCalDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+
+  const monthLabel = calDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  return (
+    <div>
+      <div className="agenda-cal-nav">
+        <button className="btn btn-sm btn-ghost" onClick={prevMonth}><i className="ti ti-chevron-left"></i></button>
+        <span className="agenda-cal-title">{monthLabel}</span>
+        <button className="btn btn-sm btn-ghost" onClick={nextMonth}><i className="ti ti-chevron-right"></i></button>
+      </div>
+      <div className="agenda-cal-grid">
+        {weekdays.map(w => <div key={w} className="agenda-cal-weekday">{w}</div>)}
+        {cells.map((cell, i) => {
+          const iso = toISO(cell.date);
+          const dayRems = remindersByDay[iso] || [];
+          const isToday = iso === todayStr;
+          const isSelected = iso === selectedDay;
+          return (
+            <div
+              key={i}
+              className={`agenda-cal-day${!cell.current ? ' other-month' : ''}${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}
+              onClick={() => onSelectDay(iso === selectedDay ? null : iso)}
+            >
+              <div className="agenda-cal-day-num">{cell.date.getDate()}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {dayRems.slice(0, 5).map(r => (
+                  <span key={r.id} className={`agenda-cal-dot${r.urgent ? ' urgent' : ''}${r.done ? ' done' : ''}`} title={r.title} />
+                ))}
+                {dayRems.length > 5 && <span style={{ fontSize: 8, color: 'var(--text-muted)', alignSelf: 'center' }}>+{dayRems.length - 5}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Agenda() {
   const { reminders, loading, add, toggle, remove, update } = useReminders();
   const confirm = useConfirm();
@@ -126,15 +211,26 @@ export default function Agenda() {
   const [sub,    setSub]    = useState('');
   const [icon,   setIcon]   = useState(null);
   const [filter, setFilter] = useState('hoje');
+  const [busca,  setBusca]  = useState('');
+  const [viewMode, setViewMode] = useState('list');
+  const [selectedDay, setSelectedDay] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
 
   const todayStr = today();
 
+  const normalizeText = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
   const sorted = [...reminders]
     .filter(r => {
-      if (filter === 'hoje')   return r.date === todayStr;
+      if (selectedDay) return r.date === selectedDay;
+      if (filter === 'hoje')    return r.date === todayStr;
       if (filter === 'futuros') return r.date > todayStr;
       return true;
+    })
+    .filter(r => {
+      if (!busca.trim()) return true;
+      const q = normalizeText(busca);
+      return normalizeText(r.title).includes(q) || normalizeText(r.sub).includes(q);
     })
     .sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
@@ -174,13 +270,57 @@ export default function Agenda() {
               {done} concluídos · {reminders.length} total {overdue > 0 && <span style={{ color: 'var(--danger-500)', fontWeight: 600 }}>· {overdue} atrasado{overdue > 1 ? 's' : ''}</span>}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {['hoje','futuros','todos'].map(f => (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button
+              className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => { setViewMode('list'); setSelectedDay(null); }}
+              title="Visão lista"
+            >
+              <i className="ti ti-list"></i>
+            </button>
+            <button
+              className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setViewMode('calendar')}
+              title="Visão calendário"
+            >
+              <i className="ti ti-calendar"></i>
+            </button>
+            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+            {viewMode === 'list' && !selectedDay && ['hoje','futuros','todos'].map(f => (
               <button key={f} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter(f)}>
                 {f === 'hoje' ? 'Hoje' : f === 'futuros' ? 'Próximos' : 'Todos'}
               </button>
             ))}
+            {selectedDay && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setSelectedDay(null)}>
+                <i className="ti ti-x"></i> {selectedDay}
+              </button>
+            )}
           </div>
+        </div>
+
+        {viewMode === 'calendar' && (
+          <div style={{ marginBottom: 16 }}>
+            <CalendarView
+              reminders={reminders}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+            />
+            {selectedDay && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+              <i className="ti ti-filter"></i> Filtrando por {selectedDay}
+            </div>}
+          </div>
+        )}
+
+        <div className="agenda-search">
+          <i className="ti ti-search"></i>
+          <input
+            type="search"
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por título ou detalhe…"
+          />
+          {busca && <button className="btn-icon" style={{ fontSize: 12, color: 'var(--text-muted)' }} onClick={() => setBusca('')}><i className="ti ti-x"></i></button>}
         </div>
 
         {sorted.length === 0

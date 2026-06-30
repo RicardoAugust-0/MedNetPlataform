@@ -43,12 +43,12 @@ export function RemindersProvider({ children }) {
     return () => supabase.removeChannel(channel);
   }, []);
 
-  const add = useCallback(async ({ title, sub, time, urgent, date }) => {
-    const opt = { id: crypto.randomUUID(), title, sub: sub || '', time: time || '10:00', urgent: !!urgent, done: false, date: date || today(), _pending: true };
+  const add = useCallback(async ({ title, sub, time, urgent, date, icon }) => {
+    const opt = { id: crypto.randomUUID(), title, sub: sub || '', time: time || '10:00', urgent: !!urgent, done: false, date: date || today(), icon: icon || null, _pending: true };
     setReminders(prev => [...prev, opt]);
     const { data, error } = await supabase
       .from('reminders')
-      .insert({ title, sub: sub || '', time: time || '10:00', urgent: !!urgent, done: false, reminder_date: date || today() })
+      .insert({ title, sub: sub || '', time: time || '10:00', urgent: !!urgent, done: false, reminder_date: date || today(), icon: icon || null })
       .select().single();
     if (error) {
       setReminders(prev => prev.filter(r => r.id !== opt.id));
