@@ -164,7 +164,11 @@ export default function EmbeddedSheet() {
       }
 
       // 2. Mapear e filtrar novas linhas do dia de hoje para importação
-      const dbExistingKeys = new Set(dbToday.map(r => makeKey(r.placa, r.data, r.colaborador)));
+      // Exclui das chaves existentes os registros que acabaram de ser deletados
+      const deletedIds = new Set(rowsToDelete.map(r => r.id));
+      const dbExistingKeys = new Set(
+        dbToday.filter(r => !deletedIds.has(r.id)).map(r => makeKey(r.placa, r.data, r.colaborador))
+      );
 
       const mappedRows = todayRows
         .map(r => {
@@ -197,11 +201,20 @@ export default function EmbeddedSheet() {
         })
         .filter(r => !dbExistingKeys.has(makeKey(r.placa, r.data, r.colaborador)));
 
+      // Deduplica as próprias linhas vindas da planilha (mesmo que a planilha tenha duplicatas)
+      const seenKeys = new Set();
+      const dedupedMappedRows = mappedRows.filter(r => {
+        const k = makeKey(r.placa, r.data, r.colaborador);
+        if (seenKeys.has(k)) return false;
+        seenKeys.add(k);
+        return true;
+      });
+
       let insertedCount = 0;
-      if (mappedRows.length > 0) {
+      if (dedupedMappedRows.length > 0) {
         const { data: inserted, error: insertErr } = await supabase
           .from('intervencoes_sheet')
-          .insert(mappedRows)
+          .insert(dedupedMappedRows)
           .select();
 
         if (insertErr) throw insertErr;
@@ -234,10 +247,22 @@ export default function EmbeddedSheet() {
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
-    // Busca inicial no mount (padrão aceitável); a execução única é garantida acima.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData().then(() => handleImportFromSheets(true));
   }, [loadData, handleImportFromSheets]);
+
+  // Correção de Meia-Noite: detecta mudança de dia e recarrega automaticamente
+  useEffect(() => {
+    let savedDate = new Date().toDateString();
+    const interval = setInterval(() => {
+      const now = new Date().toDateString();
+      if (now !== savedDate) {
+        savedDate = now;
+        lastImportTime = 0;
+        loadData();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   // Escutar atualizações via Supabase Realtime
   useEffect(() => {
@@ -272,21 +297,35 @@ export default function EmbeddedSheet() {
     };
   }, []);
 
-  // Adicionar uma nova linha vazia
+  // Salvar select imediatamente ao mudar (sem aguardar blur)
+  const saveSelectChange = useCallback(async (rowIndex, colKey, newValue, originalRow) => {
+    setActiveCell(null);
+    if (originalRow[colKey] === newValue) return;
+    setRows(prev => prev.map((r, i) => i === rowIndex ? { ...r, [colKey]: newValue, status_sync: 'pendente' } : r));
+    try {
+      const { error } = await supabase.from('intervencoes_sheet')
+        .update({ [colKey]: newValue, status_sync: 'pendente' }).eq('id', originalRow.id);
+      if (error) throw error;
+    } catch (err) {
+      toast('Erro ao atualizar registro', 'error');
+      loadData();
+    }
+  }, [toast, loadData]);
+
+  // Adicionar uma nova linha — pré-preenche campos com base na última linha existente
   const handleAddNewRow = async () => {
     if (!profile) return;
-    // Mesmo formato curto (DD/MM) das linhas do Sheets, para casar com a
-    // deduplicação e o filtro de hoje do grid.
     const [todayShort] = getTodayVariants();
+    const last = rows[0]; // rows ordenadas por created_at DESC
     const newRecord = {
       data: todayShort,
-      empresa: 'Nova Transportadora',
-      sistema: 'SASCAR',
-      colaborador: 'Novo Colaborador',
-      placa: 'AAA-0000',
+      empresa: last?.empresa || 'Nova Transportadora',
+      sistema: last?.sistema || 'SASCAR',
+      colaborador: last?.colaborador || 'Novo Colaborador',
+      placa: '',
       frota: '',
       criticidade: 'NORMAL',
-      classificacao: 'Fadiga',
+      classificacao: last?.classificacao || 'Fadiga',
       realizado: 'NÃO',
       solicitado_por: profile.nome,
       hora_solicitacao: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -653,8 +692,7 @@ export default function EmbeddedSheet() {
                           col.type === 'select' ? (
                             <select
                               value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => saveCellEdit(rowIndex, col.key, row)}
+                              onChange={(e) => saveSelectChange(rowIndex, col.key, e.target.value, row)}
                               className="sheet-cell-edit-select"
                               autoFocus
                             >

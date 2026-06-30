@@ -159,9 +159,9 @@
   transition: background-color 0.08s ease;
 }
 
-/* Listras alternadas (Zebra striping) para legibilidade */
-.sheet-table tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.015);
+/* Listras alternadas — contraste suficiente em light e dark */
+.sheet-table tbody tr:nth-child(even) td {
+  background: var(--surface-1);
 }
 
 .sheet-table tr:hover td {
@@ -183,6 +183,10 @@
   font-weight: 700;
   color: var(--text-muted) !important;
   border-right: 2px solid var(--border-strong) !important;
+  /* Sticky — coluna #1 */
+  position: sticky !important;
+  left: 0;
+  z-index: 3;
 }
 
 .col-status {
@@ -190,7 +194,20 @@
   min-width: 140px !important;
   max-width: 140px !important;
   border-right: 1px solid var(--border-strong) !important;
+  /* Sticky — coluna #2, imediatamente após col-num */
+  position: sticky !important;
+  left: 45px;
+  z-index: 3;
+  background: var(--surface-0);
 }
+/* No hover as sticky cells herdaram !important, mas precision override para td */
+.sheet-table tbody tr:hover td.col-num,
+.sheet-table tbody tr:hover td.col-status {
+  background: var(--surface-2) !important;
+}
+/* Headers sticky precisam de z-index maior (acima das linhas sticky) */
+.sheet-table thead th.col-num,
+.sheet-table thead th.col-status { z-index: 7 !important; }
 
 .col-data { width: 110px !important; min-width: 110px !important; }
 .col-empresa { width: 160px !important; min-width: 160px !important; }
