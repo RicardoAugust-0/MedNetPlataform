@@ -171,9 +171,25 @@
 /* ── Grid main ─────────────────────────────────────────────── */
 .dg-grid {
   display: grid; grid-template-columns: 1.55fr 1fr;
-  gap: 16px; margin-bottom: 16px;
+  gap: var(--space-4, 16px); margin-bottom: var(--space-4, 16px);
 }
-.dg-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dg-col { display: flex; flex-direction: column; gap: var(--space-4, 16px); min-width: 0; }
+
+/* Layout variants (Rhythm) */
+.dg-grid.dg-layout-balanced { grid-template-columns: 1.55fr 1fr; gap: var(--space-4, 16px); }
+.dg-grid.dg-layout-cinema   { grid-template-columns: 2fr 1fr;    gap: var(--space-3, 12px); }
+.dg-grid.dg-layout-compact  { grid-template-columns: 1fr 1fr;    gap: var(--space-2, 8px);  }
+
+/* Mode variants */
+.dg-mode-plantao .dg-kpi.is-hero { border-color: var(--warning-500); }
+.dg-mode-foco .dg-card { box-shadow: none; }
+.dg-mode-foco .dg-tweaks-pop { display: none; }
+
+/* Vibe variants */
+.dg-vibe-editorial .dg-kpi { border-radius: 4px; }
+.dg-vibe-editorial .dg-card { border-radius: 4px; }
+.dg-vibe-pulse .dg-kpi.is-hero { animation: pulse-hero 3s ease-in-out infinite; }
+@keyframes pulse-hero { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 20px 2px var(--accent-glow); } }
 
 .dg-card {
   background: var(--surface-0);

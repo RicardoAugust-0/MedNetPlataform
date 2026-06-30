@@ -18,6 +18,7 @@ import {
   KPI,
   ProductivityRanking,
   Section,
+  SheetInsights,
   TechAlerts,
   TransportadoraRanking,
 } from "./dashboard/components";
@@ -74,10 +75,16 @@ export default function Dashboard() {
     setExecutiveMode,
     layout,
     setLayout,
+    showSheet,
+    setShowSheet,
     sheetAutoSync,
     setSheetAutoSync,
     sheetSyncMin,
     setSheetSyncMin,
+    mode,
+    setMode,
+    vibe,
+    setVibe,
   } = settings;
 
   // ── Filtros de tela (persistidos em localStorage)
@@ -316,7 +323,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
+    <div className={`dg-mode-${mode} dg-vibe-${vibe}`}>
       {/* Saudação */}
       <div className="dg-greet">
         <div>
@@ -522,6 +529,44 @@ export default function Dashboard() {
                 </div>
 
                 <div className="dg-tweaks-grp">
+                  <label className="dg-tweaks-lb">Modo de operação</label>
+                  <div className="dg-tweaks-seg">
+                    {[
+                      { v: "pleno", l: "Pleno" },
+                      { v: "plantao", l: "Plantão" },
+                      { v: "foco", l: "Foco" },
+                    ].map((o) => (
+                      <button
+                        key={o.v}
+                        className={`dg-tweaks-seg-btn${mode === o.v ? " on" : ""}`}
+                        onClick={() => setMode(o.v)}
+                      >
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="dg-tweaks-grp">
+                  <label className="dg-tweaks-lb">Vibe visual</label>
+                  <div className="dg-tweaks-seg">
+                    {[
+                      { v: "sobrio", l: "Sóbrio" },
+                      { v: "editorial", l: "Editorial" },
+                      { v: "pulse", l: "Pulse" },
+                    ].map((o) => (
+                      <button
+                        key={o.v}
+                        className={`dg-tweaks-seg-btn${vibe === o.v ? " on" : ""}`}
+                        onClick={() => setVibe(o.v)}
+                      >
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="dg-tweaks-grp">
                   <label className="dg-tweaks-lb">Seções visíveis</label>
                   <div className="dg-tweaks-chips">
                     <button
@@ -548,6 +593,12 @@ export default function Dashboard() {
                     >
                       <i className="ti ti-building-community"></i>{" "}
                       Transportadoras
+                    </button>
+                    <button
+                      className={`dg-tweaks-chip${showSheet ? " on" : ""}`}
+                      onClick={() => setShowSheet((v) => !v)}
+                    >
+                      <i className="ti ti-table"></i> Insights da planilha
                     </button>
                   </div>
                 </div>
@@ -698,7 +749,7 @@ export default function Dashboard() {
           progress={m.pctConcluido}
           onClick={() => setActiveKpi(activeKpi === "total" ? null : "total")}
           active={activeKpi === "total"}
-          accent="#F26931"
+          accent="var(--mednet-orange, #F26931)"
         />
         <KPI
           icon="ti-circle-check"
@@ -731,7 +782,7 @@ export default function Dashboard() {
           label="Intervenções realizadas"
           value={m.intervencoesRegistradas}
           sub={`${m.sheetSolicitadasHoje} solicitadas · ${m.encerradosPlataforma} plataforma · ${m.sheetIntervencoesHoje} planilha`}
-          accent="#2A8DD9"
+          accent="var(--info-500, #2A8DD9)"
           onClick={() =>
             setActiveKpi(activeKpi === "intervencoes" ? null : "intervencoes")
           }
@@ -774,6 +825,23 @@ export default function Dashboard() {
           taxaReinc={m.taxaReinc}
           pctConcluido={m.pctConcluido}
           equipe={m.equipe}
+        />
+      )}
+
+      {/* Visão de tratamento de alertas (planilha) */}
+      {showSheet && m.sheetTMA && (
+        <SheetInsights
+          tmaMin={m.sheetTMA.avg}
+          tmaSampleSize={m.sheetTMA.n}
+          criticidade={m.sheetCriticidade}
+          classificacao={m.sheetClassificacao}
+          pendencias={m.sheetPendencias}
+          totalHoje={m.sheetRowsPeriodo.length}
+          loading={sheetHistory.loading}
+          error={sheetHistory.error}
+          ageMin={m.sheetAgeMin}
+          onRefresh={() => !sheetHistory.loading && sheetHistory.load(buildMesesLookback(3))}
+          syncing={sheetHistory.loading}
         />
       )}
 

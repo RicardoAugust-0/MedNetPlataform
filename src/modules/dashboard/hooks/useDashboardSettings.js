@@ -21,6 +21,8 @@ export function useDashboardSettings() {
   const [showSheet,       setShowSheet]       = useState(() => readBool('mn_dash_sheet',   true));
   const [sheetAutoSync,   setSheetAutoSync]   = useState(() => readBool('mn_dash_sheet_autosync', false));
   const [sheetSyncMin,    setSheetSyncMin]    = useState(() => parseInt(localStorage.getItem('mn_dash_sheet_sync_min') || '10', 10));
+  const [mode,            setMode]            = useState(() => localStorage.getItem('mn_dash_mode') || 'pleno');
+  const [vibe,            setVibe]            = useState(() => localStorage.getItem('mn_dash_vibe') || 'sobrio');
 
   useEffect(() => { localStorage.setItem('mn_dash_sla',     String(slaLimit));            }, [slaLimit]);
   useEffect(() => { localStorage.setItem('mn_dash_compare', String(compareYesterday));    }, [compareYesterday]);
@@ -33,6 +35,8 @@ export function useDashboardSettings() {
   useEffect(() => { localStorage.setItem('mn_dash_sheet',   String(showSheet));           }, [showSheet]);
   useEffect(() => { localStorage.setItem('mn_dash_sheet_autosync', String(sheetAutoSync)); }, [sheetAutoSync]);
   useEffect(() => { localStorage.setItem('mn_dash_sheet_sync_min', String(sheetSyncMin));  }, [sheetSyncMin]);
+  useEffect(() => { localStorage.setItem('mn_dash_mode', mode); }, [mode]);
+  useEffect(() => { localStorage.setItem('mn_dash_vibe', vibe); }, [vibe]);
 
   // Executive mode: aplica classe no <body> pra CSS controlar tamanhos
   useEffect(() => {
@@ -60,5 +64,7 @@ export function useDashboardSettings() {
     showSheet,   setShowSheet,
     sheetAutoSync, setSheetAutoSync,
     sheetSyncMin,  setSheetSyncMin,
+    mode,          setMode,
+    vibe,          setVibe,
   };
 }
