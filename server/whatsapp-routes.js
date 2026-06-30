@@ -1,6 +1,11 @@
+import { requireRole } from './ai-chat/middleware.js';
+
 export function registerWhatsappRoutes(app, supabase) {
+  const requireOperador = requireRole(supabase, 'operador');
+  const requireAdmin    = requireRole(supabase, 'admin');
+
   // 1. Get WhatsApp credentials (safely masked/filtered)
-  app.get('/api/whatsapp/credentials', async (req, res) => {
+  app.get('/api/whatsapp/credentials', requireOperador, async (req, res) => {
     try {
       const { data, error } = await supabase
         .from('whatsapp_credentials')
@@ -18,7 +23,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 2. Save/Update WhatsApp credentials
-  app.post('/api/whatsapp/credentials', async (req, res) => {
+  app.post('/api/whatsapp/credentials', requireAdmin, async (req, res) => {
     const { token, phone_number_id, whatsapp_business_account_id, userId } = req.body;
     if (!token || !phone_number_id || !whatsapp_business_account_id) {
       return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
@@ -63,7 +68,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 3. Sync and list templates from Meta Graph API
-  app.get('/api/whatsapp/templates', async (req, res) => {
+  app.get('/api/whatsapp/templates', requireOperador, async (req, res) => {
     const { forceSync } = req.query;
 
     try {
@@ -150,7 +155,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 4. Send Message Template via Meta Graph API
-  app.post('/api/whatsapp/send', async (req, res) => {
+  app.post('/api/whatsapp/send', requireOperador, async (req, res) => {
     const { recipient_phone, recipient_name, template_name, language_code, variables, userId } = req.body;
 
     if (!recipient_phone || !template_name) {
@@ -294,7 +299,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 5. GET all active chats
-  app.get('/api/whatsapp/chats', async (req, res) => {
+  app.get('/api/whatsapp/chats', requireOperador, async (req, res) => {
     try {
       const { data, error } = await supabase
         .from('whatsapp_chats')
@@ -310,7 +315,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 6. GET messages for a specific chat
-  app.get('/api/whatsapp/chats/:chatId/messages', async (req, res) => {
+  app.get('/api/whatsapp/chats/:chatId/messages', requireOperador, async (req, res) => {
     const { chatId } = req.params;
     try {
       const { data, error } = await supabase
@@ -328,7 +333,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 7. POST mark messages as read (reset unread count)
-  app.post('/api/whatsapp/chats/:chatId/read', async (req, res) => {
+  app.post('/api/whatsapp/chats/:chatId/read', requireOperador, async (req, res) => {
     const { chatId } = req.params;
     try {
       const { error } = await supabase
@@ -345,7 +350,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 8. POST send free-text message
-  app.post('/api/whatsapp/chats/:chatId/send', async (req, res) => {
+  app.post('/api/whatsapp/chats/:chatId/send', requireOperador, async (req, res) => {
     const { chatId } = req.params;
     const { message, userId } = req.body;
 
@@ -462,7 +467,7 @@ export function registerWhatsappRoutes(app, supabase) {
   });
 
   // 9. POST start/open chat by phone number (new conversation from UI)
-  app.post('/api/whatsapp/chats/open', async (req, res) => {
+  app.post('/api/whatsapp/chats/open', requireOperador, async (req, res) => {
     const { phone, name } = req.body;
     if (!phone) {
       return res.status(400).json({ error: 'O número de telefone é obrigatório.' });

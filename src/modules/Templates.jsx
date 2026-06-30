@@ -49,7 +49,8 @@ const formatWhatsAppText = (text) => {
 
 export default function Templates() {
   const { templates, loading, add, update, remove, reorder } = useTemplates();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
+  const authHeader = () => ({ Authorization: `Bearer ${session?.access_token}` });
   const canEdit = profile?.role === 'admin' || profile?.role === 'lider';
   const confirm = useConfirm();
   const [filter, setFilter] = useState('todos');
@@ -73,7 +74,7 @@ export default function Templates() {
     setLoadingWhatsapp(true);
     if (force) setSyncingWhatsapp(true);
     try {
-      const res = await fetch(`${API_URL}/api/whatsapp/templates${force ? '?forceSync=true' : ''}`);
+      const res = await fetch(`${API_URL}/api/whatsapp/templates${force ? '?forceSync=true' : ''}`, { headers: authHeader() });
       if (!res.ok) throw new Error('Falha ao carregar templates.');
       const data = await res.json();
       setWhatsappTemplates(data.templates || []);
@@ -137,7 +138,7 @@ export default function Templates() {
     try {
       const res = await fetch(`${API_URL}/api/whatsapp/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           recipient_phone: testPhone,
           recipient_name: testName || 'Teste Manual',

@@ -379,8 +379,9 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
   const [modal, setModal] = useState(null);
 
   const toast = useToast();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const authHeader = () => ({ Authorization: `Bearer ${session?.access_token}` });
 
   const getWebhookUrl = () => {
     if (API_URL.startsWith('http://') || API_URL.startsWith('https://')) {
@@ -405,7 +406,7 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
   const fetchCredentials = async () => {
     setLoadingCreds(true);
     try {
-      const res = await fetch(`${API_URL}/api/whatsapp/credentials`);
+      const res = await fetch(`${API_URL}/api/whatsapp/credentials`, { headers: authHeader() });
       if (!res.ok) throw new Error('Falha ao carregar credenciais.');
       const data = await res.json();
       setCredentials({
@@ -444,7 +445,7 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
 
       const res = await fetch(`${API_URL}/api/whatsapp/credentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify(payload)
       });
 

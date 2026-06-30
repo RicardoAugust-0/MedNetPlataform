@@ -5,8 +5,9 @@ import { supabase } from '../../supabase.js';
 
 export default function ChatTab({ initialParams, clearInitialParams }) {
   const toast = useToast();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const authHeader = () => ({ Authorization: `Bearer ${session?.access_token}` });
 
   const [chats, setChats] = useState([]);
   const [loadingChats, setLoadingChats] = useState(false);
@@ -51,7 +52,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
   const fetchChats = async (selectChatId = null) => {
     setLoadingChats(true);
     try {
-      const res = await fetch(`${API_URL}/api/whatsapp/chats`);
+      const res = await fetch(`${API_URL}/api/whatsapp/chats`, { headers: authHeader() });
       if (!res.ok) throw new Error('Falha ao buscar conversas.');
       const data = await res.json();
       setChats(data || []);
@@ -74,7 +75,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
   const fetchMessages = async (chatId) => {
     setLoadingMessages(true);
     try {
-      const res = await fetch(`${API_URL}/api/whatsapp/chats/${chatId}/messages`);
+      const res = await fetch(`${API_URL}/api/whatsapp/chats/${chatId}/messages`, { headers: authHeader() });
       if (!res.ok) throw new Error('Falha ao carregar mensagens.');
       const data = await res.json();
       setMessages(data || []);
@@ -89,7 +90,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
   // 3. Mark chat as read
   const markAsRead = async (chatId) => {
     try {
-      await fetch(`${API_URL}/api/whatsapp/chats/${chatId}/read`, { method: 'POST' });
+      await fetch(`${API_URL}/api/whatsapp/chats/${chatId}/read`, { method: 'POST', headers: authHeader() });
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, unread_count: 0 } : c));
     } catch (err) {
       console.error('Erro ao marcar como lido:', err);
@@ -106,7 +107,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
         try {
           const res = await fetch(`${API_URL}/api/whatsapp/chats/open`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
             body: JSON.stringify({ phone, name })
           });
           if (!res.ok) throw new Error('Erro ao abrir conversa');
@@ -224,7 +225,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
     try {
       const res = await fetch(`${API_URL}/api/whatsapp/chats/${activeChat.id}/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           message: textToSend,
           userId: profile?.id
@@ -304,7 +305,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
     setShowTemplateModal(true);
     setLoadingTemplates(true);
     try {
-      const res = await fetch(`${API_URL}/api/whatsapp/templates`);
+      const res = await fetch(`${API_URL}/api/whatsapp/templates`, { headers: authHeader() });
       const data = await res.json();
       setTemplates(data.templates || []);
     } catch (err) {
@@ -336,7 +337,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
     try {
       const res = await fetch(`${API_URL}/api/whatsapp/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           recipient_phone: activeChat.phone,
           recipient_name: activeChat.name,
