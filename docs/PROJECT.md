@@ -6,8 +6,9 @@ o prontuário clínico, analytics histórico, relatórios por IA, automações
 (WhatsApp + VPS), scripts de contato, agenda, base de conhecimento e
 administração da equipe.
 
-> **Última revisão geral:** 2026-06-25. Ver o [Changelog](#22-changelog) para o
+> **Última revisão geral:** 2026-06-30. Ver o [Changelog](#22-changelog) para o
 > que mudou desde a revisão anterior (2026-05-29).
+> Estado de infra e pendências críticas em [AUDITORIA-VPS-2026-06-30.md](./AUDITORIA-VPS-2026-06-30.md).
 
 ---
 
@@ -397,6 +398,11 @@ no git/migrations.
 | `whatsapp_chats`        | Conversas (inbox)                                                                                    | `phone` (UNIQUE), `name`, `last_message_at`, `unread_count`                                                                                  |
 | `whatsapp_messages`     | Mensagens da conversa                                                                                | `chat_id`, `direction` (inbound/outbound), `body`, `status`, `meta_message_id`                                                               |
 | `maxtrack_sessions` / `maxtrack_cache` | Infra de sessão/cache (legado do scraping Maxtrack)                                    | —                                                                                                                                            |
+| `platform_rules`        | Regras de normalização por plataforma (taxonomy de categorias para o Monitor)         | `platform_id`, `rules` (jsonb)                                                                                                               |
+| `custom_rules`          | Regras de negócio configuráveis (ex.: auto-descarte fumo Dinon por transportadora)    | `platform_id`, `transportadora`, `nome_evento`, `ativo`                                                                                      |
+| `ai_chat_threads`       | Threads de conversa do MedBot                                                         | `id`, `user_id`, `title`, `created_at`                                                                                                       |
+| `ai_chat_messages`      | Mensagens do MedBot por thread                                                        | `thread_id`, `role` (user/assistant), `content`, `chart` (jsonb opcional)                                                                   |
+| `ai_generated_reports`  | Relatórios gerados pelo MedBot (PDF + metadata)                                      | `thread_id`, `storage_path`, `metadata` (jsonb)                                                                                              |
 
 Automações da VPS: `automations` (hooks cadastrados) + `automation_logs`
 (execuções) — alimentam a aba Automações (`useAutomations`).
@@ -677,6 +683,17 @@ Para integrar uma plataforma nova no Monitor: ver [docs/PLATFORMS.md](./PLATFORM
 
 ## 22. Changelog
 
+### 2026-06-26/29 — Monitor, Analytics, MedBot, custom_rules, VPS final
+
+Detalhes completos em [AUDITORIA-VPS-2026-06-30.md](./AUDITORIA-VPS-2026-06-30.md).
+
+- **Monitor** — `categoria_bucket` agora preenchido em `fatigueParser.js` (`getBucket()`); eventos voltaram a aparecer nas abas Intervenção/Reportar/Só técnico.
+- **Analytics** — Sascar detectada por assinatura de coluna (independente do nome do arquivo); fallback de nome corrigido para `platform_id='auto'`.
+- **Regra Dinon/fumo** — removida do hardcode de `sascar/index.js` para a tabela `custom_rules` (configurável pelo admin). `applyCustomRules()` em `src/platforms/shared/customRules.js`; `useOpenAlerts.js` aplica após o aggregate.
+- **MedBot** — RPC `aggregate_driver_events` criada no banco e exposta como tool (`tool-schemas.js`, `tool-handlers.js`). Prompt atualizado: rankings usam esta RPC em vez de `query_database_records`. Gráficos inline melhorados (case-insensitive, fallback de bloco ``` simples, guard no `GlobalAiChat`).
+- **Migrations VPS** aplicadas via Studio e MCP: `platform_rules`, `custom_rules`, `ai_chat_*`, `thread_id`, Realtime `driver_events`, `atendimentos.bucket` + `norm_clf` + `get_open_alerts`, `drivers_queue` dropada.
+- **Bug pendente (infra):** Storage do VPS com `JWT_SECRET` errado → signed URLs do MedBot retornam `InvalidJWT`. Fix é infra (alinhar env do container Storage no Coolify). Ver §2 do doc de auditoria.
+
 ### 2026-06-25 — Reestruturação de rotas, roles e remoção do RPA
 
 - **React Router**: navegação por URL; `App.jsx` com `<Routes>` + lazy/Suspense;
@@ -711,6 +728,10 @@ Para integrar uma plataforma nova no Monitor: ver [docs/PLATFORMS.md](./PLATFORM
 
 ### Known limitations
 
+- **Storage VPS:** signed URLs do MedBot (`ai-reports`) retornam `InvalidJWT` — JWT_SECRET do container Storage fora de sincronia. Fix: infra (Coolify → alinhar env). Ver `AUDITORIA-VPS-2026-06-30.md`.
+- **`TRIGGER_SECRET` não provisionado:** brecha de auth em `append-sheet` continua aberta (modo de compatibilidade `SYSTEM_TRIGGER` ativo). Ver `AUDITORIA-2026-05-29.md`.
+- **`/api/whatsapp/*` sem auth:** rotas WhatsApp do Express não têm middleware de autenticação.
+- **`GOOGLE_SERVICE_ACCOUNT` não setado no VPS:** `read-sheet`/`append-sheet` sem credencial Google → Planilha Embedded sem sync.
 - Planilha Embedded: excluir linha não propaga delete para o Google Sheets.
 - `append-sheet` ainda lê o range inteiro por inserção (O(n)).
 - Modo `compare` do Analytics multi-plataforma já tem caminho RPC; conferir
