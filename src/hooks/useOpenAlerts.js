@@ -104,9 +104,9 @@ export function useOpenAlerts() {
     return overrideEmail || profile?.email || 'hevilyntfzero@gmail.com';
   }, [overrideEmail, profile]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
     if (!isSupabaseConfigured) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       // 1. Carregar omnilink_config
       const { data: configData } = await supabase
@@ -150,13 +150,22 @@ export function useOpenAlerts() {
     } catch (err) {
       console.warn('[useOpenAlerts] Erro ao carregar alertas/atendimentos:', err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
+  }, [load]);
+
+  // Refresh periódico silencioso: sem isso, o corte de "últimas 24h" fica
+  // congelado no instante do mount (só avança quando reloadDrivers() é chamado
+  // manualmente após uma ação no Monitor), fazendo a fila de "em aberto" oscilar
+  // de forma abrupta e imprevisível em vez de envelhecer suavemente com o tempo.
+  useEffect(() => {
+    const id = setInterval(() => load({ silent: true }), 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, [load]);
 
   // Escutar Realtime para driver_events e atendimentos

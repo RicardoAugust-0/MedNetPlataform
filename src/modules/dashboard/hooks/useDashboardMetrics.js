@@ -207,16 +207,28 @@ export function useDashboardMetrics({
     const positivo     = (closedInterventionsFiltered.length + sheetInterventionsFiltered.length) - posPositivo;
     const fechados     = closedInterventionsFiltered.length + sheetInterventionsFiltered.length;
     const emAberto     = showResultado('aberto') ? driversAtivos.length : 0;
+    // "em aberto" vem de uma fila viva (últimas 24h, pra sustentar o Monitor).
+    // Pro volume/percentual DO DIA, escopamos só aos motoristas cujo evento
+    // ainda-aberto mais recente ocorreu hoje — senão sobra de dias anteriores
+    // (ou o simples envelhecimento da janela de 24h) faz o total oscilar sem
+    // nenhuma ação operacional ter acontecido.
+    const emAbertoHoje = showResultado('aberto')
+      ? driversAtivos.filter(d => {
+          const abertoHojeInterv   = d.ultimoEvento && new Date(d.ultimoEvento).toDateString() === todayStr;
+          const abertoHojeReportar = d.ultimoEventoReportar && new Date(d.ultimoEventoReportar).toDateString() === todayStr;
+          return abertoHojeInterv || abertoHojeReportar;
+        }).length
+      : 0;
     const encerradosPlataforma = atHistory.filter(a => {
       const dateObj = new Date(a.created_at);
       return dateObj.toDateString() === todayStr &&
         (a.tipo === 'intervencao' || a.tipo === 'reportar') &&
         (filters.operador === 'todos' || a.operador === filters.operador);
     }).length;
-    const totalAlertas = fechados + emAberto;
+    const totalAlertas = fechados + emAbertoHoje;
     const pctConcluido = totalAlertas > 0 ? Math.round((fechados / totalAlertas) * 100) : 0;
-    const pctConcluidoPlataforma = (encerradosPlataforma + emAberto) > 0
-      ? Math.round((encerradosPlataforma / (encerradosPlataforma + emAberto)) * 100)
+    const pctConcluidoPlataforma = (encerradosPlataforma + emAbertoHoje) > 0
+      ? Math.round((encerradosPlataforma / (encerradosPlataforma + emAbertoHoje)) * 100)
       : 0;
     const taxaReinc    = (positivo + posPositivo) > 0 ? (posPositivo / (positivo + posPositivo)) * 100 : 0;
 
