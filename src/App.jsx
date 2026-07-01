@@ -16,6 +16,7 @@ const AdminEquipe = lazy(() => import("./modules/admin/EquipeTab.jsx"));
 const AdminIntegracoes = lazy(() => import("./modules/admin/IntegracoesLayout.jsx"));
 const AdminCredenciais = lazy(() => import("./modules/admin/IntegracoesCredenciais.jsx"));
 const AdminTransportadoras = lazy(() => import("./modules/admin/IntegracoesTransportadoras.jsx"));
+const AdminHorizon = lazy(() => import("./modules/admin/IntegracoesHorizon.jsx"));
 const AdminIA = lazy(() => import("./modules/admin/AiCredentials.jsx"));
 const AdminSistema = lazy(() => import("./modules/admin/SistemaLayout.jsx"));
 const AdminManutencao = lazy(() => import("./modules/admin/SistemaManutencao.jsx"));
@@ -188,6 +189,7 @@ function AppShell() {
                       <Route index element={<Navigate to="credenciais" replace />} />
                       <Route path="credenciais" element={<AdminCredenciais />} />
                       <Route path="transportadoras" element={<AdminTransportadoras />} />
+                      <Route path="horizon" element={<AdminHorizon />} />
                     </Route>
                     <Route path="ia" element={<AdminIA />} />
                     <Route path="sistema" element={<AdminSistema />}>

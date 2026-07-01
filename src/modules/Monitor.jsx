@@ -393,7 +393,7 @@ export default function Monitor() {
   const attend = async (d) => {
     if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
     const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', bucket: 'intervencao', obs });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', bucket: 'intervencao', obs, platformId: d._platformId });
     const now = new Date();
     const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const data = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -420,7 +420,7 @@ export default function Monitor() {
 
   const reportar = async (d) => {
     if (!(await confirm({ title: 'Registrar notificação', message: `Registrar notificação para a empresa: ${d.nome}?` }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', bucket: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})` });
+    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', bucket: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})`, platformId: d._platformId });
   };
 
   const deleteAlert = (d, tipo = 'intervencao') => {
@@ -439,6 +439,7 @@ export default function Monitor() {
       tipo: 'descarte',
       bucket: tipo,
       obs: `Alerta descartado · ${countStr} · Motivo: ${reason}`,
+      platformId: d._platformId,
     });
   };
 
@@ -466,6 +467,7 @@ export default function Monitor() {
     const results = await Promise.allSettled(list.map(d => registrar({
       motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
       tipo: 'descarte', bucket: targetBucket, obs: obsFor(d),
+      platformId: d._platformId,
     })));
     const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
     const fail = list.length - ok;

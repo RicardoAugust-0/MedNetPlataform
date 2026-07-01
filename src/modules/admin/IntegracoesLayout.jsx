@@ -7,6 +7,7 @@ import './adminSubnav.css';
 const SUB_TABS = [
   { to: 'credenciais',     label: 'Credenciais & OmniLink', icon: 'ti-key' },
   { to: 'transportadoras', label: 'Transportadoras (de-para)', icon: 'ti-replace' },
+  { to: 'horizon',         label: 'Horizon (contas)', icon: 'ti-cloud-download' },
 ];
 
 export default function IntegracoesLayout() {

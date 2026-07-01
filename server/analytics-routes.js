@@ -588,15 +588,19 @@ export function registerAnalyticsRoutes(app, supabase) {
 
   // 5. Importação de planilhas gigantes no backend
   app.post('/api/analytics/import', requireAdmin, uploadMiddleware, (req, res) => {
-    const clearCache = (platformId) => {
-      if (platformId) {
-        delete rawEventsCache[platformId];
-      } else {
-        Object.keys(rawEventsCache).forEach(k => delete rawEventsCache[k]);
-      }
-      resultCache.clear();
-      console.log(`[MedNet Backend] Cache limpo após importação para platformId: ${platformId}`);
-    };
-    handleImportEvents(supabase, req, res, clearCache);
+    handleImportEvents(supabase, req, res, clearAnalyticsCache);
   });
+}
+
+// Limpa o cache em memória do Analytics após uma importação. Exportada para
+// que outras rotas de ingestão (ex.: server/horizon-routes.js) reutilizem a
+// mesma referência de cache em vez de duplicar o estado.
+export function clearAnalyticsCache(platformId) {
+  if (platformId) {
+    delete rawEventsCache[platformId];
+  } else {
+    Object.keys(rawEventsCache).forEach(k => delete rawEventsCache[k]);
+  }
+  resultCache.clear();
+  console.log(`[MedNet Backend] Cache limpo após importação para platformId: ${platformId}`);
 }
