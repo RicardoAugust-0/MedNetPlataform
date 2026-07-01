@@ -180,10 +180,18 @@
 .dg-grid.dg-layout-cinema   { grid-template-columns: 2fr 1fr;    gap: var(--space-3, 12px); }
 .dg-grid.dg-layout-compact  { grid-template-columns: 1fr 1fr;    gap: var(--space-2, 8px);  }
 
+/* Pulso da operação: cards lado a lado, cada um com sua altura natural */
+.dg-ops-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4, 16px);
+  align-items: start;
+  margin-bottom: var(--space-4, 16px);
+}
+
 /* Mode variants */
 .dg-mode-plantao .dg-kpi.is-hero { border-color: var(--warning-500); }
 .dg-mode-foco .dg-card { box-shadow: none; }
-.dg-mode-foco .dg-tweaks-pop { display: none; }
 
 /* Vibe variants */
 .dg-vibe-editorial .dg-kpi { border-radius: 4px; }
@@ -660,149 +668,6 @@ body.dash-tv-mode .dg-kpi.is-hero .dg-kpi-value { font-size: 60px; line-height: 
 body.dash-tv-mode .dg-kpi, body.dash-tv-mode .dg-kpi-sk { height: 160px; }
 body.dash-tv-mode .dg-kpi.is-hero, body.dash-tv-mode .dg-kpi-sk.is-hero-sk { height: 172px; }
 
-/* ── Tweaks popover (dashboard-scoped) ────────────────────── */
-.dg-tweaks-wrap { position: relative; }
-.dg-btn.is-active { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-primary); }
-.dg-tweaks-pop {
-  position: absolute; top: calc(100% + 6px); right: 0;
-  width: 340px; max-height: calc(100vh - 120px); overflow-y: auto;
-  z-index: 50;
-  background: var(--surface-0);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-md), 0 12px 32px rgba(0,0,0,0.18);
-  padding: 12px 14px 14px;
-  animation: drillIn 0.16s ease;
-  scrollbar-width: thin;
-}
-.dg-tweaks-head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-muted);
-  padding-bottom: 10px; margin-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-}
-.dg-tweaks-head i { font-size: 13px; margin-right: 4px; vertical-align: -1px; }
-.dg-tweaks-x {
-  background: none; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 14px; padding: 2px 4px; border-radius: 4px;
-}
-.dg-tweaks-x:hover { color: var(--text-primary); background: var(--surface-1); }
-
-.dg-tweaks-grp { margin-bottom: 12px; }
-.dg-tweaks-grp:last-child { margin-bottom: 0; }
-.dg-tweaks-lb {
-  display: block; font-size: 10px; font-weight: 700;
-  letter-spacing: 0.10em; text-transform: uppercase;
-  color: var(--text-muted); margin-bottom: 6px;
-}
-
-.dg-tweaks-sla { display: inline-flex; align-items: center; gap: 4px; }
-.dg-tweaks-sla button {
-  width: 26px; height: 26px; border-radius: 6px;
-  border: 1px solid var(--border-md); background: var(--surface-1);
-  color: var(--text-secondary); cursor: pointer; font-size: 12px;
-  display: grid; place-items: center;
-}
-.dg-tweaks-sla button:hover { color: var(--text-primary); border-color: var(--border-strong); }
-.dg-tweaks-sla input {
-  width: 56px; height: 26px; text-align: center;
-  background: var(--surface-1); border: 1px solid var(--border-md);
-  border-radius: 6px; color: var(--text-primary);
-  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-}
-.dg-tweaks-sla input::-webkit-outer-spin-button,
-.dg-tweaks-sla input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.dg-tweaks-sla input:focus { outline: none; border-color: var(--accent-500); }
-
-.dg-tweaks-toggle {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 10px 5px 5px; border-radius: 99px;
-  border: 1px solid var(--border-md);
-  background: var(--surface-1); cursor: pointer;
-  font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
-  transition: all 0.15s;
-}
-.dg-tweaks-toggle .knob {
-  width: 28px; height: 16px; border-radius: 99px;
-  background: var(--surface-3); position: relative;
-  transition: background 0.18s;
-}
-.dg-tweaks-toggle .knob::after {
-  content: ''; position: absolute; top: 2px; left: 2px;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: #fff; transition: transform 0.18s;
-}
-.dg-tweaks-toggle.on { color: var(--text-primary); border-color: var(--accent-500); }
-.dg-tweaks-toggle.on .knob { background: var(--accent-500); }
-.dg-tweaks-toggle.on .knob::after { transform: translateX(12px); }
-
-.dg-tweaks-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.dg-tweaks-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 99px;
-  border: 1px solid var(--border-md); background: var(--surface-1);
-  color: var(--text-muted); cursor: pointer;
-  font-size: 11px; font-weight: 500;
-  transition: all 0.15s;
-}
-.dg-tweaks-chip i { font-size: 12px; }
-.dg-tweaks-chip:hover { color: var(--text-primary); border-color: var(--border-strong); }
-.dg-tweaks-chip.on { color: #fff; background: var(--accent-500); border-color: var(--accent-500); }
-
-/* Toggles em coluna */
-.dg-tweaks-toggles { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-
-/* Segmento (radio horizontal) */
-.dg-tweaks-seg {
-  display: flex; gap: 0;
-  border: 1px solid var(--border-md); border-radius: 8px;
-  overflow: hidden; background: var(--surface-1);
-}
-.dg-tweaks-seg-btn {
-  flex: 1; padding: 6px 8px; font-size: 11px; font-weight: 600;
-  border: none; background: transparent; color: var(--text-muted);
-  cursor: pointer; transition: all 0.12s;
-  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  border-right: 1px solid var(--border-md);
-}
-.dg-tweaks-seg-btn:last-child { border-right: none; }
-.dg-tweaks-seg-btn:hover { color: var(--text-primary); background: var(--surface-2); }
-.dg-tweaks-seg-btn.on { color: #fff; background: var(--accent-500); }
-.dg-tweaks-seg-btn i { font-size: 12px; }
-
-/* Swatches de cor */
-.dg-tweaks-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
-.dg-tweaks-sw {
-  width: 24px; height: 24px; border-radius: 50%;
-  border: 2px solid var(--surface-0);
-  box-shadow: 0 0 0 1px var(--border-md);
-  cursor: pointer; padding: 0;
-  transition: transform 0.12s, box-shadow 0.12s;
-}
-.dg-tweaks-sw:hover { transform: scale(1.1); }
-.dg-tweaks-sw.on { box-shadow: 0 0 0 2px var(--text-primary); transform: scale(1.08); }
-
-/* Footer link (atalho admin → mapeamento) */
-.dg-tweaks-foot {
-  margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.dg-tweaks-link {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 8px 10px; border-radius: 8px;
-  background: var(--surface-1); border: 1px solid var(--border-md);
-  color: var(--text-secondary); cursor: pointer;
-  font-size: 11.5px; font-weight: 600; font-family: var(--font-sans);
-  transition: all 0.15s;
-}
-.dg-tweaks-link i { font-size: 13px; }
-.dg-tweaks-link:hover {
-  color: var(--text-primary); border-color: var(--accent-500);
-  background: var(--surface-2);
-}
 
 /* ── Layout variants (dg-grid) ────────────────────────────── */
 .dg-grid.dg-layout-cinema  { grid-template-columns: 1fr; }
@@ -876,17 +741,6 @@ body.dash-exec-mode .dg-kpi-row { gap: 18px; margin-bottom: 22px; }
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.6s infinite linear;
 }
-.dg-grid-sk {
-  display: grid;
-  grid-template-columns: 1.55fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.dg-col-sk {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
 .dg-card-sk {
   background: linear-gradient(90deg, var(--surface-0) 25%, var(--surface-1) 50%, var(--surface-0) 75%);
   background-size: 200% 100%;
@@ -897,17 +751,12 @@ body.dash-exec-mode .dg-kpi-row { gap: 18px; margin-bottom: 22px; }
 
 @media (max-width: 1280px) {
   .dg-kpi-row-sk { grid-template-columns: 1fr 1fr; }
-  .dg-grid-sk { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .dg-kpi-row-sk { grid-template-columns: 1fr; }
 }
 
 /* Card stable heights to prevent CLS */
-.dg-card-critical { min-height: 280px; }
-.dg-card-hourly { min-height: 220px; }
-.dg-card-classification { min-height: 340px; }
-.dg-card-transportadora { min-height: 320px; }
 .dg-card-productivity { min-height: 240px; }
 
 /* ── Dashboard readability refresh ───────────────────────────── */

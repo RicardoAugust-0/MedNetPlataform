@@ -10,7 +10,7 @@ import { usePWA } from '../hooks/usePWA.js';
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { drivers } = useApp();
+  const { drivers, sidebarCollapsed, setSidebarCollapsed } = useApp();
   const { profile, signOut } = useAuth();
   const [query, setQuery]   = useState('');
   const [open,  setOpen]    = useState(false);
@@ -37,12 +37,21 @@ export default function Sidebar() {
   // ⌘K / Ctrl+K
   useEffect(() => {
     const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus(); setOpen(true); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (sidebarCollapsed) setSidebarCollapsed(false);
+        setOpen(true);
+      }
       if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [sidebarCollapsed, setSidebarCollapsed]);
+
+  // Foca a busca assim que ela fica visível (após expandir de um estado colapsado)
+  useEffect(() => {
+    if (open && !sidebarCollapsed) searchRef.current?.focus();
+  }, [open, sidebarCollapsed]);
 
   // Visibilidade por hierarquia de role: operador < líder < admin.
   const myLevel = ROLE_LEVEL[profile?.role] ?? 0;
@@ -78,10 +87,11 @@ export default function Sidebar() {
     }
     const badge = item.id === 'monitor' ? (alertCount > 0 ? alertCount : null) : (item.badge || null);
     navRows.push(
-      <div 
-        key={item.id} 
-        className={'nav-item' + (isItemActive(item) ? ' active' : '')} 
+      <div
+        key={item.id}
+        className={'nav-item' + (isItemActive(item) ? ' active' : '')}
         onClick={() => navigate(item.path)}
+        title={sidebarCollapsed ? item.label : undefined}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -99,20 +109,27 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className="sidebar">
+    <aside className={'sidebar' + (sidebarCollapsed ? ' collapsed' : '')}>
       <div className="sidebar-logo">
-        <svg className="logo-mark" width="34" height="34" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="mn-logo-bg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#9E1A45"/>
-              <stop offset="100%" stopColor="#5A0F25"/>
-            </linearGradient>
-          </defs>
-          <rect width="32" height="32" rx="7" fill="url(#mn-logo-bg)"/>
-          <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
-          <rect x="23" y="5" width="2" height="8" rx="1" fill="#F26931"/>
-          <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
-        </svg>
+        <button
+          className="logo-mark-btn"
+          title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        >
+          <svg className="logo-mark" width="34" height="34" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="mn-logo-bg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#9E1A45"/>
+                <stop offset="100%" stopColor="#5A0F25"/>
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="7" fill="url(#mn-logo-bg)"/>
+            <text x="15" y="23" fontFamily="system-ui,-apple-system,sans-serif" fontSize="19" fontWeight="800" fill="white" textAnchor="middle">M</text>
+            <rect x="23" y="5" width="2" height="8" rx="1" fill="#F26931"/>
+            <rect x="20" y="8" width="8" height="2" rx="1" fill="#F26931"/>
+          </svg>
+          <i className={`ti ${sidebarCollapsed ? 'ti-chevron-right' : 'ti-chevron-left'} logo-mark-chevron`}></i>
+        </button>
         <div className="logo-text">
           <div className="logo-grupo">GRUPO</div>
           <div className="logo-name">Med<span className="net">Net</span></div>
@@ -122,7 +139,11 @@ export default function Sidebar() {
 
       {/* Search */}
       <div className="sidebar-search" style={{ position: 'relative' }}>
-        <div className="sidebar-search-wrap">
+        <div
+          className="sidebar-search-wrap"
+          title={sidebarCollapsed ? 'Buscar (Ctrl+K)' : undefined}
+          onClick={() => { if (sidebarCollapsed) { setSidebarCollapsed(false); setOpen(true); } }}
+        >
           <i className="ti ti-search"></i>
           <input
             ref={searchRef}
@@ -189,17 +210,17 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         {isInstallable && (
-          <div style={{ padding: '0 12px', marginBottom: 12 }}>
+          <div className="sidebar-install" style={{ padding: '0 12px', marginBottom: 12 }}>
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: 13, gap: 6 }} onClick={install}>
               <i className="ti ti-download"></i> Instalar App
             </button>
           </div>
         )}
-        <div 
-          className="user-card" 
-          style={{ cursor: 'pointer' }} 
-          onClick={() => navigate('/perfil')} 
-          title="Abrir perfil"
+        <div
+          className="user-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/perfil')}
+          title={sidebarCollapsed ? `${profile?.nome || 'Perfil'} — abrir perfil` : 'Abrir perfil'}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -218,10 +239,12 @@ export default function Sidebar() {
             <div className="user-name">{profile?.nome || '—'}</div>
             <div className="user-role">{profile?.cargo || 'Operador'}</div>
           </div>
-          <button title="Sair" onClick={e => { e.stopPropagation(); signOut(); }}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center' }}>
-            <i className="ti ti-logout" style={{ fontSize: 16 }}></i>
-          </button>
+          {!sidebarCollapsed && (
+            <button title="Sair" onClick={e => { e.stopPropagation(); signOut(); }}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center' }}>
+              <i className="ti ti-logout" style={{ fontSize: 16 }}></i>
+            </button>
+          )}
         </div>
       </div>
     </aside>

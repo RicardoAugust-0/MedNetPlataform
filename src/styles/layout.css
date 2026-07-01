@@ -37,6 +37,83 @@ body {
   position: relative;
   z-index: 10;
   border-right: 1px solid rgba(255,255,255,0.04);
+  transition: width 0.18s ease, min-width 0.18s ease;
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-w-collapsed);
+  min-width: var(--sidebar-w-collapsed);
+}
+
+.logo-mark-btn {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 9px;
+}
+.logo-mark-btn .logo-mark {
+  transition: opacity 0.15s;
+}
+.logo-mark-chevron {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(15, 3, 6, 0.55);
+  border-radius: 9px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.logo-mark-btn:hover .logo-mark-chevron {
+  opacity: 1;
+}
+
+/* ── Estado colapsado: só ícones, sem rótulos ── */
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .sidebar-search-kbd,
+.sidebar.collapsed .sidebar-search input,
+.sidebar.collapsed .nav-group-label,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .user-meta,
+.sidebar.collapsed .sidebar-install {
+  display: none;
+}
+.sidebar.collapsed .sidebar-logo {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.sidebar.collapsed .sidebar-search-wrap {
+  justify-content: center;
+  cursor: pointer;
+}
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.sidebar.collapsed .nav-item .nav-icon {
+  width: auto;
+}
+.sidebar.collapsed .nav-item .nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 14px;
+  padding: 0 4px;
+  font-size: 9px;
+  min-width: 14px;
+  text-align: center;
+}
+.sidebar.collapsed .user-card {
+  justify-content: center;
+  padding: 8px 0;
 }
 
 .sidebar-logo {
@@ -286,6 +363,8 @@ body {
 .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger-500); color: var(--danger-600); }
 .btn-warning { color: var(--warning-600); }
 .btn-warning:hover { background: var(--warning-bg); border-color: var(--warning-500); color: var(--warning-600); }
+.btn-wa { background: #1FA855; color: #fff; border-color: transparent; }
+.btn-wa:hover { background: #178a45; }
 
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--surface-2); }

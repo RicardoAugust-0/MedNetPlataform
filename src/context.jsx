@@ -22,6 +22,7 @@ export function AppProvider({ children }) {
   const [mode,        setModeState]        = useState(() => load('mode',     'pleno'));
   const [vibe,        setVibeState]        = useState(() => load('vibe',     'sobrio'));
   const [rhythm,      setRhythmState]      = useState(() => load('rhythm',   'operacional'));
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => load('sidebarCollapsed', false));
 
   // Setters memoizados — referência estável evita re-render dos consumers.
   const setPlatformId  = useCallback((v) => { setPlatformIdState(v);  save('platformId',  v); }, []);
@@ -31,6 +32,7 @@ export function AppProvider({ children }) {
   const setMode        = useCallback((v) => { setModeState(v);        save('mode',        v); }, []);
   const setVibe        = useCallback((v) => { setVibeState(v);        save('vibe',        v); }, []);
   const setRhythm      = useCallback((v) => { setRhythmState(v);      save('rhythm',      v); }, []);
+  const setSidebarCollapsed = useCallback((v) => { setSidebarCollapsedState(v); save('sidebarCollapsed', v); }, []);
 
   // Sem useMemo no value, todo consumer de useApp() re-renderiza a cada render do Provider.
   const value = useMemo(() => ({
@@ -43,6 +45,7 @@ export function AppProvider({ children }) {
     mode, setMode,
     vibe, setVibe,
     rhythm, setRhythm,
+    sidebarCollapsed, setSidebarCollapsed,
     sheetHistory,
   }), [
     drivers, driversLoading, driversLoadedAt, reloadDrivers, lastImportedAt,
@@ -54,6 +57,7 @@ export function AppProvider({ children }) {
     mode, setMode,
     vibe, setVibe,
     rhythm, setRhythm,
+    sidebarCollapsed, setSidebarCollapsed,
     sheetHistory,
   ]);
 

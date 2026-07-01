@@ -2,20 +2,20 @@ import { useState, useEffect } from 'react';
 
 export function ElapsedTimer({ since }) {
   const [mins, setMins] = useState(() => since ? Math.floor((Date.now() - new Date(since)) / 60000) : 0);
-  
+
   useEffect(() => {
     if (!since) return;
     const id = setInterval(() => setMins(Math.floor((Date.now() - new Date(since)) / 60000)), 30000);
     return () => clearInterval(id);
   }, [since]);
-  
+
   if (!since || mins < 2) return null;
-  const color = mins >= 20 ? 'var(--danger-500)' : mins >= 8 ? 'var(--warning-500)' : 'var(--text-muted)';
+  const level = mins >= 20 ? 'danger' : mins >= 8 ? 'warning' : 'muted';
   const label = mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 > 0 ? ` ${mins % 60}min` : ''}` : `${mins}min`;
-  
+
   return (
-    <span style={{ fontSize: 10.5, color, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)' }}>
-      <i className="ti ti-clock" style={{ fontSize: 9, marginRight: 2 }}></i>{label} na fila
+    <span className={`d-chip d-chip-${level}`}>
+      <i className="ti ti-clock"></i>{label} na fila
     </span>
   );
 }

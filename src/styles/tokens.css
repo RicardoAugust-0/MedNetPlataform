@@ -48,6 +48,7 @@
 
   /* ── Geometria ── */
   --sidebar-w: 232px;
+  --sidebar-w-collapsed: 72px;
   --topbar-h: 56px;
   --density: 1; /* multiplicador de spacing — Tweaks */
 }
