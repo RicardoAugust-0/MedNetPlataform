@@ -1,6 +1,24 @@
 import { AnimatedNumber } from './_shared';
 
-export function KPI({ icon, label, value, sub, trend, trendDir, hero, accent, progress, pulse, onClick, active, compareValue, compareLabel = 'ontem', executive }) {
+export function KPI({
+  icon,
+  label,
+  value,
+  sub,
+  description,
+  source,
+  trend,
+  trendDir,
+  hero,
+  accent,
+  progress,
+  pulse,
+  onClick,
+  active,
+  compareValue,
+  compareLabel = 'ontem',
+  executive,
+}) {
   // Calcula delta automaticamente quando compareValue é fornecido
   let autoTrend = trend;
   let autoTrendDir = trendDir;
@@ -25,7 +43,11 @@ export function KPI({ icon, label, value, sub, trend, trendDir, hero, accent, pr
         <div className="dg-kpi-ic" style={!hero && accent ? { color: accent, background: `color-mix(in srgb, ${accent} 14%, transparent)` } : null}>
           <i className={`ti ${icon}`}></i>
         </div>
-        <div className="dg-kpi-label">{label}</div>
+        <div className="dg-kpi-title">
+          <div className="dg-kpi-label">{label}</div>
+          {description && <div className="dg-kpi-desc">{description}</div>}
+        </div>
+        {source && <span className="dg-kpi-source">{source}</span>}
         {onClick && <i className="ti ti-chevron-right" style={{ marginLeft: 'auto', fontSize: 14, color: hero ? 'rgba(255,255,255,0.5)' : 'var(--text-muted)' }}></i>}
       </div>
       <div className="dg-kpi-value">

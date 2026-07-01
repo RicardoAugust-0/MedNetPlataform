@@ -237,6 +237,10 @@ export default function Dashboard() {
     return `Atualizado há ${Math.floor(diffH / 24)}d`;
   })();
 
+  const fechadosHojeValue = platRaw ? platRaw.total : m.encerradosPlataforma;
+  const fechadosHojeSource = platRaw ? `Fonte: ${platRaw.platform}` : "Fonte: plataforma";
+  const operacaoResumo = `${m.totalAlertas} alertas no dia: ${m.fechados} resolvidos e ${m.emAberto} em aberto`;
+
   // ── Tweaks popover
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tweaksRef = useRef(null);
@@ -327,7 +331,9 @@ export default function Dashboard() {
       {/* Saudação */}
       <div className="dg-greet">
         <div>
+          <div className="dg-eyebrow">Painel operacional</div>
           <h1>Gestão à Vista</h1>
+          <p className="dg-greet-summary">{operacaoResumo}</p>
           <div className="meta">
             <span>
               <i
@@ -743,8 +749,10 @@ export default function Dashboard() {
           hero
           icon="ti-layers-subtract"
           label="Volume do dia"
+          description="Resolvidos + fila aberta"
           value={m.totalAlertas}
           sub={`encerrados + em aberto · ${m.pctConcluido}% concluído`}
+          source="Plataforma + planilha"
           compareValue={m.ONTEM?.total}
           progress={m.pctConcluido}
           onClick={() => setActiveKpi(activeKpi === "total" ? null : "total")}
@@ -753,11 +761,13 @@ export default function Dashboard() {
         />
         <KPI
           icon="ti-circle-check"
-          label="Fechados hoje"
-          value={platRaw ? platRaw.total : m.encerradosPlataforma}
+          label="Resolvidos hoje"
+          description="Finalizados na plataforma"
+          value={fechadosHojeValue}
           sub={platRaw
             ? `eventos processados · ${platRaw.platform}`
             : `${m.pctConcluidoPlataforma}% do volume · plataforma`}
+          source={fechadosHojeSource}
           compareValue={m.ONTEM?.fechados}
           accent="var(--success-500)"
           progress={platRaw ? null : m.pctConcluidoPlataforma}
@@ -765,12 +775,14 @@ export default function Dashboard() {
         <KPI
           icon="ti-clock-hour-4"
           label="Em aberto agora"
+          description="Motoristas aguardando ação"
           value={m.emAberto}
           sub={
             m.slaVencidos > 0
               ? `${m.slaVencidos} vencido${m.slaVencidos > 1 ? "s" : ""} · ${m.criticos.length} críticos`
               : `${m.criticos.length} em estado crítico`
           }
+          source="Fila atual"
           compareValue={m.ONTEM?.emAberto}
           accent="var(--warning-500)"
           pulse={m.slaVencidos > 0}
@@ -780,8 +792,10 @@ export default function Dashboard() {
         <KPI
           icon="ti-headset"
           label="Intervenções realizadas"
+          description="Atendimentos registrados"
           value={m.intervencoesRegistradas}
           sub={`${m.sheetSolicitadasHoje} solicitadas · ${m.encerradosPlataforma} plataforma · ${m.sheetIntervencoesHoje} planilha`}
+          source="Equipe + planilha"
           accent="var(--info-500, #2A8DD9)"
           onClick={() =>
             setActiveKpi(activeKpi === "intervencoes" ? null : "intervencoes")

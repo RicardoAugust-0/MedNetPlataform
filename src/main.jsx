@@ -13,6 +13,7 @@ import "./styles/embedded-sheet.css";
 import "./styles/layout.css";
 import "./styles/modules.css";
 import "./styles/tokens.css";
+import "./styles/visual-refresh.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
