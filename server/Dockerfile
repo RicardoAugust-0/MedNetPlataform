@@ -9,10 +9,11 @@ COPY server/package.json ./server/
 WORKDIR /app/server
 RUN npm install
 
-# Copy shared code (needed for fatigueParser.js relative import)
+# Copy shared code (needed for fatigueParser.js and crosscheck/utils.js relative imports)
 WORKDIR /app
 COPY package.json ./
 COPY src/utils/fatigueParser.js ./src/utils/
+COPY src/modules/crosscheck/utils.js ./src/modules/crosscheck/
 COPY server/ ./server/
 
 # Set working directory to server for execution
