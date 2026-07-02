@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { parseCSV, readHeaders, applyPlatformMap } from '../src/utils/fatigueParser.js';
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
+import { runAutoCrossCheck } from './auto-crosscheck.js';
 
 // Mesmo id semeado em migration_automations.sql para Bot_HorizonScraping.
 const BOT_HORIZON_SCRAPING_AUTOMATION_ID = 'c1b94e82-e3e7-4c74-bfd4-3a56df93df24';
@@ -11,7 +12,10 @@ const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
 // Autenticação máquina-a-máquina para o robô Playwright/N8N na VPS — mesmo
 // espírito do gate em server/ai-chat-routes.js (POST /api/ai/internal/generate-pdf),
 // comparando um segredo fixo via header Authorization: Bearer.
-function requireHorizonBotToken(req, res, next) {
+// Exportado porque server/maxtrack-routes.js reusa o mesmo segredo: é o
+// mesmo robô/VPS confiável (bots_playwright) autenticando em qualquer rota
+// de ingestão do MedNet, não um segredo exclusivo da Horizon apesar do nome.
+export function requireHorizonBotToken(req, res, next) {
   const expected = process.env.HORIZON_BOT_TOKEN;
   const header = req.headers.authorization || '';
   const incoming = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
@@ -78,6 +82,12 @@ export function registerHorizonRoutes(app, supabase) {
         } catch (logErr) {
           console.error('[Horizon Ingest] Falha ao gravar automation_logs:', logErr);
         }
+
+        try {
+          await runAutoCrossCheck(supabase, 'horizon');
+        } catch (crossCheckErr) {
+          console.error('[Horizon Ingest] Falha no Auto Cross-Check:', crossCheckErr);
+        }
       }
     } catch (err) {
       console.error('[Horizon Ingest] Erro ao processar importação:', err);
@@ -134,6 +144,61 @@ export function registerHorizonRoutes(app, supabase) {
       return res.status(200).json(data || []);
     } catch (err) {
       console.error('[Horizon Credentials] Erro:', err);
+      return res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // GET /api/horizon/treatment-queue — o Bot_HorizonTreatment (B3) lê as
+  // pendências geradas pelo Auto Cross-Check (server/auto-crosscheck.js)
+  // para replicar o mesmo veredito do MaxTrack na Horizon.
+  app.get('/api/horizon/treatment-queue', requireHorizonBotToken, async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('horizon_treatment_queue')
+        .select('id, placa, nome, ocorrido_em, classificacao, motivo_raw, intervencao_sugerida, tentativas')
+        .eq('status', 'pending')
+        .order('ocorrido_em', { ascending: true })
+        .limit(500);
+      if (error) throw error;
+
+      return res.status(200).json(data || []);
+    } catch (err) {
+      console.error('[Horizon Treatment Queue] Erro ao listar:', err);
+      return res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // POST /api/horizon/treatment-queue/:id/resolve — o robô reporta o
+  // resultado de cada tentativa de tratativa na Horizon.
+  const TREATMENT_RESOLVE_STATUSES = ['done', 'error', 'no_horizon_match'];
+  app.post('/api/horizon/treatment-queue/:id/resolve', requireHorizonBotToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, erro } = req.body || {};
+      if (!status || !TREATMENT_RESOLVE_STATUSES.includes(status)) {
+        return res.status(400).json({ error: `status deve ser um de: ${TREATMENT_RESOLVE_STATUSES.join(', ')}` });
+      }
+
+      const update = { status, updated_at: new Date().toISOString() };
+      if (status === 'done') {
+        update.erro = null;
+      } else {
+        update.erro = erro || null;
+        const { data: atual, error: errAtual } = await supabase
+          .from('horizon_treatment_queue')
+          .select('tentativas')
+          .eq('id', id)
+          .single();
+        if (errAtual) throw errAtual;
+        update.tentativas = (atual?.tentativas || 0) + 1;
+      }
+
+      const { error } = await supabase.from('horizon_treatment_queue').update(update).eq('id', id);
+      if (error) throw error;
+
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[Horizon Treatment Queue] Erro ao resolver:', err);
       return res.status(500).json({ error: err.message || String(err) });
     }
   });

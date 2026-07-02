@@ -90,7 +90,12 @@ export const PLATFORM_COLUMN_MAPS = {
     evidence:       ['Possui evidência?'],
     treatStart:     ['Início da Tratativa'],
     treatEnd:       ['Data finalização evento'],
-    description:    ['Categoria', 'Descrição'],
+    // 'Motivo' primeiro: é a coluna real do export "Fechados" (lista de tags
+    // tipo "Fadiga Leve;Intervenção com motorista;") — 'Categoria'/'Descrição'
+    // não existem no export real, ficam só como fallback teórico. O Auto
+    // Cross-Check (server/auto-crosscheck.js) lê esse campo pra sugerir a
+    // opção de "Intervenção" na Horizon (ver PLANO_AUTOMACAO_HORIZON.md, B3).
+    description:    ['Motivo', 'Categoria', 'Descrição'],
   },
   omnilink: {
     datetime:       ['Data da ocorrência', 'Data de cadastro'],

@@ -6,6 +6,7 @@ import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerWhatsappRoutes } from './whatsapp-routes.js';
 import { registerAiChatRoutes } from './ai-chat-routes.js';
 import { registerHorizonRoutes } from './horizon-routes.js';
+import { registerMaxtrackRoutes } from './maxtrack-routes.js';
 
 // Load env variables from root and server directory
 dotenv.config({ path: '../.env' });
@@ -44,6 +45,7 @@ registerAnalyticsRoutes(app, supabase);
 registerWhatsappRoutes(app, supabase);
 registerAiChatRoutes(app, supabase);
 registerHorizonRoutes(app, supabase);
+registerMaxtrackRoutes(app, supabase);
 
 const server = app.listen(PORT, () => {
   console.log(`[MedNet Backend] Servidor rodando na porta ${PORT}`);
