@@ -83,10 +83,16 @@ export function resolveFrotaChart(d, resolveMonitorName, aliases) {
   return d;
 }
 
+// Quantos dias (inclusive) entre duas datas 'YYYY-MM-DD'.
+function daySpan(startDate, endDate) {
+  return Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+}
+
 // Deriva os parâmetros de tempo/bucket a partir do filtro de mês do front.
-// - mês específico 'YYYY-MM' : buckets diários, janela = mês, months = base_all.
-// - 'custom' + range        : buckets mensais, janela = range, months = janela.
-// - 'all' (ou vazio)        : buckets mensais, sem janela, months = base_all.
+// - mês específico 'YYYY-MM'      : buckets diários, janela = mês, months = base_all.
+// - 'custom' + range <= 31 dias   : buckets diários, janela = range, months = base_all.
+// - 'custom' + range > 31 dias    : buckets mensais, janela = range, months = janela.
+// - 'all' (ou vazio)              : buckets mensais, sem janela, months = base_all.
 export function deriveDateParams(month, startDate, endDate) {
   const isSpecific = month && month !== 'all' && month !== 'custom' && month.includes('-');
   if (isSpecific) {
@@ -94,7 +100,9 @@ export function deriveDateParams(month, startDate, endDate) {
     return { from, to, daily: true, windowMonths: false };
   }
   if (month === 'custom' && startDate && endDate) {
-    return { from: spDayStart(startDate), to: spDayEnd(endDate), daily: false, windowMonths: true };
+    const span = daySpan(startDate, endDate);
+    const daily = span > 0 && span <= 31;
+    return { from: spDayStart(startDate), to: spDayEnd(endDate), daily, windowMonths: !daily };
   }
   return { from: null, to: null, daily: false, windowMonths: false };
 }

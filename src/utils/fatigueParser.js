@@ -358,7 +358,11 @@ export function detect(headers, platformHint, fileName) {
 }
 
 // ── Agregação principal ──
-export function aggregate(headers, dataRows, mapping, filterMonth = null) {
+// dailyRange: { start, end } ('YYYY-MM-DD') — quando presente (e filterMonth
+// ausente), agrupa por dia dentro do intervalo em vez de por mês. Usado no
+// filtro de período customizado com <= 31 dias (ver customDailyRange em
+// server/analytics-routes.js e o mesmo corte no caminho RPC).
+export function aggregate(headers, dataRows, mapping, filterMonth = null, dailyRange = null) {
   const idx = {};
   Object.keys(mapping).forEach((k) => { idx[k] = mapping[k] ? headers.indexOf(mapping[k]) : -1; });
   const get = (row, k) => (idx[k] > -1 ? row[idx[k]] : '');
@@ -393,15 +397,27 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
   }
 
   // 3. Determinar chaves de tempo e inicializar contadores
+  const isDaily = !!filterMonth || !!dailyRange;
   let timeKeys = [];
   if (filterMonth) {
-    // Agrupamento diário
+    // Agrupamento diário (mês específico)
     const [yearStr, monthStr] = filterMonth.split('-');
     const year = parseInt(yearStr);
     const month = parseInt(monthStr);
     const numDays = new Date(year, month, 0).getDate();
     for (let i = 1; i <= numDays; i++) {
       timeKeys.push(`${yearStr}-${monthStr}-${String(i).padStart(2, '0')}`);
+    }
+  } else if (dailyRange) {
+    // Agrupamento diário (período customizado curto)
+    const cursor = new Date(dailyRange.start + 'T00:00:00');
+    const end = new Date(dailyRange.end + 'T00:00:00');
+    while (cursor <= end) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const dd = String(cursor.getDate()).padStart(2, '0');
+      timeKeys.push(`${y}-${m}-${dd}`);
+      cursor.setDate(cursor.getDate() + 1);
     }
   } else {
     // Agrupamento mensal
@@ -457,7 +473,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
       if (!minD || d < minD) minD = d;
       if (!maxD || d > maxD) maxD = d;
 
-      const tk = filterMonth
+      const tk = isDaily
         ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
         : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 
@@ -483,7 +499,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
     const t = tRaw || 'Não informado';
     typeTotal[t] = (typeTotal[t] || 0) + 1;
     if (d) {
-      const tk = filterMonth
+      const tk = isDaily
         ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
         : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 
@@ -518,7 +534,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
     if (idx.treatEnd > -1 && d) { const te = toDate(get(row, 'treatEnd')); if (te) { const m = (te - d) / 60000; if (m >= 0 && m < 4320) treatEndDiffs.push(m); } }
   }
 
-  const sortedKeys = filterMonth ? timeKeys : Object.keys(timeSet).sort();
+  const sortedKeys = isDaily ? timeKeys : Object.keys(timeSet).sort();
   const valores = sortedKeys.map((tk) => timeSet[tk] || 0);
   const variacao = valores.map((v, i) => i === 0 ? null : (valores[i - 1] ? +(((v - valores[i - 1]) / valores[i - 1]) * 100).toFixed(1) : null));
 
@@ -544,7 +560,7 @@ export function aggregate(headers, dataRows, mapping, filterMonth = null) {
   const t = total || 1;
   const velMed = median(velAll);
 
-  const labelFn = filterMonth
+  const labelFn = isDaily
     ? (tk) => { const [, m, d] = tk.split('-'); return d + '/' + m; }
     : (tk) => { const [y, m] = tk.split('-'); return MESES[+m - 1] + '/' + y.slice(2); };
   

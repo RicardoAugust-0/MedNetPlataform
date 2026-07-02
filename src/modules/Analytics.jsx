@@ -184,6 +184,8 @@ export default function Analytics() {
             noData={state.noData}
             selectedMonth={state.selectedMonth}
             formatMonthKey={state.formatMonthKey}
+            startDate={state.startDate}
+            endDate={state.endDate}
             selectedSeverity={state.selectedSeverity}
             setSelectedSeverity={state.setSelectedSeverity}
             selectedClassification={state.selectedClassification}

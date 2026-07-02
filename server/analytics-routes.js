@@ -164,6 +164,14 @@ async function getRawEvents(supabase, platformId) {
   return events;
 }
 
+// Mesmo corte de granularidade do caminho RPC (server/analytics-rpc.js
+// deriveDateParams): período customizado <= 31 dias vira bucket diário.
+function customDailyRange(month, startDate, endDate) {
+  if (month !== 'custom' || !startDate || !endDate) return null;
+  const span = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+  return (span > 0 && span <= 31) ? { start: startDate, end: endDate } : null;
+}
+
 function excludeLeve(events) {
   return events.filter((ev) => ev.severidade !== 'Leve');
 }
@@ -463,7 +471,7 @@ export function registerAnalyticsRoutes(app, supabase) {
             }
           }
 
-          const agg = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
+          const agg = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month, customDailyRange(month, startDate, endDate));
           const platformName = pid === 'omnilink' ? 'OmniLink'
             : pid === 'maxtrack' ? 'MaxTrack'
             : pid.toUpperCase();
@@ -478,7 +486,7 @@ export function registerAnalyticsRoutes(app, supabase) {
           };
         });
 
-        const combinedD = aggregate(HEADERS, combinedRawRows, MAPPING, month === 'all' || month === 'custom' ? null : month);
+        const combinedD = aggregate(HEADERS, combinedRawRows, MAPPING, month === 'all' || month === 'custom' ? null : month, customDailyRange(month, startDate, endDate));
         let combinedPrevD = null;
         if (prevMonthKey) {
           combinedPrevD = aggregate(HEADERS, combinedRawRowsPrev, MAPPING, prevMonthKey);
@@ -493,7 +501,7 @@ export function registerAnalyticsRoutes(app, supabase) {
         const rawRows = formatDataRows(events, aliases);
 
         const filtered = filterRows(rawRows, { company, severity, month, startDate, endDate, classification, eventType, uf });
-        const d = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month);
+        const d = aggregate(HEADERS, filtered, MAPPING, month === 'all' || month === 'custom' ? null : month, customDailyRange(month, startDate, endDate));
 
         let prevD = null;
         if (month && month !== 'all' && month !== 'custom' && month.indexOf('-') > -1) {

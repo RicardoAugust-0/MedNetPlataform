@@ -10,6 +10,8 @@ export default function FadigaCharts({
   noData,
   selectedMonth,
   formatMonthKey,
+  startDate,
+  endDate,
   selectedSeverity,
   setSelectedSeverity,
   selectedClassification,
@@ -58,6 +60,8 @@ export default function FadigaCharts({
           noData={noData}
           selectedMonth={selectedMonth}
           formatMonthKey={formatMonthKey}
+          startDate={startDate}
+          endDate={endDate}
         />
       </div>
 
@@ -72,6 +76,8 @@ export default function FadigaCharts({
             d={d}
             noData={noData}
             selectedMonth={selectedMonth}
+            startDate={startDate}
+            endDate={endDate}
             selectedSeverity={selectedSeverity}
             setSelectedSeverity={setSelectedSeverity}
           />

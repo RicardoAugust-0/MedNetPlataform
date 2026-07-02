@@ -2,7 +2,15 @@ import { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { C, fmt, kf, _ax } from './ChartUtils.js';
 
-export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey }) {
+// Custom range <= 31 dias mostra granularidade diária (mesmo corte usado no backend,
+// ver deriveDateParams em server/analytics-rpc.js) — mantém front/back em sincronia.
+function isCustomDaily(selectedMonth, startDate, endDate) {
+  if (selectedMonth !== 'custom' || !startDate || !endDate) return false;
+  const span = Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
+  return span > 0 && span <= 31;
+}
+
+export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey, startDate, endDate }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -73,13 +81,21 @@ export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey }) {
     };
   }, [d, noData, selectedMonth]);
 
+  const isSpecificMonth = selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom';
+  const customDaily = isCustomDaily(selectedMonth, startDate, endDate);
+  const isDaily = isSpecificMonth || customDaily;
+
+  let title = 'Alertas por mês';
+  if (isSpecificMonth) title = `Alertas por dia em ${formatMonthKey(selectedMonth)}`;
+  else if (customDaily) title = `Alertas por dia · ${d?.meta?.periodo ? `${d.meta.periodo[0]} a ${d.meta.periodo[1]}` : `${startDate} a ${endDate}`}`;
+
   return (
     <div data-card className="card" style={{ padding: '18px 18px 14px' }}>
       <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-        {selectedMonth && selectedMonth !== 'all' ? `Alertas por dia em ${formatMonthKey(selectedMonth)}` : 'Alertas por mês'}
+        {title}
       </h4>
       <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-        {selectedMonth && selectedMonth !== 'all'
+        {isDaily
           ? 'Contagem diária de eventos e variação percentual dia a dia.'
           : 'Contagem consolidada de eventos mensais e variação em relação ao mês anterior.'}
       </p>
@@ -97,7 +113,7 @@ export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey }) {
   );
 }
 
-export function VolumeCriticidadeCard({ d, noData, selectedMonth, selectedSeverity, setSelectedSeverity }) {
+export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, endDate, selectedSeverity, setSelectedSeverity }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -165,8 +181,8 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, selectedSeveri
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Volume por criticidade</h4>
           <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-            {selectedMonth && selectedMonth !== 'all'
-              ? 'Composição da severidade ao longo dos dias do mês.'
+            {(selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom') || isCustomDaily(selectedMonth, startDate, endDate)
+              ? 'Composição da severidade ao longo dos dias do período.'
               : 'Composição da severidade ao longo dos meses.'}
           </p>
         </div>
