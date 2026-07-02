@@ -629,13 +629,18 @@ pelo usuário. Código novo:
   consistente com B1/B2), `event_type=null` — reflete a arquitetura real
   (polling da fila via Auto Cross-Check, não mais evento manual).
 
+**Migration de correção e N8N: concluídos em 2026-07-02.** Migration
+`20260702140000_fix_horizon_treatment_automation.sql` aplicada em
+produção. Workflow N8N do B3 montado (Schedule 15min → POST
+`/automacoes/BOT_HorizonTreatment` com `background=true` → Wait → GET
+`/tasks/{task_id}`), duplicado do padrão já validado do B1/B2.
+
+**Arquitetura completa fechada:** B1 (Horizon) + B2 (MaxTrack) alimentam
+`driver_events` → Auto Cross-Check popula `horizon_treatment_queue` →
+B3 consome a fila e replica a tratativa na Horizon. Todas as 4 peças
+têm código pronto e agendadas no N8N.
+
 **Pendente pra próxima sessão:**
-- Aplicar a migration `20260702140000_fix_horizon_treatment_automation.sql`
-  no Supabase real.
-- Configurar `MEDNET_API_BASE`/`HORIZON_BOT_TOKEN`/`TWOCAPTCHA_API_KEY` no
-  `.env` da VPS pro robô novo (mesmas variáveis do B1, já devem estar
-  configuradas) e registrar `BOT_HorizonTreatment` no N8N (mesmo padrão
-  de agendamento do B1/B2).
 - Rodar o B3 pela primeira vez em produção com uma pendência real pra
   confirmar o comportamento pós-"Finalizar" (não testável sem
   side-effect real na Horizon) — hoje o bot só assume sucesso se o modal

@@ -21,7 +21,6 @@ export const NAV_ITEMS = [
   { id: 'notas',      label: 'Bloco de Notas',   icon: 'ti-file-text',       group: 'Conhecimento', path: '/notas' },
   { id: 'links',      label: 'Links Rápidos',    icon: 'ti-link',            group: 'Conhecimento', path: '/links' },
   // GESTÃO — ferramentas avançadas (Líder+); fora do menu do operador comum
-  { id: 'crosscheck', label: 'Cross-Check',      icon: 'ti-list-check',      group: 'Gestão',       path: '/crosscheck',  minRole: 'lider' },
   { id: 'automacoes', label: 'Automações',       icon: 'ti-webhook',         group: 'Gestão',       path: '/automacoes',  minRole: 'lider' },
   { id: 'aichat',     label: 'Chat IA',          icon: 'ti-messages',        group: 'Gestão',       path: '/chat',        minRole: 'admin' },
   { id: 'admin',      label: 'Administração',    icon: 'ti-shield',          group: 'Gestão',       path: '/admin',       minRole: 'admin' },
@@ -51,7 +50,6 @@ export const PANEL_TITLES = {
   'admin/auditoria':   { t: 'Auditoria',        s: 'Trilha global de tratativas e atendimentos registrados' },
   analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
   relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
-  crosscheck: { t: 'Cross-Check',           s: 'Comparar alertas entre plataformas' },
 };
 
 export const MOCK_DRIVERS = [

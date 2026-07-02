@@ -25,7 +25,6 @@ const AdminAuditoria = lazy(() => import("./modules/admin/AdminAuditoria.jsx"));
 const AdminAiChat = lazy(() => import("./modules/admin/AiChatTab.jsx"));
 const Agenda = lazy(() => import("./modules/Agenda.jsx"));
 const Analytics = lazy(() => import("./modules/Analytics.jsx"));
-const CrossCheck = lazy(() => import("./modules/CrossCheck.jsx"));
 const Dashboard = lazy(() => import("./modules/Dashboard.jsx"));
 const DossiesPage = lazy(() => import("./modules/DossiesPage.jsx"));
 const Links = lazy(() => import("./modules/Links.jsx"));
@@ -154,10 +153,6 @@ function AppShell() {
                   <Route path="/dossies" element={<Navigate to="/dossies/clinico" replace />} />
                   <Route path="/dossies/:tab" element={<DossiesPage />} />
                   <Route path="/agenda" element={<Agenda />} />
-                  <Route
-                    path="/crosscheck"
-                    element={<RoleGuard min="lider"><CrossCheck /></RoleGuard>}
-                  />
                   <Route
                     path="/chat"
                     element={<AdminGuard><AdminAiChat /></AdminGuard>}
