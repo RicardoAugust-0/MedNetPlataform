@@ -281,6 +281,12 @@ body {
   padding: 0 24px;
   gap: 14px;
   flex-shrink: 0;
+  /* visual-refresh.css aplica backdrop-filter aqui, o que cria um stacking
+     context isolado no topbar — sem z-index próprio, ele pinta atrás do
+     .content-area (que vem depois no DOM), prendendo qualquer dropdown
+     interno (ex: notificações) atrás da página mesmo com z-index alto. */
+  position: relative;
+  z-index: 50;
 }
 .topbar-brand {
   display: flex; align-items: center; gap: 10px;

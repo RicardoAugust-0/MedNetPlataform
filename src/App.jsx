@@ -22,7 +22,6 @@ const AdminIA = lazy(() => import("./modules/admin/AiCredentials.jsx"));
 const AdminSistema = lazy(() => import("./modules/admin/SistemaLayout.jsx"));
 const AdminManutencao = lazy(() => import("./modules/admin/SistemaManutencao.jsx"));
 const AdminLimpeza = lazy(() => import("./modules/admin/SistemaLimpeza.jsx"));
-const AdminAuditoria = lazy(() => import("./modules/admin/AdminAuditoria.jsx"));
 const AdminAiChat = lazy(() => import("./modules/admin/AiChatTab.jsx"));
 const Agenda = lazy(() => import("./modules/Agenda.jsx"));
 const Analytics = lazy(() => import("./modules/Analytics.jsx"));

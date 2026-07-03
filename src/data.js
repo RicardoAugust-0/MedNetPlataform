@@ -47,7 +47,6 @@ export const PANEL_TITLES = {
   'admin/integracoes': { t: 'Integrações',      s: 'OmniLink, credenciais e mapeamento de transportadoras' },
   'admin/ia':          { t: 'IA & Parsing',     s: 'Provedores, modelos e chaves de API' },
   'admin/sistema':     { t: 'Sistema',          s: 'Modo manutenção e limpeza de histórico' },
-  'admin/auditoria':   { t: 'Auditoria',        s: 'Trilha global de tratativas e atendimentos registrados' },
   analytics:  { t: 'Analytics',              s: 'Análise de reincidência e métricas da operação' },
   relatorios: { t: 'Relatórios IA',          s: 'Relatórios executivos gerados por IA para reuniões com transportadoras' },
 };
