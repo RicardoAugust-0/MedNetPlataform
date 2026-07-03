@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Modal from '../../components/Modal';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useToast } from '../../hooks/useToast.jsx';
 import { supabase } from '../../supabase.js';
@@ -596,18 +597,17 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
 
       {/* MODAL: START NEW CONVERSATION */}
       {showNewChatModal && (
-        <div className="modal-overlay open" onClick={() => setShowNewChatModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '400px' }}>
+        <Modal open onClose={() => setShowNewChatModal(false)} width={400} labelledBy="new-chat-modal-title">
             <div className="modal-header">
-              <div className="modal-title"><i className="ti ti-message-plus"></i> Abrir Nova Conversa</div>
+              <div className="modal-title" id="new-chat-modal-title"><i className="ti ti-message-plus"></i> Abrir Nova Conversa</div>
               <button className="btn-icon" onClick={() => setShowNewChatModal(false)}><i className="ti ti-x"></i></button>
             </div>
             <form onSubmit={handleOpenNewChat}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div className="form-group">
                   <label className="form-label">Número do WhatsApp (com DDI/DDD)</label>
-                  <input 
-                    className="form-control mono" 
+                  <input
+                    className="form-control mono"
                     value={newPhone}
                     onChange={e => setNewPhone(e.target.value)}
                     placeholder="Ex: 5511999999999"
@@ -617,8 +617,8 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Nome do Contato (Opcional)</label>
-                  <input 
-                    className="form-control" 
+                  <input
+                    className="form-control"
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
                     placeholder="Ex: Motorista João"
@@ -632,16 +632,14 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: SELECT & SEND TEMPLATE */}
       {showTemplateModal && (
-        <div className="modal-overlay open" onClick={() => setShowTemplateModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '550px' }}>
+        <Modal open onClose={() => setShowTemplateModal(false)} width={550} labelledBy="send-template-modal-title">
             <div className="modal-header">
-              <div className="modal-title"><i className="ti ti-file-text"></i> Escolher Template para Reabrir Chat</div>
+              <div className="modal-title" id="send-template-modal-title"><i className="ti ti-file-text"></i> Escolher Template para Reabrir Chat</div>
               <button className="btn-icon" onClick={() => setShowTemplateModal(false)}><i className="ti ti-x"></i></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -714,16 +712,15 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setShowTemplateModal(false)}>Cancelar</button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={handleSendTemplateMessage}
                 disabled={!selectedTemplate || sendingTemplate}
               >
                 <i className="ti ti-send"></i> Enviar Template
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

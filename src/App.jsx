@@ -10,6 +10,7 @@ import { useApp } from "./context.jsx";
 import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
+import { useNotifications } from "./hooks/useNotifications.jsx";
 import { DataProvider } from "./components/DataProvider.jsx";
 const AdminLayout = lazy(() => import("./modules/admin/AdminLayout.jsx"));
 const AdminEquipe = lazy(() => import("./modules/admin/EquipeTab.jsx"));
@@ -57,6 +58,7 @@ function RoleGuard({ min = "lider", children }) {
 function ReminderNotifier() {
   const { reminders, toggle } = useReminders();
   const toast = useToast();
+  const { notify } = useNotifications();
   const notified = useRef(new Set());
 
   const remindersRef = useRef(reminders);
@@ -88,6 +90,12 @@ function ReminderNotifier() {
         toast(r.title + (r.sub ? ` — ${r.sub}` : ""), "info", {
           label: "Marcar como feito",
           fn: () => toggle(r.id),
+        });
+        notify({
+          title: r.title,
+          body: r.sub || "Lembrete da agenda",
+          kind: "info",
+          link: "/agenda",
         });
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("⏰ " + r.title, {
@@ -130,6 +138,10 @@ function AppShell() {
   }
 
   const isChat = location.pathname === "/chat";
+  // Chaveia a transição pelo 1º segmento da rota (módulo), não pelo pathname
+  // inteiro — assim trocar de aba dentro de Monitor/Dossiês (mesmo componente,
+  // só muda o :tab) não remonta a página nem perde o estado interno.
+  const topSegment = location.pathname.split("/").filter(Boolean)[0] || "dashboard";
 
   return (
     <RemindersProvider>
@@ -141,6 +153,7 @@ function AppShell() {
             {!isChat && <Topbar />}
             <main className={isChat ? "content-area chat-content-area" : "content-area"}>
               <Suspense fallback={null}>
+                <div key={topSegment} className="page-transition">
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
@@ -195,6 +208,7 @@ function AppShell() {
                   </Route>
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
+                </div>
               </Suspense>
             </main>
           </div>

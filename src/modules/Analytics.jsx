@@ -66,6 +66,10 @@ export default function Analytics() {
           selectedCompany={state.selectedCompany}
           setSelectedCompany={setSelectedCompany => state.setSelectedCompany(setSelectedCompany)}
           availableCompanies={state.availableCompanies}
+          savedViews={state.savedViews}
+          promptSaveCurrentView={state.promptSaveCurrentView}
+          applySavedView={state.applySavedView}
+          removeSavedView={state.removeSavedView}
         />
 
         <SourceChips

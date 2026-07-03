@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '../components/Modal';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
+import { useDragReorder } from '../hooks/useDragReorder';
 import { getCustomVars, setCustomVars } from './monitor/utils';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../hooks/useToast.jsx';
@@ -193,33 +194,7 @@ export default function Templates() {
     setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1400);
   };
 
-  const handleDragStart = (e, tpl) => {
-    e.dataTransfer.setData('tplId', tpl.id);
-    e.currentTarget.classList.add('dragging');
-  };
-
-  const handleDragEnd = (e) => {
-    e.currentTarget.classList.remove('dragging');
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e, targetTpl) => {
-    e.preventDefault();
-    const draggedId = e.dataTransfer.getData('tplId');
-    if (draggedId === targetTpl.id) return;
-
-    const newList = [...templates];
-    const draggedIdx = newList.findIndex(t => t.id === draggedId);
-    const targetIdx = newList.findIndex(t => t.id === targetTpl.id);
-
-    const [draggedItem] = newList.splice(draggedIdx, 1);
-    newList.splice(targetIdx, 0, draggedItem);
-
-    reorder(newList);
-  };
+  const { getItemProps: getDragProps } = useDragReorder(templates, reorder, t => t.id);
 
   const handleRemove = async (id) => {
     if (!(await confirm({ title: 'Excluir template', message: 'Tem certeza que deseja excluir este template?', danger: true }))) return;
@@ -584,11 +559,7 @@ export default function Templates() {
               <div
                 className={`template-card ${t._pending ? 'opacity-50' : ''}`}
                 key={t.id}
-                draggable={canEdit}
-                onDragStart={(e) => canEdit && handleDragStart(e, t)}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={(e) => canEdit && handleDrop(e, t)}
+                {...getDragProps(t, canEdit, { label: t.title })}
               >
                 <div className="template-card-header">
                   <span className={`tag tag-${t.tag}`}>{t.tagLabel}</span>
@@ -789,11 +760,10 @@ function TemplateModal({ tpl, onSave, onClose }) {
     }, 0);
   };
 
-  return createPortal(
-    <div className="modal-overlay open">
-      <div className="modal">
+  return (
+    <Modal open onClose={onClose} labelledBy="template-modal-title">
         <div className="modal-header">
-          <div className="modal-title"><i className="ti ti-message-2"></i> {tpl ? 'Editar template' : 'Novo template'}</div>
+          <div className="modal-title" id="template-modal-title"><i className="ti ti-message-2"></i> {tpl ? 'Editar template' : 'Novo template'}</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
         </div>
         <div className="form-row">
@@ -832,8 +802,6 @@ function TemplateModal({ tpl, onSave, onClose }) {
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave}><i className="ti ti-check"></i> Salvar</button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

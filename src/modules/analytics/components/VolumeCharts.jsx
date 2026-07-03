@@ -126,15 +126,18 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
     if (!canvasRef.current || noData || !d || !d.mensal_crit || !d.mensal_crit.labels.length) return;
 
     const cc = { Gravíssimo: C.danger, Grave: C.warning, Médio: C.info };
+    const groupOf = (s) => (s === 'Médio' ? 'medium' : 'high');
+    const alpha = (hex, a) => hex + a;
+    const seriesKeys = Object.keys(d.mensal_crit.series);
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
       data: {
         labels: d.mensal_crit.labels,
-        datasets: Object.keys(d.mensal_crit.series).map((s) => ({
+        datasets: seriesKeys.map((s) => ({
           label: s,
           data: d.mensal_crit.series[s],
-          backgroundColor: cc[s],
+          backgroundColor: selectedSeverity !== 'all' && groupOf(s) !== selectedSeverity ? alpha(cc[s], '55') : cc[s],
           borderRadius: d.mensal_crit.labels.length > 15 ? 2 : 4,
           maxBarThickness: d.mensal_crit.labels.length > 15 ? 20 : 54,
         })),
@@ -142,6 +145,12 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const group = groupOf(seriesKeys[elements[0].datasetIndex]);
+          setSelectedSeverity(selectedSeverity === group ? 'all' : group);
+        },
         plugins: {
           legend: {
             display: true,
@@ -152,6 +161,10 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
               padding: 12,
               usePointStyle: true,
               pointStyle: 'rectRounded',
+            },
+            onClick: (evt, item) => {
+              const group = groupOf(seriesKeys[item.datasetIndex]);
+              setSelectedSeverity(selectedSeverity === group ? 'all' : group);
             },
           },
         },
@@ -168,7 +181,7 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
         chartRef.current = null;
       }
     };
-  }, [d, noData]);
+  }, [d, noData, selectedSeverity, setSelectedSeverity]);
 
   const calcTotal = (seriesName) => {
     if (!d || !d.mensal_crit || !d.mensal_crit.series || !d.mensal_crit.series[seriesName]) return 0;

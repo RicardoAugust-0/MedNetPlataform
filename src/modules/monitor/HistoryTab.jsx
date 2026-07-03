@@ -3,6 +3,7 @@ import { exportCSV } from './utils';
 import { useSheetHistory } from '../../hooks/useSheetHistory.js';
 import Skeleton from '../../components/Skeleton.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
+import Pagination from '../../components/Pagination.jsx';
 
 function HistoryRowSkeleton() {
   return (
@@ -260,17 +261,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="pagination" style={{ display:'flex', justifyContent:'center', gap:8, marginTop:16 }}>
-          <button className="btn btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
-            <i className="ti ti-chevron-left"></i>
-          </button>
-          <span style={{ fontSize:13, alignSelf:'center', color:'var(--text-muted)' }}>Página {currentPage} de {totalPages}</span>
-          <button className="btn btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
-            <i className="ti ti-chevron-right"></i>
-          </button>
-        </div>
-      )}
+      <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
 
       {/* Seção Planilha Google Sheets */}
       {showSheets && (
@@ -311,19 +302,7 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
               <div className="driver-list">
                 {sheetPaginatedList.map((row, i) => <SheetRow key={i} row={row} />)}
               </div>
-              {sheetTotalPages > 1 && (
-                <div className="pagination" style={{ display:'flex', justifyContent:'center', gap:8, marginTop:12 }}>
-                  <button className="btn btn-sm" disabled={sheetPage === 1} onClick={() => setSheetPage(p => p - 1)}>
-                    <i className="ti ti-chevron-left"></i>
-                  </button>
-                  <span style={{ fontSize:13, alignSelf:'center', color:'var(--text-muted)' }}>
-                    {sheetPage} / {sheetTotalPages} · {sheetFiltered.length} registros
-                  </span>
-                  <button className="btn btn-sm" disabled={sheetPage === sheetTotalPages} onClick={() => setSheetPage(p => p + 1)}>
-                    <i className="ti ti-chevron-right"></i>
-                  </button>
-                </div>
-              )}
+              <Pagination page={sheetPage} totalPages={sheetTotalPages} onPageChange={setSheetPage} totalCount={sheetFiltered.length} style={{ marginTop: 12 }} />
             </>
           )}
         </div>

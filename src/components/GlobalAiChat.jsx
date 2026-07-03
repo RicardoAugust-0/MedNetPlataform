@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/analyticsApi.js';
 import { useConfirm } from '../hooks/useConfirm';
 import { useToast } from '../hooks/useToast';
 import renderMarkdown from '../modules/admin/ai-chat/renderMarkdown.js';
+import StreamedText from './StreamedText.jsx';
 import '../styles/ai-chat.css';
 import {
   ResponsiveContainer,
@@ -122,7 +123,8 @@ export default function GlobalAiChat() {
         id: crypto.randomUUID(),
         role: 'assistant',
         text: data.text,
-        chart: data.chart // Opcional, contendo estrutura de gráfico Recharts
+        chart: data.chart, // Opcional, contendo estrutura de gráfico Recharts
+        streaming: true
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -211,7 +213,12 @@ export default function GlobalAiChat() {
                   {m.role === 'user' ? (
                     <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.text}</p>
                   ) : (
-                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
+                    <StreamedText
+                      text={m.text}
+                      active={!!m.streaming}
+                      renderHtml={renderMarkdown}
+                      onTick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })}
+                    />
                   )}
                 </div>
                 

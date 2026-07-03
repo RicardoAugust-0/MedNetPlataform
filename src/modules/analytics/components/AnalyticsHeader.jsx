@@ -1,3 +1,5 @@
+import SavedViewsMenu from './SavedViewsMenu.jsx';
+
 export default function AnalyticsHeader({
   activeId,
   compare,
@@ -19,6 +21,10 @@ export default function AnalyticsHeader({
   selectedCompany,
   setSelectedCompany,
   availableCompanies = [],
+  savedViews = [],
+  promptSaveCurrentView,
+  applySavedView,
+  removeSavedView,
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
@@ -141,6 +147,15 @@ export default function AnalyticsHeader({
           </div>
         )}
 
+
+        {(activeId || compare) && (
+          <SavedViewsMenu
+            views={savedViews}
+            onApply={applySavedView}
+            onSave={promptSaveCurrentView}
+            onRemove={removeSavedView}
+          />
+        )}
 
         {sourcesList.length >= 2 && (
           <button

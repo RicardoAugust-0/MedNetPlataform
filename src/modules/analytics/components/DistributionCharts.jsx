@@ -14,6 +14,8 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
 
     if (!canvasRef.current || noData || !d || !d.uf || !d.uf.labels.length) return;
 
+    const isFiltered = !compare && !!selectedUf;
+
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
       data: {
@@ -21,7 +23,7 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
         datasets: [
           {
             data: d.uf.valores,
-            backgroundColor: 'rgba(42,141,217,0.7)',
+            backgroundColor: d.uf.labels.map((l) => (isFiltered && selectedUf !== l ? 'rgba(42,141,217,0.28)' : 'rgba(42,141,217,0.7)')),
             borderRadius: 5,
             maxBarThickness: 18,
           },
@@ -31,6 +33,12 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        onHover: (evt, elements) => { evt.native.target.style.cursor = !compare && elements.length ? 'pointer' : 'default'; },
+        onClick: (evt, elements) => {
+          if (compare || !elements.length) return;
+          const label = d.uf.labels[elements[0].index];
+          setSelectedUf(selectedUf === label ? '' : label);
+        },
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
@@ -48,7 +56,7 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
         chartRef.current = null;
       }
     };
-  }, [d, noData]);
+  }, [d, noData, selectedUf, setSelectedUf, compare]);
 
   return (
     <div data-card className="card" style={{ padding: '16px 18px' }}>
@@ -114,6 +122,7 @@ export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelected
     if (!canvasRef.current || noData || !d || !d.frota || !d.frota.labels.length) return;
 
     const short = (s) => (s.length > 20 ? s.slice(0, 18) + '…' : s);
+    const isFiltered = !compare && !!selectedCompany;
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
@@ -122,9 +131,10 @@ export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelected
         datasets: [
           {
             data: d.frota.valores,
-            backgroundColor: d.frota.valores.map((v, i) =>
-              i === 0 ? 'rgba(158,26,69,0.65)' : 'rgba(194,74,106,0.55)'
-            ),
+            backgroundColor: d.frota.labels.map((l, i) => {
+              if (isFiltered) return selectedCompany === l ? 'rgba(158,26,69,0.75)' : 'rgba(158,26,69,0.18)';
+              return i === 0 ? 'rgba(158,26,69,0.65)' : 'rgba(194,74,106,0.55)';
+            }),
             borderRadius: 5,
             maxBarThickness: 22,
           },
@@ -134,6 +144,12 @@ export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelected
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        onHover: (evt, elements) => { evt.native.target.style.cursor = !compare && elements.length ? 'pointer' : 'default'; },
+        onClick: (evt, elements) => {
+          if (compare || !elements.length) return;
+          const label = d.frota.labels[elements[0].index];
+          setSelectedCompany(selectedCompany === label ? '' : label);
+        },
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
@@ -151,7 +167,7 @@ export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelected
         chartRef.current = null;
       }
     };
-  }, [d, noData]);
+  }, [d, noData, selectedCompany, setSelectedCompany, compare]);
 
   return (
     <div data-card className="card" style={{ padding: '16px 18px' }}>

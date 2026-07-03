@@ -150,7 +150,8 @@ export default function AiChatTab() {
         id: crypto.randomUUID(),
         role: 'assistant',
         text: data.text,
-        chart: data.chart
+        chart: data.chart,
+        streaming: true
       };
 
       // O bot limpou o histórico: refletir em tempo real (não apenas após F5).

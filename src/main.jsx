@@ -5,6 +5,8 @@ import { AuthProvider } from "./auth/AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppProvider } from "./context";
 import { ConfirmProvider } from "./hooks/useConfirm";
+import { NotificationsProvider } from "./hooks/useNotifications";
+import { ReauthProvider } from "./hooks/useReauth";
 import { ToastProvider } from "./hooks/useToast";
 import { SheetHistoryProvider } from "./hooks/useSheetHistory";
 import "./styles/embedded-sheet.css";
@@ -19,11 +21,15 @@ createRoot(document.getElementById("root")).render(
       <ConfirmProvider>
         <ToastProvider>
           <AuthProvider>
-            <SheetHistoryProvider>
-              <AppProvider>
-                <App />
-              </AppProvider>
-            </SheetHistoryProvider>
+            <ReauthProvider>
+              <NotificationsProvider>
+                <SheetHistoryProvider>
+                  <AppProvider>
+                    <App />
+                  </AppProvider>
+                </SheetHistoryProvider>
+              </NotificationsProvider>
+            </ReauthProvider>
           </AuthProvider>
         </ToastProvider>
       </ConfirmProvider>

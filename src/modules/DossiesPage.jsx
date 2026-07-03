@@ -5,6 +5,7 @@ import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supa
 import { useToast } from '../hooks/useToast.jsx';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import Modal from '../components/Modal.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -129,6 +130,7 @@ export default function DossiesPage() {
   // Documentos do motorista (upload + OCR/IA)
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState(null);
+  const [dragOverType, setDragOverType] = useState(null);
   const [processingDocId, setProcessingDocId] = useState(null);
   const [reviewingDoc, setReviewingDoc] = useState(null);
   const [reviewFields, setReviewFields] = useState({});
@@ -1091,15 +1093,23 @@ export default function DossiesPage() {
                   {DOC_TYPES.map(dt => (
                     <label
                       key={dt.id}
-                      className="upload-area collapsed"
+                      className={`upload-area collapsed${dragOverType === dt.id ? ' drag-over' : ''}`}
                       style={{ cursor: uploadingType ? 'wait' : 'pointer' }}
+                      onDragOver={e => { e.preventDefault(); if (!uploadingType) setDragOverType(dt.id); }}
+                      onDragLeave={() => setDragOverType(prev => (prev === dt.id ? null : prev))}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setDragOverType(null);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && !uploadingType) handleUploadDocument(dt.id, file);
+                      }}
                     >
                       <div className="upload-icon">
                         <i className={`ti ${uploadingType === dt.id ? 'ti-loader-2 ti-spin' : dt.icon}`}></i>
                       </div>
                       <div className="upload-text">
                         <div className="upload-title">{dt.label}</div>
-                        <div className="upload-hint">JPG, PNG, WebP ou PDF · até 10MB</div>
+                        <div className="upload-hint">JPG, PNG, WebP ou PDF · até 10MB (ou arraste aqui)</div>
                       </div>
                       <input
                         type="file"
@@ -1277,10 +1287,9 @@ export default function DossiesPage() {
 
     {/* Modal de revisão dos dados extraídos por OCR/IA antes de aplicar na ficha */}
     {reviewingDoc && (
-      <div className="modal-overlay open">
-        <div className="modal" style={{ width: 560 }}>
+      <Modal open onClose={() => setReviewingDoc(null)} width={560} labelledBy="ocr-review-modal-title" closeOnOverlay={false}>
           <div className="modal-header">
-            <div className="modal-title">
+            <div className="modal-title" id="ocr-review-modal-title">
               <i className="ti ti-sparkles" style={{ color: 'var(--accent-500)' }}></i>
               Revisar dados extraídos — {DOC_TYPES.find(d => d.id === reviewingDoc.tipo_documento)?.label || reviewingDoc.tipo_documento}
             </div>
@@ -1326,8 +1335,7 @@ export default function DossiesPage() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
+      </Modal>
     )}
     </>
   );

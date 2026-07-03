@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabase.js';
 import { useToast } from '../../hooks/useToast.jsx';
 import { useConfirm } from '../../hooks/useConfirm';
+import { useReauth } from '../../hooks/useReauth.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
 
 const STATUS_INFO = {
@@ -28,6 +29,7 @@ function formatDate(iso) {
 export default function IntegracoesHorizon() {
   const toast = useToast();
   const confirm = useConfirm();
+  const reauth = useReauth();
 
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,7 @@ export default function IntegracoesHorizon() {
   const [editCandidates, setEditCandidates] = useState([]);
   const [newCandidate, setNewCandidate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [revealedId, setRevealedId] = useState(null);
 
   const [newLabel, setNewLabel] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -102,6 +105,15 @@ export default function IntegracoesHorizon() {
     setEditPassword('');
     setEditCandidates([]);
     setNewCandidate('');
+    setRevealedId(null);
+  };
+
+  const handleReveal = async (accId) => {
+    if (revealedId === accId) { setRevealedId(null); return; }
+    const ok = await reauth({
+      message: 'Por segurança, confirme sua senha para revelar a senha desta conta Horizon.',
+    });
+    if (ok) setRevealedId(accId);
   };
 
   const addCandidate = () => {
@@ -194,21 +206,31 @@ export default function IntegracoesHorizon() {
                     <div style={{ marginTop: 10, padding: 10, background: 'var(--surface-2, rgba(0,0,0,0.03))', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Senha atual</label>
-                        <input
-                          className="form-control"
-                          type="text"
-                          value={editPassword}
-                          onChange={e => setEditPassword(e.target.value)}
-                          style={{ fontSize: 13, padding: '5px 8px' }}
-                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            className="form-control"
+                            type={revealedId === acc.id ? 'text' : 'password'}
+                            value={editPassword}
+                            onChange={e => setEditPassword(e.target.value)}
+                            style={{ fontSize: 13, padding: '5px 8px', flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleReveal(acc.id)}
+                            title={revealedId === acc.id ? 'Ocultar senha' : 'Revelar senha (requer confirmação)'}
+                          >
+                            <i className={`ti ${revealedId === acc.id ? 'ti-eye-off' : 'ti-eye'}`}></i>
+                          </button>
+                        </div>
                       </div>
 
                       <div>
                         <label className="form-label">Senhas candidatas (rotação)</label>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                           {editCandidates.map(c => (
-                            <span key={c} className="pillc" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              {c}
+                            <span key={c} className="pillc" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: revealedId === acc.id ? undefined : 'monospace' }}>
+                              {revealedId === acc.id ? c : '•'.repeat(Math.min(c.length, 10))}
                               <i className="ti ti-x" style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => removeCandidate(c)}></i>
                             </span>
                           ))}

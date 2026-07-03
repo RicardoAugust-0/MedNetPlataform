@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '../components/Modal';
 import { useParams, NavLink } from 'react-router-dom';
 import { useWsPages } from '../hooks/useWsPages';
+import { useDragReorder } from '../hooks/useDragReorder';
 import { useConfirm } from '../hooks/useConfirm';
 import { WS_ICONS, WS_CATEGORIES } from '../data';
 import PageEditor from './WorkspaceEditor.jsx';
@@ -34,33 +35,7 @@ export default function Workspace() {
   const [newIcon, setNewIcon] = useState(0);
   const [newCat, setNewCat] = useState('protocolos');
 
-  const handleDragStart = (e, page) => {
-    e.dataTransfer.setData('pageId', page.id);
-    e.currentTarget.classList.add('dragging');
-  };
-
-  const handleDragEnd = (e) => {
-    e.currentTarget.classList.remove('dragging');
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e, targetPage) => {
-    e.preventDefault();
-    const draggedId = e.dataTransfer.getData('pageId');
-    if (draggedId === targetPage.id) return;
-
-    const newList = [...wsPages];
-    const draggedIdx = newList.findIndex(p => p.id === draggedId);
-    const targetIdx = newList.findIndex(p => p.id === targetPage.id);
-
-    const [draggedItem] = newList.splice(draggedIdx, 1);
-    newList.splice(targetIdx, 0, draggedItem);
-
-    reorder(newList);
-  };
+  const { getItemProps: getDragProps } = useDragReorder(wsPages, reorder, p => p.id);
 
   const handleDelete = async (id) => {
     if (!(await confirm({ title: 'Excluir página', message: 'Tem certeza que deseja excluir esta página?', danger: true }))) return;
@@ -114,12 +89,12 @@ export default function Workspace() {
     return (
       <div
         className="ws-page-card"
-        draggable={canEdit}
-        onDragStart={(e) => canEdit && handleDragStart(e, p)}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDrop={(e) => canEdit && handleDrop(e, p)}
         onClick={() => setCurrent(p.id)}
+        role="button"
+        {...getDragProps(p, canEdit, {
+          label: p.title,
+          onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrent(p.id); } },
+        })}
       >
         <div className="ws-card-icon" style={{ background: ic.bg, color: ic.ic }}><i className={`ti ${ic.i}`}></i></div>
         <div className="ws-card-title">{p.title}</div>
@@ -227,11 +202,10 @@ export default function Workspace() {
         )}
       </div>
 
-      {modal && createPortal(
-        <div className="modal-overlay open" onClick={() => setModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+      {modal && (
+        <Modal open onClose={() => setModal(false)} labelledBy="ws-new-page-modal-title">
             <div className="modal-header">
-              <div className="modal-title"><i className="ti ti-notebook"></i> Nova página</div>
+              <div className="modal-title" id="ws-new-page-modal-title"><i className="ti ti-notebook"></i> Nova página</div>
               <button className="btn-icon" onClick={() => setModal(false)}><i className="ti ti-x"></i></button>
             </div>
             <div className="form-group">
@@ -258,9 +232,7 @@ export default function Workspace() {
               <button className="btn" onClick={() => setModal(false)}>Cancelar</button>
               <button className="btn btn-primary" onClick={createPage}><i className="ti ti-check"></i> Criar</button>
             </div>
-          </div>
-        </div>,
-        document.body
+        </Modal>
       )}
     </div>
   );

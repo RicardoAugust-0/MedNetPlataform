@@ -1,7 +1,8 @@
 // deno-lint-ignore-file
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '../components/Modal';
 import { useLinks, PALETTE, AVAILABLE_ICONS } from '../hooks/useLinks';
+import { useDragReorder } from '../hooks/useDragReorder';
 import { useConfirm } from "../hooks/useConfirm.jsx";
 import { useAuth } from '../auth/AuthContext.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -23,33 +24,7 @@ export default function Links() {
     remove(id);
   };
 
-  const handleDragStart = (e, link) => {
-    e.dataTransfer.setData('linkId', link.id);
-    e.currentTarget.classList.add('dragging');
-  };
-
-  const handleDragEnd = (e) => {
-    e.currentTarget.classList.remove('dragging');
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e, targetLink) => {
-    e.preventDefault();
-    const draggedId = e.dataTransfer.getData('linkId');
-    if (draggedId === targetLink.id) return;
-
-    const newList = [...links];
-    const draggedIdx = newList.findIndex(l => l.id === draggedId);
-    const targetIdx = newList.findIndex(l => l.id === targetLink.id);
-
-    const [draggedItem] = newList.splice(draggedIdx, 1);
-    newList.splice(targetIdx, 0, draggedItem);
-
-    reorder(newList);
-  };
+  const { getItemProps: getDragProps } = useDragReorder(links, reorder, l => l.id);
 
   if (loading) return <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando...</div>;
 
@@ -76,14 +51,10 @@ export default function Links() {
             </div>
             <div className="links-grid">
               {list.map(l => (
-                <div 
-                  key={l.id} 
+                <div
+                  key={l.id}
                   className={`link-card-wrap ${l._pending ? 'opacity-50' : ''}`}
-                  draggable={canEdit}
-                  onDragStart={(e) => canEdit && handleDragStart(e, l)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => canEdit && handleDrop(e, l)}
+                  {...getDragProps(l, canEdit, { label: l.name })}
                 >
                   <a className="link-card" href={l.url} target="_blank" rel="noreferrer" aria-label={`Link para ${l.name} - ${l.desc || ''}`}>
                     <div className="link-icon" style={{ background: l.bg, color: l.ic }}><i className={`ti ${l.icon}`}></i></div>
@@ -136,11 +107,10 @@ function LinkModal({ initialData, onSave, onClose }) {
   const [bg, setBg] = useState(initialData?.bg || PALETTE[0].bg);
   const [ic, setIc] = useState(initialData?.ic || PALETTE[0].ic);
 
-  return createPortal(
-    <div className="modal-overlay open" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+  return (
+    <Modal open onClose={onClose} style={{ maxWidth: 500 }} labelledBy="link-modal-title">
         <div className="modal-header">
-          <div className="modal-title"><i className="ti ti-link"></i> {initialData ? 'Editar link' : 'Novo link'}</div>
+          <div className="modal-title" id="link-modal-title"><i className="ti ti-link"></i> {initialData ? 'Editar link' : 'Novo link'}</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
         </div>
         <div className="modal-body">
@@ -242,8 +212,6 @@ function LinkModal({ initialData, onSave, onClose }) {
             <i className="ti ti-check"></i> {initialData ? 'Salvar' : 'Adicionar'}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

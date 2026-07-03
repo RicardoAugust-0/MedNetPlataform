@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '../../components/Modal';
 import { useAuth } from '../../auth/AuthContext.jsx';
 
 import { useToast } from '../../hooks/useToast.jsx';
@@ -285,11 +285,10 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
     });
   };
 
-  return createPortal(
-    <div className="modal-overlay open" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '650px', maxWidth: '95vw' }}>
+  return (
+    <Modal open onClose={onClose} width={650} labelledBy="hooks-config-modal-title">
         <div className="modal-header">
-          <div className="modal-title"><i className="ti ti-settings"></i> {isNew ? 'Nova automação' : 'Configurar ' + automation.name}</div>
+          <div className="modal-title" id="hooks-config-modal-title"><i className="ti ti-settings"></i> {isNew ? 'Nova automação' : 'Configurar ' + automation.name}</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
         </div>
 
@@ -367,9 +366,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
             <i className="ti ti-check"></i> {isNew ? 'Adicionar' : 'Salvar'}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }
 
@@ -693,18 +690,17 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
 export function VncModal({ vncUrl, onStopBot, onClose }) {
   const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale&quality=6&compression=7`;
 
-  return createPortal(
-    <div className="modal-overlay open" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '960px', maxWidth: '95vw' }}>
+  return (
+    <Modal open onClose={onClose} width={960} labelledBy="vnc-modal-title">
         <div className="modal-header">
-          <div className="modal-title"><i className="ti ti-device-desktop"></i> Transmissão de Tela da VPS (noVNC)</div>
+          <div className="modal-title" id="vnc-modal-title"><i className="ti ti-device-desktop"></i> Transmissão de Tela da VPS (noVNC)</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
         </div>
         <div className="modal-body" style={{ padding: 0, background: '#111', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <iframe 
-            src={iframeUrl} 
+          <iframe
+            src={iframeUrl}
             title="VNC Stream"
-            style={{ width: '100%', height: '580px', border: 'none', background: '#000' }} 
+            style={{ width: '100%', height: '580px', border: 'none', background: '#000' }}
             allow="fullscreen"
           />
         </div>
@@ -720,8 +716,6 @@ export function VncModal({ vncUrl, onStopBot, onClose }) {
           )}
           <button className="btn btn-primary" onClick={onClose}><i className="ti ti-check"></i> Concluir</button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

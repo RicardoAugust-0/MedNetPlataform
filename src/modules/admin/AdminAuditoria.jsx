@@ -3,6 +3,9 @@ import { useState, useMemo } from 'react';
 import { useAtendimentos } from '../../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../../hooks/useCarrierAliases.js';
 import Skeleton from '../../components/Skeleton.jsx';
+import Pagination from '../../components/Pagination.jsx';
+import DataTable from '../../components/DataTable.jsx';
+import AuditTimeline from './AuditTimeline.jsx';
 
 // /admin/auditoria — trilha global e somente-leitura de todas as tratativas
 // (atendimentos) registradas pela equipe. Reaproveita o `history` já carregado
@@ -17,12 +20,40 @@ const TIPO_META = {
 const TIPOS = ['intervencao', 'reportar', 'descarte', 'limpeza'];
 const PAGE_SIZE = 25;
 
+const COLUMNS = (resolveMonitorName) => [
+  {
+    key: 'data',
+    header: 'Data/Hora',
+    cellStyle: { whiteSpace: 'nowrap', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' },
+    render: h => `${h.created_at ? new Date(h.created_at).toLocaleDateString('pt-BR') : '—'} ${h.hora || ''}`,
+  },
+  {
+    key: 'tipo',
+    header: 'Tipo',
+    render: h => {
+      const meta = TIPO_META[h.tipo] || { label: h.tipo, badge: 'info' };
+      return <span className={`badge badge-${meta.badge}`} style={{ fontSize: 9.5 }}>{meta.label}</span>;
+    },
+  },
+  {
+    key: 'motorista',
+    header: 'Motorista',
+    cellStyle: { fontWeight: 600, color: 'var(--text-primary)' },
+    render: h => h.motorista || '—',
+  },
+  { key: 'placa', header: 'Placa', render: h => h.placa || '—' },
+  { key: 'transportadora', header: 'Transportadora', render: h => (h.transportadora ? resolveMonitorName(h.transportadora) : '—') },
+  { key: 'operador', header: 'Operador', render: h => h.operador || '—' },
+  { key: 'obs', header: 'Observação', cellStyle: { color: 'var(--text-secondary)' }, render: h => h.obs || '—' },
+];
+
 export default function AdminAuditoria() {
   const { history, loading, reload } = useAtendimentos();
   const { resolveMonitorName } = useCarrierAliases();
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState(''); // '' = todos
   const [currentPage, setCurrentPage] = useState(1);
+  const [view, setView] = useState('table'); // 'table' | 'timeline'
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -51,9 +82,19 @@ export default function AdminAuditoria() {
           <div className="card-title">
             <i className="ti ti-history"></i> Trilha de tratativas · {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
           </div>
-          <button className="btn btn-sm" onClick={reload} disabled={loading}>
-            <i className={`ti ti-refresh ${loading ? 'fz-spin' : ''}`}></i> Atualizar
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="seg">
+              <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')} title="Ver como tabela">
+                <i className="ti ti-table"></i>
+              </button>
+              <button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')} title="Ver como linha do tempo">
+                <i className="ti ti-timeline-event"></i>
+              </button>
+            </div>
+            <button className="btn btn-sm" onClick={reload} disabled={loading}>
+              <i className={`ti ti-refresh ${loading ? 'fz-spin' : ''}`}></i> Atualizar
+            </button>
+          </div>
         </div>
 
         {/* Filtros */}
@@ -80,54 +121,13 @@ export default function AdminAuditoria() {
         ) : filtered.length === 0 ? (
           <div className="empty-state" style={{ fontSize: 12.5 }}>Nenhuma tratativa encontrada com os filtros atuais.</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: 8 }}>Data/Hora</th>
-                  <th style={{ padding: 8 }}>Tipo</th>
-                  <th style={{ padding: 8 }}>Motorista</th>
-                  <th style={{ padding: 8 }}>Placa</th>
-                  <th style={{ padding: 8 }}>Transportadora</th>
-                  <th style={{ padding: 8 }}>Operador</th>
-                  <th style={{ padding: 8 }}>Observação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map(h => {
-                  const meta = TIPO_META[h.tipo] || { label: h.tipo, badge: 'info' };
-                  return (
-                    <tr key={h.id} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.02))' }}>
-                      <td style={{ padding: 8, whiteSpace: 'nowrap', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        {h.created_at ? new Date(h.created_at).toLocaleDateString('pt-BR') : '—'} {h.hora || ''}
-                      </td>
-                      <td style={{ padding: 8 }}>
-                        <span className={`badge badge-${meta.badge}`} style={{ fontSize: 9.5 }}>{meta.label}</span>
-                      </td>
-                      <td style={{ padding: 8, fontWeight: 600, color: 'var(--text-primary)' }}>{h.motorista || '—'}</td>
-                      <td style={{ padding: 8 }}>{h.placa || '—'}</td>
-                      <td style={{ padding: 8 }}>{h.transportadora ? resolveMonitorName(h.transportadora) : '—'}</td>
-                      <td style={{ padding: 8 }}>{h.operador || '—'}</td>
-                      <td style={{ padding: 8, color: 'var(--text-secondary)' }}>{h.obs || '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {totalPages > 1 && (
-              <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16 }}>
-                <button className="btn btn-sm" disabled={page === 1} onClick={() => setCurrentPage(page - 1)}>
-                  <i className="ti ti-chevron-left"></i>
-                </button>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  Página {page} de {totalPages} · {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
-                </span>
-                <button className="btn btn-sm" disabled={page === totalPages} onClick={() => setCurrentPage(page + 1)}>
-                  <i className="ti ti-chevron-right"></i>
-                </button>
-              </div>
+          <div>
+            {view === 'table' ? (
+              <DataTable columns={COLUMNS(resolveMonitorName)} rows={pageRows} />
+            ) : (
+              <AuditTimeline rows={pageRows} resolveMonitorName={resolveMonitorName} />
             )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setCurrentPage} totalCount={filtered.length} />
           </div>
         )}
       </div>

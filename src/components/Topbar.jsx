@@ -5,6 +5,7 @@ import { PANEL_TITLES } from '../data';
 import { fmtTime } from '../utils';
 import { useOnline } from '../hooks/useOnline';
 import { usePwaUpdate } from '../hooks/usePwaUpdate';
+import NotificationBell from './NotificationBell.jsx';
 
 export default function Topbar() {
   const { theme, setTheme, setMobileNavOpen } = useApp();
@@ -66,6 +67,7 @@ export default function Topbar() {
           <span className="dot"></span> Fadiga Zero · {online ? 'Online' : 'Offline'}
         </span>
         <span className="topbar-clock">{clock}</span>
+        <NotificationBell />
         <button
           className="topbar-icon-btn"
           title="Alternar tema"

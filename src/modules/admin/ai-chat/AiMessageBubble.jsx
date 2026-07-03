@@ -1,5 +1,6 @@
 import RobotIcon from './RobotIcon.jsx';
 import renderMarkdown from './renderMarkdown.js';
+import StreamedText from '../../../components/StreamedText.jsx';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
@@ -78,7 +79,7 @@ export default function AiMessageBubble({ message, onSaveReport }) {
           {isUser ? (
             <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{message.text}</p>
           ) : (
-            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(message.text) }} />
+            <StreamedText text={message.text} active={!!message.streaming} renderHtml={renderMarkdown} />
           )}
         </div>
 

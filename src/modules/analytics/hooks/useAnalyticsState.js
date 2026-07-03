@@ -3,6 +3,7 @@ import { PLATFORMS } from '../../../utils/fatigueParser.js';
 import { supabase } from '../../../supabase.js';
 import { useToast } from '../../../hooks/useToast.jsx';
 import { useConfirm } from '../../../hooks/useConfirm.jsx';
+import { useSavedViews } from '../../../hooks/useSavedViews.js';
 import { apiFetch, buildAnalyticsQuery } from '../../../lib/analyticsApi.js';
 import { exportToCSV as exportCSVUtil, exportToHTML as exportHTMLUtil } from '../utils/exportUtils.js';
 import { formatMonthKey } from '../utils/formatUtils.js';
@@ -225,13 +226,47 @@ export function useAnalyticsState() {
     }
   }, [endDate]);
 
+  // Aplicar uma visão salva seta activeId + filtros juntos; sem este flag, o
+  // efeito abaixo (que zera os filtros ao trocar de fonte manualmente)
+  // apagaria os próprios filtros que a visão acabou de restaurar.
+  const applyingViewRef = useRef(false);
+
   useEffect(() => {
+    if (applyingViewRef.current) {
+      applyingViewRef.current = false;
+      return;
+    }
     setSelectedCompany('');
     setSelectedClassification('all');
     setSelectedType('');
     setSelectedUf('');
     setActiveKpi(null);
   }, [activeId, compare]);
+
+  const savedViewsStore = useSavedViews('mn_saved_views_analytics');
+
+  const saveCurrentView = (name) => {
+    savedViewsStore.saveView(name, {
+      activeId, selectedMonth, startDate, endDate,
+      selectedCompany, selectedSeverity, selectedClassification, selectedType, selectedUf,
+    });
+  };
+
+  const applySavedView = (snapshot) => {
+    // Só precisa pular o reset se a fonte (activeId) realmente vai mudar —
+    // do contrário o efeito [activeId, compare] nem dispara e a flag ficaria
+    // presa em true, atrapalhando a próxima troca manual de fonte.
+    if ((snapshot.activeId ?? null) !== activeId) applyingViewRef.current = true;
+    setActiveId(snapshot.activeId ?? null);
+    setSelectedMonth(snapshot.selectedMonth ?? null);
+    setStartDate(snapshot.startDate ?? '');
+    setEndDate(snapshot.endDate ?? '');
+    setSelectedCompany(snapshot.selectedCompany ?? '');
+    setSelectedSeverity(snapshot.selectedSeverity ?? 'all');
+    setSelectedClassification(snapshot.selectedClassification ?? 'all');
+    setSelectedType(snapshot.selectedType ?? '');
+    setSelectedUf(snapshot.selectedUf ?? '');
+  };
 
   const loadFromDatabase = async (preferredPlatformId = null, isSilent = false) => {
     if (loadAbortRef.current) loadAbortRef.current.abort();
@@ -646,6 +681,18 @@ export function useAnalyticsState() {
     }
   };
 
+  const promptSaveCurrentView = async () => {
+    const name = await confirm({
+      title: 'Salvar visão',
+      message: 'Dê um nome para esta combinação de filtros. Você poderá recarregá-la depois com um clique.',
+      confirmText: 'Salvar',
+      input: { placeholder: 'Ex: Gravíssimos · Últimos 30 dias' },
+    });
+    if (!name) return;
+    saveCurrentView(name);
+    toast(`Visão "${name}" salva.`, 'success');
+  };
+
   const noData = !d;
 
   return {
@@ -719,5 +766,9 @@ export function useAnalyticsState() {
     handleConfirmCompare,
     removeSource,
     formatMonthKey,
+    savedViews: savedViewsStore.views,
+    promptSaveCurrentView,
+    applySavedView,
+    removeSavedView: savedViewsStore.removeView,
   };
 }

@@ -17,6 +17,8 @@ export function ClassificacaoAlertasCard({ d, noData, selectedClassification, se
     const keys = ['Positivo', 'Falso positivo', 'Não classificado'];
     const col = { Positivo: C.vinho, 'Falso positivo': C.info, 'Não classificado': 'var(--border-strong, #C9CDD6)' };
     const total = d.kpis.total || 1;
+    const isFiltered = selectedClassification && selectedClassification !== 'all';
+    const alpha = (hex, a) => hex.startsWith('var') ? hex : hex + a;
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'doughnut',
@@ -25,7 +27,7 @@ export function ClassificacaoAlertasCard({ d, noData, selectedClassification, se
         datasets: [
           {
             data: keys.map((k) => d.clf_total[k] || 0),
-            backgroundColor: keys.map((k) => col[k]),
+            backgroundColor: keys.map((k) => (isFiltered && selectedClassification !== k ? alpha(col[k], '55') : col[k])),
             borderColor: 'var(--surface-0, #fff)',
             borderWidth: 3,
             hoverOffset: 6,
@@ -36,6 +38,12 @@ export function ClassificacaoAlertasCard({ d, noData, selectedClassification, se
         responsive: true,
         maintainAspectRatio: false,
         cutout: '60%',
+        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const label = keys[elements[0].index];
+          setSelectedClassification(selectedClassification === label ? 'all' : label);
+        },
         plugins: {
           legend: {
             display: true,
@@ -70,7 +78,7 @@ export function ClassificacaoAlertasCard({ d, noData, selectedClassification, se
         chartRef.current = null;
       }
     };
-  }, [d, noData]);
+  }, [d, noData, selectedClassification, setSelectedClassification]);
 
   return (
     <div data-card className="card" style={{ padding: '16px 18px' }}>
@@ -207,19 +215,21 @@ export function TipoDeteccaoCard({ d, noData, selectedMonth, selectedType, setSe
 
     const cols = [C.vinho, C.info, C.warning, C.success, C.vinho2];
     const short = (s) => (s.length > 26 ? s.slice(0, 24) + '…' : s);
+    const fullLabels = Object.keys(d.mensal_tipo.series);
+    const isFiltered = !!selectedType;
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
         labels: d.mensal_tipo.labels,
-        datasets: Object.keys(d.mensal_tipo.series).map((s, i) => ({
+        datasets: fullLabels.map((s, i) => ({
           label: short(s),
           data: d.mensal_tipo.series[s],
-          borderColor: cols[i % cols.length],
+          borderColor: isFiltered && selectedType !== s ? cols[i % cols.length] + '33' : cols[i % cols.length],
           backgroundColor: 'transparent',
           tension: 0.35,
           pointRadius: d.mensal_tipo.labels.length > 15 ? 1 : 3,
-          borderWidth: 2,
+          borderWidth: isFiltered && selectedType === s ? 3 : 2,
         })),
       },
       options: {
@@ -237,6 +247,10 @@ export function TipoDeteccaoCard({ d, noData, selectedMonth, selectedType, setSe
               pointStyle: 'circle',
               font: { size: 9.5 },
             },
+            onClick: (evt, item) => {
+              const full = fullLabels[item.datasetIndex];
+              setSelectedType(selectedType === full ? '' : full);
+            },
           },
         },
         scales: {
@@ -252,7 +266,7 @@ export function TipoDeteccaoCard({ d, noData, selectedMonth, selectedType, setSe
         chartRef.current = null;
       }
     };
-  }, [d, noData]);
+  }, [d, noData, selectedType, setSelectedType]);
 
   return (
     <div data-card className="card" style={{ padding: '16px 18px' }}>
