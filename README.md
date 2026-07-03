@@ -1,6 +1,6 @@
 # MedNet · Fadiga Zero
 
-Plataforma operacional da equipe **Fadiga Zero** do GRUPO MedNet. Centraliza o monitoramento de motoristas, fila de intervenções, scripts de contato, agenda, base de conhecimento e administração da equipe.
+Plataforma operacional da equipe **Fadiga Zero** do GRUPO MedNet. Centraliza o monitoramento de motoristas, fila de intervenções, scripts de contato, agenda, dossiês clínicos, base de conhecimento, automações de ingestão e administração da equipe.
 
 ---
 
@@ -17,13 +17,12 @@ Abra o navegador e acesse **`https://mednetplataform.vercel.app/`**. Faça login
 ### Fluxo de trabalho diário
 
 ```
-1. Monitor de Frota  →  faça upload da planilha Sascar OU clique "Buscar eventos agora"
-                        (Sascar: use o bookmarklet uma vez por turno para ativar a busca automática)
-                        (Maxtrack: configure e-mail e senha em Meu Perfil → Integrações)
+1. Monitor de Frota  →  faça upload da planilha (Sascar, Maxtrack ou OmniLink)
+                        (Maxtrack/Horizon: robôs da VPS alimentam a fila automaticamente, sem upload manual)
 2. Aba Intervenção   →  ligue ou envie mensagem ao motorista
 3. Templates         →  copie o script de WhatsApp adequado
-4. Confirme a ação   →  "Inserir na planilha" registra o atendimento no Google Sheets
-5. Aba Histórico     →  consulte o histórico do motorista antes de agir
+4. Confirme a ação   →  "Inserir na planilha" registra o atendimento no Google Sheets e no banco
+5. Histórico/Dossiê  →  consulte o histórico ou o dossiê clínico do motorista antes de agir
 6. Agenda            →  crie lembretes para acompanhamentos futuros
 ```
 
@@ -33,68 +32,65 @@ Abra o navegador e acesse **`https://mednetplataform.vercel.app/`**. Faça login
 
 ### Painéis
 
-| Painel | O que faz |
-|---|---|
-| **Dashboard** | Visão geral: alertas ativos, motoristas críticos, atendimentos do dia e gráfico semanal. |
-| **Monitor de Frota** | Núcleo operacional. Faça upload da planilha Sascar e gerencie a fila nas abas abaixo. |
-| **Cross-Check** | Compare alertas de duas plataformas diferentes. Veja detalhes abaixo. |
-| **Agenda** | Lembretes com data, hora e prioridade. Notificação automática no horário configurado. |
-| **Templates** | Scripts prontos para WhatsApp. Variáveis como `[NOME]`, `[PLACA]` e `[HORA]` são preenchidas automaticamente. |
-| **Workspace** | Wiki interna da equipe: protocolos, configurações e procedimentos. |
-| **Bloco de Notas** | Notas pessoais (só você vê) ou compartilhadas com toda a equipe. |
-| **Links Rápidos** | Atalhos para sistemas externos usados no dia a dia. |
-| **Meu Perfil** | Edite seu nome, cargo e senha. Configure integrações (Sascar bookmarklet, credenciais Maxtrack). |
-| **Administração** *(admin)* | Gerencie a equipe, convide operadores e ative/desative modo de manutenção. |
-| **Analytics** *(admin)* | Métricas de 30 dias: reincidentes, transportadoras e tendência de atendimentos. |
+| Painel                 | Acesso mínimo | O que faz                                                                                                               |
+| ---------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard**          | operador      | Visão geral: alertas ativos, motoristas críticos, atendimentos do dia e gráfico semanal.                                |
+| **Monitor de Frota**   | operador      | Núcleo operacional. Faça upload das planilhas e gerencie a fila nas abas abaixo.                                        |
+| **Planilha Embedded**  | operador      | Edição inline das intervenções com sincronização em tempo real (Supabase Realtime).                                     |
+| **Dossiês Clínicos**   | operador      | Histórico de fadiga, tratativas e prontuário de saúde por motorista.                                                    |
+| **Agenda**             | operador      | Lembretes com data, hora e prioridade. Notificação automática no horário configurado.                                   |
+| **Templates**          | operador      | Scripts prontos para WhatsApp. Variáveis como `[NOME]`, `[PLACA]` e `[HORA]` são preenchidas automaticamente.           |
+| **Workspace**          | operador      | Wiki interna da equipe: protocolos, configurações e procedimentos (editor rich-text).                                   |
+| **Bloco de Notas**     | operador      | Notas pessoais (só você vê) ou compartilhadas com toda a equipe.                                                        |
+| **Links Rápidos**      | operador      | Atalhos para sistemas externos usados no dia a dia.                                                                     |
+| **Meu Perfil**         | operador      | Edite seu nome, cargo e senha. Configure integrações (Sascar bookmarklet, credenciais Maxtrack).                        |
+| **Automações**         | líder         | Status de execução dos robôs da VPS, disparos e métricas de ingestão.                                                   |
+| **Chat IA** _(MedBot)_ | admin         | Assistente de IA com acesso de leitura/escrita à plataforma (analytics, relatórios em PDF, ações administrativas).      |
+| **Administração**      | admin         | Analytics, Equipe & Acessos, Integrações, IA & Parsing, Sistema (manutenção/limpeza) e Auditoria — ver subseção abaixo. |
 
 #### Monitor de Frota — abas
 
-| Aba | Conteúdo | Ações disponíveis |
-|---|---|---|
-| **Intervenção** | Motoristas com eventos de fadiga ou distração (bocejo, olho fechado, distração genérica) | Histórico · Template · Inserir na planilha · Descartar |
-| **Reportar à empresa** | Motoristas com eventos que devem ser reportados à transportadora | Histórico · Template · Reportar · Descartar |
-| **Só técnico** | Eventos técnicos (câmera obstruída, perda de vídeo) sem risco imediato | Descartar |
-| **Histórico** | Todos os atendimentos registrados, com filtros por período, tipo e busca por nome/placa | Exportar CSV |
+| Aba                    | Conteúdo                                                                                 | Ações disponíveis                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Intervenção**        | Motoristas com eventos de fadiga ou distração (bocejo, olho fechado, distração genérica) | Histórico · Template · Inserir na planilha · Descartar |
+| **Reportar à empresa** | Motoristas com eventos que devem ser reportados à transportadora                         | Histórico · Template · Reportar · Descartar            |
+| **Só técnico**         | Eventos técnicos (câmera obstruída, perda de vídeo) sem risco imediato                   | Descartar                                              |
+| **Histórico**          | Todos os atendimentos registrados, com filtros por período, tipo e busca por nome/placa  | Exportar CSV                                           |
 
----
+#### Administração — subpáginas
 
-### Cross-Check — passo a passo
-
-O Cross-Check compara relatórios de alertas de **duas plataformas diferentes** para identificar motoristas ou veículos que aparecem nas duas fontes.
-
-1. Baixe a planilha da **Plataforma A** (ex.: Maxtrack) e da **Plataforma B** (ex.: Horizon).
-2. No painel Cross-Check, arraste ou selecione a planilha A na área **Planilha 1** e a planilha B na **Planilha 2**.
-3. Se a planilha não tiver coluna de transportadora, preencha o campo **"Transportadora"** antes de carregar — ele será aplicado automaticamente como valor padrão.
-4. O cruzamento ocorre automaticamente após o segundo upload. Use **"Comparar lado a lado"** para forçar o recálculo.
-5. Use os filtros para refinar: **período**, **tipo** (placa ou motorista), **ordenação**, **somente divergências** ou clique em uma transportadora para filtrar por ela.
-6. Clique em **"Exportar resultados"** ou **"Exportar divergências"** para baixar o CSV.
-
-> **Match perfeito** = o motorista ou placa aparece o mesmo número de vezes nas duas plataformas.  
-> **Divergência** = número de ocorrências diferente entre as fontes — prioridade de investigação.
+| Subpágina            | Conteúdo                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| **Analytics**        | Métricas de reincidência, transportadoras e tendência de atendimentos, com comparação de períodos. |
+| **Equipe & Acessos** | Convites, papéis e permissões da equipe.                                                           |
+| **Integrações**      | Credenciais das plataformas, mapeamento de transportadoras e configuração Horizon.                 |
+| **IA & Parsing**     | Provedores, modelos e chaves de API usados pelo parsing e pelo MedBot.                             |
+| **Sistema**          | Modo manutenção e limpeza de histórico.                                                            |
+| **Auditoria**        | Trilha global de tratativas e atendimentos registrados por toda a equipe.                          |
 
 ---
 
 ### Glossário
 
-| Termo | Significado |
-|---|---|
-| **Intervenção** | Contato direto com o motorista (ligação ou WhatsApp) para tratar um evento de fadiga. |
-| **Reportar à empresa** | Comunicado formal enviado à transportadora responsável pelo motorista. |
-| **Descarte** | Evento removido da fila por não exigir ação (falso positivo, condição já resolvida, etc.). |
-| **Criticidade** | Nível de gravidade do evento — eventos graves/críticos têm prioridade. |
-| **Transportadora** | Empresa responsável pelo veículo e pelo motorista monitorado. |
-| **Match** | Correspondência encontrada entre as duas planilhas no Cross-Check (mesma placa ou mesmo motorista). |
-| **Divergência** | Match onde o número de ocorrências difere entre as duas fontes. |
-| **Atendimento** | Qualquer ação registrada na plataforma (intervenção, reporte ou descarte). |
+| Termo                  | Significado                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **Intervenção**        | Contato direto com o motorista (ligação ou WhatsApp) para tratar um evento de fadiga.      |
+| **Reportar à empresa** | Comunicado formal enviado à transportadora responsável pelo motorista.                     |
+| **Descarte**           | Evento removido da fila por não exigir ação (falso positivo, condição já resolvida, etc.). |
+| **Criticidade**        | Nível de gravidade do evento — eventos graves/críticos têm prioridade.                     |
+| **Transportadora**     | Empresa responsável pelo veículo e pelo motorista monitorado.                              |
+| **Dossiê Clínico**     | Prontuário de fadiga e saúde acumulado de um motorista ao longo do tempo.                  |
+| **Atendimento**        | Qualquer ação registrada na plataforma (intervenção, reporte ou descarte).                 |
 
 ---
 
 ### Papéis
 
-| Papel | Acesso |
-|---|---|
-| **operador** | Dashboard, Monitor, Cross-Check, Agenda, Templates, Workspace, Notas, Links, Perfil |
-| **admin** | Tudo acima + Administração + Analytics + toggle de manutenção |
+| Papel        | Nível | Acesso                                                                                             |
+| ------------ | ----- | -------------------------------------------------------------------------------------------------- |
+| **operador** | 0     | Dashboard, Monitor, Planilha Embedded, Dossiês, Agenda, Templates, Workspace, Notas, Links, Perfil |
+| **líder**    | 1     | Tudo acima + Automações                                                                            |
+| **admin**    | 2     | Tudo acima + Chat IA (MedBot) + Administração completa                                             |
 
 ---
 
@@ -102,78 +98,105 @@ O Cross-Check compara relatórios de alertas de **duas plataformas diferentes** 
 
 ### Stack
 
-| Camada | Tecnologia |
-|---|---|
-| Frontend | React 19, Vite 8, Recharts, TipTap, `vite-plugin-pwa` |
-| Backend | Supabase (Auth + Postgres + Realtime + Storage) |
-| Edge Functions | Deno — `append-sheet`, `invite-user`, `pull-sascar`, `pull-maxtrack` |
-| Integração externa | Google Sheets (audit trail de atendimentos) |
-
-SPA sem roteamento de URL — navegação via `activePanel` no contexto global.
+| Camada             | Tecnologia                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| Frontend           | React 19, Vite 8, React Router 7 (roteamento por URL), Recharts + Chart.js, TipTap, `vite-plugin-pwa` |
+| Backend (Supabase) | Auth + Postgres + Realtime + Storage                                                                  |
+| Backend (Express)  | `server/` — analytics, ingestão Horizon/Maxtrack via robôs, WhatsApp, MedBot (IA)                     |
+| Edge Functions     | Deno — `append-sheet`, `read-sheet`, `invite-user`, `generate-report`, `generate-dossier-report`      |
+| Integração externa | Google Sheets (audit trail), n8n (webhook MedBot), robôs Playwright na VPS                            |
 
 ### Início rápido
 
 ```bash
 cp .env.example .env
-# preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY
+# preencha VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY
 npm install
 npm run dev
+
+# backend Express (analytics, Horizon/Maxtrack, MedBot, WhatsApp) — em outro terminal
+cd server && npm install && npm start
 ```
 
-| Comando | Ação |
-|---|---|
-| `npm run dev` | Servidor de desenvolvimento (Vite + HMR) |
-| `npm run build` | Build de produção |
-| `npm run preview` | Servir o build localmente |
-| `npm run lint` | ESLint |
+| Comando              | Ação                                     |
+| -------------------- | ---------------------------------------- |
+| `npm run dev`        | Servidor de desenvolvimento (Vite + HMR) |
+| `npm run build`      | Build de produção                        |
+| `npm run preview`    | Servir o build localmente                |
+| `npm run lint`       | ESLint                                   |
+| `npm test`           | Testes (Vitest)                          |
+| `npm run test:watch` | Testes em modo watch                     |
 
 ### Estrutura
 
 ```
 src/
-├── App.jsx               # Shell principal, auth, painel ativo, SascarTokenHandler
+├── App.jsx               # Shell principal, auth, rotas (React Router)
 ├── context.jsx           # AppProvider — UI state, fila, preferências
-├── data.js               # Constantes (NAV_ITEMS, defaults)
+├── data.js               # Constantes (NAV_ITEMS, ROLE_LEVEL, defaults)
 ├── auth/                 # AuthContext, LoginPage, SetPasswordPage
-├── components/           # Topbar, Sidebar, TweaksPanel, ErrorBoundary
-├── hooks/                # 11 hooks de domínio
-├── modules/              # Painéis (Dashboard, Monitor, CrossCheck, Agenda, …)
+├── components/           # Topbar, Sidebar, GlobalAiChat, MaintenancePage, DataProvider, ErrorBoundary
+├── hooks/                # 15 hooks de domínio (atendimentos, automations, reminders, wsPages, ...)
+├── modules/               # Painéis (Dashboard, Monitor, Analytics, Automações, Workspace, Dossiês, ...)
+│   ├── dashboard/        # Subcomponentes do Dashboard
 │   ├── monitor/          # Subcomponentes do Monitor
-│   └── crosscheck/       # Subcomponentes do Cross-Check
-└── platforms/            # Adapters de plataforma (padrão Adapter)
+│   ├── analytics/        # Subcomponentes do Analytics
+│   ├── automacoes/       # Subcomponentes de Automações (status de robôs)
+│   ├── admin/            # Subpáginas de Administração + ai-chat/ (UI do MedBot)
+│   └── crosscheck/       # utils.js — reaproveitado só pelo backend (server/auto-crosscheck.js)
+└── platforms/             # Adapters de plataforma (padrão Adapter)
     ├── base.js           # Contrato + emptyDriver/emptyStats
-    ├── index.js          # Registry
-    ├── shared/           # normalize, parsers, history
+    ├── index.js          # Registry (sascar, maxtrack, omnilink)
+    ├── shared/           # normalize, parsers, history, aggregate, customRules
     ├── sascar/           # Adapter Sascar (spreadsheet + scraper)
-    ├── maxtrack/         # Adapter Maxtrack (scraper via Edge Function)
+    ├── maxtrack/         # Adapter Maxtrack (columns + parser)
+    ├── omnilink/         # Adapter OmniLink (upload manual de planilha)
     └── _template/        # Esqueleto para novas plataformas
 
+server/                    # Backend Express — companheiro do Supabase, não substituto
+├── index.js               # Bootstrap, monta as rotas abaixo
+├── analytics-routes.js    # API de Analytics (role-gated)
+├── analytics-rpc.js       # Motor de Analytics via RPC Postgres
+├── analytics-import.js    # Upload/parsing compartilhado (multer)
+├── horizon-routes.js      # Ingestão Horizon (auth de robô) + Auto Cross-Check
+├── maxtrack-routes.js     # Ingestão Maxtrack (auth de robô) + Auto Cross-Check
+├── auto-crosscheck.js     # Cruza eventos Maxtrack × Horizon e sugere classificação
+├── whatsapp-routes.js     # Credenciais/rotas do WhatsApp Business API
+├── ai-chat-routes.js      # Backend do MedBot (chat IA)
+├── ai-chat/               # middleware, prompt, tool-handlers do MedBot
+├── pdf-generator.js       # Geração de PDF (relatórios do MedBot)
+└── Dockerfile             # node:18-alpine, expõe porta 3000
+
 supabase/
-├── migration*.sql        # v2..v10 — schemas e integrações
+├── migrations/            # Schemas e integrações (histórico incremental por data)
 └── functions/
-    ├── append-sheet/     # Append no Google Sheets
-    ├── invite-user/      # Convite de operadores
-    ├── pull-sascar/      # Busca automática de alarmes Sascar
-    └── pull-maxtrack/    # Busca automática de eventos Maxtrack
+    ├── append-sheet/      # Append no Google Sheets
+    ├── read-sheet/        # Leitura da planilha embedded
+    ├── invite-user/       # Convite de operadores
+    ├── generate-report/   # Relatório executivo (IA)
+    └── generate-dossier-report/  # Dossiê clínico em PDF
 ```
 
 ### Plataformas de monitoramento
 
-| Plataforma | Modo | Status |
-|---|---|---|
-| Sascar | spreadsheet + scraper (bookmarklet) | ✅ ativa · 🧪 scraper beta |
-| Maxtrack | scraper (Edge Function + credenciais) | 🧪 beta |
-| Autotrack | a definir | 📋 planejada |
-| Trimble | a definir | 📋 planejada |
-| Cobli | a definir | 📋 planejada |
-| Horizon | a definir | 📋 planejada |
+| Plataforma | Modo                                                                                    | Status                                           |
+| ---------- | --------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Sascar     | spreadsheet                                                                             | ✅ ativa                                         |
+| Maxtrack   | upload de planilha + ingestão automática via robô (`server/maxtrack-routes.js`)         | ✅ ativa                                         |
+| OmniLink   | spreadsheet (upload manual do export do portal)                                         | ✅ ativa                                         |
+| Horizon    | ingestão automática via robô (`server/horizon-routes.js`), fora do registry de adapters | ✅ ativa (ver `docs/PLANO_AUTOMACAO_HORIZON.md`) |
+| Autotrack  | a definir                                                                               | 📋 planejada                                     |
+| Trimble    | a definir                                                                               | 📋 planejada                                     |
+| Cobli      | a definir                                                                               | 📋 planejada                                     |
 
-Para adicionar uma plataforma nova: copie `src/platforms/_template/`, implemente o bloco de ingestão e registre em `src/platforms/index.js`.
+Para adicionar uma plataforma nova ao Monitor de Frota (upload/adapter): copie `src/platforms/_template/`, implemente o bloco de ingestão e registre em `src/platforms/index.js`. Para uma plataforma ingerida via robô/VPS (como Horizon), siga o padrão de `server/horizon-routes.js` em vez do registry de adapters.
 
 ### Documentação técnica
 
-| Documento | Conteúdo |
-|---|---|
-| [`docs/PROJECT.md`](docs/PROJECT.md) | Documentação completa: modelo de dados, regras de negócio, integração Google Sheets, PWA |
-| [`docs/PLATFORMS.md`](docs/PLATFORMS.md) | Guia detalhado para adicionar novas plataformas (adapter, formato canônico, checklist) |
-| [`docs/skills/mednet-skill/SKILL.md`](docs/skills/mednet-skill/SKILL.md) | Skill workspace-scoped para scaffold de adapters e módulos |
+| Documento                                                                | Conteúdo                                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [`docs/PROJECT.md`](docs/PROJECT.md)                                     | Documentação completa: modelo de dados, regras de negócio, integração Google Sheets, PWA          |
+| [`docs/PLATFORMS.md`](docs/PLATFORMS.md)                                 | Guia detalhado para adicionar novas plataformas ao Monitor (adapter, formato canônico, checklist) |
+| [`docs/PLANO_AUTOMACAO_HORIZON.md`](docs/PLANO_AUTOMACAO_HORIZON.md)     | Status vivo da automação Horizon/Maxtrack (robôs VPS, Auto Cross-Check)                           |
+| `docs/AUDITORIA-*.md`, `docs/analytics-rpc-progress.md`                  | Logs de auditoria históricos — consulte só para contexto de decisões passadas                     |
+| [`docs/skills/mednet-skill/SKILL.md`](docs/skills/mednet-skill/SKILL.md) | Skill workspace-scoped para scaffold de adapters e módulos                                        |
