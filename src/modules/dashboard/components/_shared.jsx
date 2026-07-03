@@ -1,5 +1,3 @@
-import { useState, useEffect, useRef } from 'react';
-
 // Design tokens compartilhados pelos componentes do Dashboard.
 export const COLORS = {
   fadiga:       '#E24B4A',
@@ -8,31 +6,6 @@ export const COLORS = {
   posPositivo:  '#2A8DD9',
   aberto:       '#8A94A6',
 };
-
-// Anima a transição entre o número anterior e o atual (easing cubic out).
-export function AnimatedNumber({ value, duration = 700 }) {
-  const [display, setDisplay] = useState(0);
-  const prev = useRef(0);
-  const raf = useRef(null);
-  useEffect(() => {
-    const from = prev.current;
-    const to = value;
-    prev.current = value;
-    if (raf.current) cancelAnimationFrame(raf.current);
-    if (from === to) { setDisplay(to); return; }
-    let start = null;
-    const tick = (ts) => {
-      if (!start) start = ts;
-      const p = Math.min((ts - start) / duration, 1);
-      const e = 1 - Math.pow(1 - p, 3);
-      setDisplay(Math.round(from + (to - from) * e));
-      if (p < 1) raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => raf.current && cancelAnimationFrame(raf.current);
-  }, [value, duration]);
-  return display.toLocaleString('pt-BR');
-}
 
 // Donut chart usado pelo ClassificationBreakdown — privado ao módulo.
 export function Donut({ items, total, size = 160, stroke = 22 }) {

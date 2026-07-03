@@ -1,4 +1,4 @@
-import { AnimatedNumber } from './_shared';
+import { AnimatedNumber } from '../../../components/AnimatedNumber';
 
 export function KPI({
   icon,

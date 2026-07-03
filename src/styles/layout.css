@@ -283,6 +283,11 @@ body {
   font-weight: 500;
   background: var(--success-bg);
   color: var(--success-600);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.status-pill.is-offline {
+  background: var(--danger-bg);
+  color: var(--danger-600);
 }
 .status-pill .dot {
   width: 6px; height: 6px;
@@ -290,6 +295,7 @@ body {
   background: currentColor;
   animation: pulse-dot 2s infinite;
 }
+.status-pill.is-offline .dot { animation: none; }
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -415,15 +421,8 @@ body {
 .badge-success { background: var(--success-bg); color: var(--success-600); }
 .badge-info    { background: var(--info-bg);    color: var(--info-500); }
 
-/* Modais */
-.modal-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(10, 7, 23, 0.55);
-  z-index: 200;
-  align-items: center; justify-content: center;
-  backdrop-filter: blur(4px);
-}
-.modal-overlay.open { display: flex; }
+/* Modais — .modal-overlay base fica em modules.css ("Modal Improvements"),
+   fonte única de display/z-index/background/backdrop-filter. */
 .modal {
   background: var(--surface-0);
   border: 1px solid var(--border);

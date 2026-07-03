@@ -33,14 +33,12 @@
   --info-500: #2a8dd9;
   --info-bg: #e6f1fb;
 
-  /* ── Sombras & raios ── */
+  /* ── Sombras & raios ──
+     --radius-lg/xl e --shadow-sm/md/lg são definidos em visual-refresh.css
+     (carregado depois — era a fonte real desses valores; os antigos aqui
+     ficavam mortos). Só --radius-sm/md, sem equivalente lá, seguem aqui. */
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --shadow-sm: 0 1px 3px rgba(15, 25, 35, 0.08);
-  --shadow-md: 0 4px 14px rgba(15, 25, 35, 0.1);
-  --shadow-lg: 0 12px 40px rgba(15, 25, 35, 0.14);
 
   /* ── Tipografia ── */
   --font-sans: "Poppins", "DM Sans", system-ui, sans-serif;
@@ -56,24 +54,11 @@
 /* ─── TEMA CLARO (padrão) ─── */
 :root,
 [data-theme="light"] {
-  --bg-app: #f4f5f8;
   --bg-sidebar: var(--accent-900);
   --bg-sidebar-active: rgba(158, 26, 69, 0.22);
   --bg-sidebar-hover: rgba(255, 255, 255, 0.05);
-  --surface-0: #ffffff;
-  --surface-1: #f4f5f8;
-  --surface-2: #eaecf1;
-  --surface-3: #dde0e7;
   --surface-glass: rgba(255, 255, 255, 0.65);
-
-  --text-primary: #0f1923;
-  --text-secondary: #4a5568;
-  --text-muted: #8a94a6;
   --text-on-brand: #ffffff;
-
-  --border: rgba(15, 25, 35, 0.08);
-  --border-md: rgba(15, 25, 35, 0.13);
-  --border-strong: rgba(15, 25, 35, 0.2);
 
   /* tag colors (claro) */
   --tag-contato-bg: #e6f1fb;
@@ -90,28 +75,10 @@
 
 /* ─── TEMA ESCURO ─── */
 [data-theme="dark"] {
-  --bg-app: #0d0c0d;
-  --bg-sidebar: #0f0205;
   --bg-sidebar-active: rgba(158, 26, 69, 0.25);
   --bg-sidebar-hover: rgba(255, 255, 255, 0.05);
-  --surface-0: #161315;
-  --surface-1: #1c181b;
-  --surface-2: #231d21;
-  --surface-3: #2c252a;
   --surface-glass: rgba(22, 19, 21, 0.65);
-
-  --text-primary: #eceaf7;
-  --text-secondary: #9d98b5;
-  --text-muted: #6f6a88;
   --text-on-brand: #ffffff;
-
-  --border: rgba(255, 255, 255, 0.06);
-  --border-md: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
 
   --danger-bg: rgba(226, 75, 74, 0.14);
   --warning-bg: rgba(232, 160, 32, 0.14);

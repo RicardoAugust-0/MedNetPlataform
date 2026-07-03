@@ -1,6 +1,9 @@
 /* =============================================================
    MedNet Plataforma - visual refresh
    Global polish layer loaded after the legacy styles.
+   Fonte canônica de bg-app, surface-0..3, text-primary/secondary/muted,
+   border/md/strong, radius-lg/xl e shadow-sm/md/lg (claro no :root,
+   escuro no bloco data-theme dark abaixo) — não redeclarar em tokens.css.
    ============================================================= */
 
 :root {

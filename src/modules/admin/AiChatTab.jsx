@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/analyticsApi.js';
 import { useApp } from '../../context.jsx';
+import { useConfirm } from '../../hooks/useConfirm';
+import { useToast } from '../../hooks/useToast';
 
 // Sub-components
 import AiChatSidebar from './ai-chat/AiChatSidebar.jsx';
@@ -24,6 +26,8 @@ const WELCOME_MESSAGE = {
 export default function AiChatTab() {
   const navigate = useNavigate();
   const { theme, setTheme } = useApp();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
@@ -202,7 +206,13 @@ export default function AiChatTab() {
   // ── Delete thread ──
   const handleDeleteThread = async (id, e) => {
     e.stopPropagation();
-    if (!confirm('Deseja excluir esta conversa permanentemente?')) return;
+    const ok = await confirm({
+      title: 'Excluir conversa',
+      message: 'Deseja excluir esta conversa permanentemente?',
+      confirmText: 'Excluir',
+      danger: true
+    });
+    if (!ok) return;
     try {
       const res = await apiFetch(`/api/ai/chat/threads/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -210,15 +220,27 @@ export default function AiChatTab() {
         if (activeThreadId === id) {
           handleNewChat();
         }
+        toast('Conversa excluída.', 'success');
+      } else {
+        toast('Não foi possível excluir a conversa.', 'error');
       }
     } catch (err) {
       console.error(err);
+      toast('Não foi possível excluir a conversa.', 'error');
     }
   };
 
   // ── Save report manually ──
   const handleSaveReportManually = async (msg) => {
-    const title = prompt('Digite o título para este relatório:', `Relatório MedBot - ${new Date().toLocaleDateString()}`);
+    const title = await confirm({
+      title: 'Salvar relatório',
+      message: 'Digite um título para este relatório:',
+      confirmText: 'Salvar',
+      input: {
+        defaultValue: `Relatório MedBot - ${new Date().toLocaleDateString()}`,
+        placeholder: 'Título do relatório'
+      }
+    });
     if (!title) return;
 
     try {
@@ -232,18 +254,27 @@ export default function AiChatTab() {
         })
       });
       if (res.ok) {
-        alert('Relatório salvo na galeria lateral!');
+        toast('Relatório salvo na galeria lateral!', 'success');
         fetchReports();
+      } else {
+        toast('Não foi possível salvar o relatório.', 'error');
       }
     } catch (err) {
       console.error(err);
+      toast('Não foi possível salvar o relatório.', 'error');
     }
   };
 
   // ── Delete report ──
   const handleDeleteReport = async (id, e) => {
     e.stopPropagation();
-    if (!confirm('Excluir este relatório permanentemente?')) return;
+    const ok = await confirm({
+      title: 'Excluir relatório',
+      message: 'Excluir este relatório permanentemente?',
+      confirmText: 'Excluir',
+      danger: true
+    });
+    if (!ok) return;
     try {
       const res = await apiFetch(`/api/ai/reports/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -251,9 +282,13 @@ export default function AiChatTab() {
         if (selectedReport?.id === id) {
           setSelectedReport(null);
         }
+        toast('Relatório excluído.', 'success');
+      } else {
+        toast('Não foi possível excluir o relatório.', 'error');
       }
     } catch (err) {
       console.error(err);
+      toast('Não foi possível excluir o relatório.', 'error');
     }
   };
 

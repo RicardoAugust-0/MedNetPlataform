@@ -3,11 +3,15 @@ import { useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { PANEL_TITLES } from '../data';
 import { fmtTime } from '../utils';
+import { useOnline } from '../hooks/useOnline';
+import { usePwaUpdate } from '../hooks/usePwaUpdate';
 
 export default function Topbar() {
   const { theme, setTheme } = useApp();
   const location = useLocation();
   const [clock, setClock] = useState(fmtTime());
+  const online = useOnline();
+  usePwaUpdate();
 
   useEffect(() => {
     const id = setInterval(() => setClock(fmtTime()), 1000);
@@ -50,7 +54,9 @@ export default function Topbar() {
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-actions">
-        <span className="status-pill"><span className="dot"></span> Fadiga Zero · Online</span>
+        <span className={`status-pill${online ? '' : ' is-offline'}`}>
+          <span className="dot"></span> Fadiga Zero · {online ? 'Online' : 'Offline'}
+        </span>
         <span className="topbar-clock">{clock}</span>
         <button
           className="topbar-icon-btn"

@@ -1,4 +1,5 @@
 import renderMarkdown from './renderMarkdown.js';
+import { useToast } from '../../../hooks/useToast';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
@@ -59,6 +60,7 @@ function ReportChart({ chart }) {
 }
 
 export default function AiReportModal({ report, onClose }) {
+  const toast = useToast();
   if (!report) return null;
 
   return (
@@ -87,7 +89,7 @@ export default function AiReportModal({ report, onClose }) {
             className="btn btn-ghost"
             onClick={() => {
               navigator.clipboard.writeText(report.content);
-              alert('Texto do relatório copiado!');
+              toast('Texto do relatório copiado!', 'success');
             }}
           >
             <i className="ti ti-copy" /> Copiar Texto

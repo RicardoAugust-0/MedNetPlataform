@@ -1,5 +1,5 @@
 // Barrel: mantém o import path `./dashboard/components` estável.
-export { AnimatedNumber } from './_shared';
+export { AnimatedNumber } from '../../../components/AnimatedNumber';
 export { KPI } from './KPI';
 export { FilterBar } from './FilterBar';
 export { ProductivityRanking } from './ProductivityRanking';

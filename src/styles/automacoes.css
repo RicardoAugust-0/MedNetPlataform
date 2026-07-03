@@ -160,14 +160,10 @@
 .hook-lastrun.idle { background: var(--surface-1); }
 .lr-icon.idle { background: var(--surface-2); color: var(--text-muted); }
 
-/* ── Modal ── */
-.modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,7,23,.5); backdrop-filter: blur(5px); z-index: 500; padding: 20px; animation: fade-in .15s ease both; }
-.modal { background: var(--surface-0); border: 1px solid var(--border-md); border-radius: var(--radius-xl); width: 650px; max-width: 95vw; max-height: 92vh; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; overflow: hidden; }
-.modal-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
-.modal-title { font-size: 14.5px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; flex: 1; }
-.modal-title i { color: var(--accent-500); font-size: 18px; }
-.modal-body { padding: 18px 20px; overflow-y: auto; }
-.modal-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+/* Modal chrome (overlay/modal/header/title/body/footer) vem do sistema
+   compartilhado em layout.css + modules.css — não redeclarar aqui, isso
+   sobrescrevia globalmente (z-index, largura) todo modal do app assim
+   que este módulo carregava. Largura específica: inline style no JSX. */
 .modal-footer .spacer { flex: 1; }
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

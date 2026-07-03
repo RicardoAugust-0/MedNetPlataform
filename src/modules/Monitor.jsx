@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useAtendimentos } from '../hooks/useAtendimentos';
 import { useTemplates } from '../hooks/useTemplates';
 import { useConfirm } from '../hooks/useConfirm';
+import { useToast } from '../hooks/useToast';
 import { getPlatform } from '../platforms';
 
 // Monitor Subcomponents
@@ -94,6 +95,7 @@ export default function Monitor() {
   } = useAtendimentos();
   const { templates } = useTemplates();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const { resolveAlias } = useCarrierAliases();
   const sheetHistory   = useSheetHistory();
@@ -345,6 +347,7 @@ export default function Monitor() {
             setLoading(false);
             setStatusKind('idle');
             setStatusMsg('Upload cancelado: planilha duplicada.');
+            toast('Upload cancelado: planilha duplicada.', 'info');
             return;
           }
         }
@@ -376,10 +379,12 @@ export default function Monitor() {
       
       setStatusKind('active');
       setStatusMsg(`${file.name} (${detection.platformName}) processada. Fila atualizada.`);
+      toast(`${file.name} processada. Fila atualizada.`, 'success');
       navigate('/monitor/intervencao', { replace: true });
     } catch (err) {
       setStatusKind('error');
       setStatusMsg(`Erro ao ler planilha: ${err.message}`);
+      toast(`Erro ao ler planilha: ${err.message}`, 'error');
     } finally { setLoading(false); }
   };
 
@@ -393,7 +398,9 @@ export default function Monitor() {
   const attend = async (d) => {
     if (!(await confirm({ title: 'Iniciar contato', message: `Iniciar contato com ${d.nome}?` }))) return;
     const obs = `${d.alertas} evento(s) de intervenção (${d.tipos.join(', ') || '—'})`;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', bucket: 'intervencao', obs, platformId: d._platformId });
+    const { error } = await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'intervencao', bucket: 'intervencao', obs, platformId: d._platformId }) || {};
+    if (error) return;
+    toast(`Contato iniciado com ${d.nome}.`, 'success');
     const now = new Date();
     const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const data = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -420,7 +427,9 @@ export default function Monitor() {
 
   const reportar = async (d) => {
     if (!(await confirm({ title: 'Registrar notificação', message: `Registrar notificação para a empresa: ${d.nome}?` }))) return;
-    await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', bucket: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})`, platformId: d._platformId });
+    const { error } = await registrar({ motorista: d.nome, placa: d.placa, transportadora: d.transportadora, tipo: 'reportar', bucket: 'reportar', obs: `Reportado à transportadora · ${d.reportaveis} evento(s) (${d.tiposReportar.join(', ') || '—'})`, platformId: d._platformId }) || {};
+    if (error) return;
+    toast(`Notificação registrada para ${d.nome}.`, 'success');
   };
 
   const deleteAlert = (d, tipo = 'intervencao') => {
@@ -434,13 +443,15 @@ export default function Monitor() {
     const countStr = isIntervencao ? `${d.alertas} evento(s)`
                    : isReportar   ? `${d.reportaveis} evento(s) reportáveis`
                    :                `${d.tecnicos} evento(s) técnicos`;
-    await registrar({
+    const { error } = await registrar({
       motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
       tipo: 'descarte',
       bucket: tipo,
       obs: `Alerta descartado · ${countStr} · Motivo: ${reason}`,
       platformId: d._platformId,
-    });
+    }) || {};
+    if (error) return;
+    toast(`Alerta de ${d.nome} descartado.`, 'success');
   };
 
   const bulkDiscard = async () => {
@@ -477,6 +488,10 @@ export default function Monitor() {
     setLoading(false);
     setStatusKind(fail > 0 ? 'error' : 'active');
     setStatusMsg(`Descarte em massa: ${ok} ok${fail > 0 ? ` · ${fail} falha(s)` : ''}`);
+    toast(
+      `${ok} alerta(s) de ${tabLabel} descartado(s)${fail > 0 ? ` · ${fail} falha(s)` : ''}.`,
+      fail > 0 ? 'error' : 'success'
+    );
   };
 
   const clearQueue = async () => {
@@ -493,8 +508,10 @@ export default function Monitor() {
       setLoadStats(null);
       setStatusKind('idle');
       setStatusMsg('Fila limpa. Aguardando nova planilha.');
+      toast('Fila limpa.', 'success');
     } catch (err) {
       console.warn('[Monitor] Erro ao limpar fila:', err.message);
+      toast('Não foi possível limpar a fila.', 'error');
     } finally {
       setLoading(false);
     }
@@ -521,7 +538,10 @@ export default function Monitor() {
     const list = activeTab === 'intervencao' ? intervencaoList
                : activeTab === 'reportar'    ? reportarList
                : activeTab === 'tecnicos'    ? tecList : [];
-    if (list.length === 0) return;
+    if (list.length === 0) {
+      toast('Nenhum dado para exportar nesta aba.', 'warning');
+      return;
+    }
 
     // Ponto e vírgula como separador para abrir corretamente no Excel/LibreOffice
     // com locale pt-BR (onde a vírgula é separador decimal).
@@ -573,10 +593,12 @@ export default function Monitor() {
 
     const csv = [header.map(esc).join(SEP), ...rows].join('\r\n');
     const a = document.createElement('a');
+    const filename = `monitor-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `monitor-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+    toast(`Exportado: ${filename}`, 'success');
   };
 
   const openDossie = async (nome) => {

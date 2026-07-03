@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { uploadAvatar, removeAvatar } from '../lib/uploadAvatar';
 import { iniciais } from '../utils.js';
+import { useConfirm } from '../hooks/useConfirm';
 
 function Section({ title, children }) {
   return (
@@ -41,6 +42,7 @@ function Alert({ type, msg }) {
 }
 
 function AvatarSection({ profile, updateProfile }) {
+  const confirm = useConfirm();
   const fileInputRef = useRef(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoMsg,     setPhotoMsg]     = useState(null);
@@ -67,7 +69,13 @@ function AvatarSection({ profile, updateProfile }) {
 
   const handleRemove = async () => {
     if (!profile?.id || !profile.avatar_url) return;
-    if (!window.confirm('Remover sua foto de perfil?')) return;
+    const ok = await confirm({
+      title: 'Remover foto',
+      message: 'Remover sua foto de perfil?',
+      confirmText: 'Remover',
+      danger: true
+    });
+    if (!ok) return;
     setPhotoLoading(true);
     setPhotoMsg(null);
     try {

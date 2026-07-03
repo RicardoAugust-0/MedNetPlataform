@@ -6,10 +6,12 @@ const ConfirmContext = createContext(null);
 export function ConfirmProvider({ children }) {
   const [modal, setModal] = useState(null);
   const confirmBtnRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (!modal) return;
-    confirmBtnRef.current?.focus();
+    (modal.input ? inputRef : confirmBtnRef).current?.focus();
+    if (modal.input) inputRef.current?.select();
     const handleKey = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -31,8 +33,12 @@ export function ConfirmProvider({ children }) {
         confirmText: options.confirmText || 'Confirmar',
         cancelText: options.cancelText || 'Cancelar',
         danger: options.danger || false,
-        onConfirm: () => { setModal(null); resolve(true); },
-        onCancel: () => { setModal(null); resolve(false); }
+        input: options.input || null,
+        onConfirm: () => {
+          setModal(null);
+          resolve(options.input ? (inputRef.current?.value.trim() || null) : true);
+        },
+        onCancel: () => { setModal(null); resolve(options.input ? null : false); }
       });
     });
   }, []);
@@ -49,12 +55,22 @@ export function ConfirmProvider({ children }) {
                 {modal.title}
               </div>
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: modal.input ? 12 : 24, lineHeight: 1.5 }}>
               {modal.message}
             </div>
+            {modal.input && (
+              <input
+                ref={inputRef}
+                type="text"
+                className="form-control"
+                defaultValue={modal.input.defaultValue || ''}
+                placeholder={modal.input.placeholder || ''}
+                style={{ marginBottom: 24 }}
+              />
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-ghost" onClick={modal.onCancel}>{modal.cancelText}</button>
-              <button ref={confirmBtnRef} className={`btn ${modal.danger ? 'btn-danger' : 'btn-primary'}`} onClick={modal.onConfirm}>
+              <button ref={modal.input ? null : confirmBtnRef} className={`btn ${modal.danger ? 'btn-danger' : 'btn-primary'}`} onClick={modal.onConfirm}>
                 {modal.confirmText}
               </button>
             </div>

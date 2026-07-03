@@ -287,7 +287,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
 
   return createPortal(
     <div className="modal-overlay open" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '650px', maxWidth: '95vw' }}>
         <div className="modal-header">
           <div className="modal-title"><i className="ti ti-settings"></i> {isNew ? 'Nova automação' : 'Configurar ' + automation.name}</div>
           <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>

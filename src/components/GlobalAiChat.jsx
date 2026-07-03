@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { apiFetch } from '../lib/analyticsApi.js';
+import { useConfirm } from '../hooks/useConfirm';
+import { useToast } from '../hooks/useToast';
 import renderMarkdown from '../modules/admin/ai-chat/renderMarkdown.js';
 import '../styles/ai-chat.css';
 import {
@@ -43,6 +45,8 @@ const WELCOME_MESSAGE = {
 export default function GlobalAiChat() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
@@ -144,14 +148,24 @@ export default function GlobalAiChat() {
   };
 
   const handleClearHistory = async () => {
-    if (!confirm('Deseja limpar todo o histórico de conversas com a IA?')) return;
+    const ok = await confirm({
+      title: 'Limpar histórico',
+      message: 'Deseja limpar todo o histórico de conversas com a IA?',
+      confirmText: 'Limpar',
+      danger: true
+    });
+    if (!ok) return;
     try {
       const res = await apiFetch('/api/ai/chat/history', { method: 'DELETE' });
       if (res.ok) {
         setMessages([WELCOME_MESSAGE]);
+        toast('Histórico limpo.', 'success');
+      } else {
+        toast('Não foi possível limpar o histórico.', 'error');
       }
     } catch (err) {
       console.error(err);
+      toast('Não foi possível limpar o histórico.', 'error');
     }
   };
 

@@ -654,6 +654,27 @@ export default function DossiesPage() {
     return { total, critical, yawning };
   }, [telemetryEvents, telemetryTotal]);
 
+  // Linha do tempo única: alertas de telemetria + ações/tratativas, intercalados por data
+  const combinedHistory = useMemo(() => {
+    const events = telemetryEvents.map(e => ({
+      kind: 'evento',
+      id: `ev-${e.id}`,
+      ts: e.ocorrido_em,
+      severidade: e.severidade,
+      label: e.nome_evento,
+      meta: [e.platform_id, e.velocidade_kmh != null ? `${e.velocidade_kmh} km/h` : null].filter(Boolean).join(' · '),
+    }));
+    const actions = atendimentosList.map(a => ({
+      kind: 'atendimento',
+      id: `at-${a.id}`,
+      ts: a.created_at,
+      tipo: a.tipo,
+      label: a.obs,
+      meta: `Operador: ${a.operador_nome || a.operador || '—'}`,
+    }));
+    return [...events, ...actions].sort((x, y) => new Date(y.ts) - new Date(x.ts));
+  }, [telemetryEvents, atendimentosList]);
+
   const severityColor = (sev) => {
     const s = String(sev).toLowerCase();
     if (s.includes('graviss') || s === 'grave') return 'var(--danger-500)';
@@ -712,7 +733,7 @@ export default function DossiesPage() {
                   setSearchParams({ driver: d.nome });
                 }}
                 style={{
-                  padding: '10px 14px',
+                  padding: '7px 12px',
                   borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))',
                   cursor: 'pointer',
                   background: selectedDriver?.nome === d.nome ? 'var(--surface-1, rgba(255,255,255,0.05))' : 'transparent',
@@ -726,10 +747,10 @@ export default function DossiesPage() {
                   if (selectedDriver?.nome !== d.nome) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 12.5, color: selectedDriver?.nome === d.nome ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: selectedDriver?.nome === d.nome ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {d.nome}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
                   <span>{d.placa || 'Sem placa'}</span>
                   <span>{resolveMonitorName(d.transportadora)}</span>
                 </div>
@@ -740,18 +761,18 @@ export default function DossiesPage() {
       </div>
 
       {/* Painel Direito: Dossiê e IA */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', gap: 16 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', gap: 10 }}>
         {selectedDriver ? (
           <>
             {/* Header Motorista */}
-            <div className="card" style={{ padding: '16px 20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+            <div className="card" style={{ padding: '10px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <i className="ti ti-steering-wheel" style={{ color: 'var(--accent-500)' }}></i>
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="ti ti-steering-wheel" style={{ color: 'var(--accent-500)', fontSize: 15 }}></i>
                     {selectedDriver.nome}
                   </h2>
-                  <div style={{ display: 'flex', gap: 12, color: 'var(--text-muted)', fontSize: 12, marginTop: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, color: 'var(--text-muted)', fontSize: 10.5, marginTop: 3, flexWrap: 'wrap' }}>
                     <span><strong style={{ color: 'var(--text-primary)' }}>Placa:</strong> {selectedDriver.placa || '—'}</span>
                     <span>·</span>
                     <span><strong style={{ color: 'var(--text-primary)' }}>Transportadora:</strong> {resolveMonitorName(selectedDriver.transportadora)}</span>
@@ -763,37 +784,37 @@ export default function DossiesPage() {
                     )}
                     <span>·</span>
                     <span>
-                      <strong style={{ color: 'var(--text-primary)' }}>Turno:</strong> 
-                      <i className={`ti ti-${selectedDriver.turno === 'diurno' ? 'sun' : 'moon'}`} style={{ marginLeft: 4, marginRight: 2, color: selectedDriver.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-300)' }}></i>
+                      <strong style={{ color: 'var(--text-primary)' }}>Turno:</strong>
+                      <i className={`ti ti-${selectedDriver.turno === 'diurno' ? 'sun' : 'moon'}`} style={{ marginLeft: 3, marginRight: 2, color: selectedDriver.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-300)' }}></i>
                       {selectedDriver.turno === 'diurno' ? 'Diurno' : 'Noturno'}
                     </span>
                   </div>
                 </div>
-              </div>
 
-              {/* KPIs Rápidos */}
-              <div className="stat-strip" style={{ marginTop: 16, marginBottom: 0 }}>
-                <div className="stat-box">
-                  <div className="stat-label">Alertas Totais</div>
-                  <div className="stat-value">{stats.total}</div>
-                </div>
-                <div className="stat-box">
-                  <div className="stat-label">Críticos</div>
-                  <div className={`stat-value${stats.critical > 0 ? ' danger' : ''}`}>{stats.critical}</div>
-                </div>
-                <div className="stat-box">
-                  <div className="stat-label">Bocejos</div>
-                  <div className="stat-value">{stats.yawning}</div>
+                {/* KPIs Rápidos — compactos, na mesma linha do nome em telas largas */}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <div className="stat-box" style={{ padding: '5px 10px', minWidth: 74, textAlign: 'center' }}>
+                    <div className="stat-label" style={{ fontSize: 9, marginBottom: 1 }}>Alertas</div>
+                    <div className="stat-value" style={{ fontSize: 16 }}>{stats.total}</div>
+                  </div>
+                  <div className="stat-box" style={{ padding: '5px 10px', minWidth: 74, textAlign: 'center' }}>
+                    <div className="stat-label" style={{ fontSize: 9, marginBottom: 1 }}>Críticos</div>
+                    <div className={`stat-value${stats.critical > 0 ? ' danger' : ''}`} style={{ fontSize: 16 }}>{stats.critical}</div>
+                  </div>
+                  <div className="stat-box" style={{ padding: '5px 10px', minWidth: 74, textAlign: 'center' }}>
+                    <div className="stat-label" style={{ fontSize: 9, marginBottom: 1 }}>Bocejos</div>
+                    <div className="stat-value" style={{ fontSize: 16 }}>{stats.yawning}</div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Navegação de abas: Clínico × Documentos × Tratativas (vira /dossies/:tab) */}
-            <nav className="tabs" aria-label="Abas do Dossiê do Motorista">
+            {/* Navegação de abas: Clínico × Documentos × Histórico & Tratativas (vira /dossies/:tab) */}
+            <nav className="tabs" aria-label="Abas do Dossiê do Motorista" style={{ marginBottom: 10 }}>
               {[
-                { id: 'clinico',     label: 'Clínico',     icon: 'ti-activity' },
-                { id: 'documentos',  label: 'Documentos',  icon: 'ti-files', count: documents.length },
-                { id: 'tratativas',  label: 'Tratativas',  icon: 'ti-history', count: atendimentosList.length },
+                { id: 'clinico',     label: 'Clínico',              icon: 'ti-activity' },
+                { id: 'documentos',  label: 'Documentos',            icon: 'ti-files', count: documents.length },
+                { id: 'tratativas',  label: 'Histórico & Tratativas', icon: 'ti-history', count: combinedHistory.length },
               ].map(t => (
                 <div
                   key={t.id}
@@ -808,6 +829,7 @@ export default function DossiesPage() {
                     }
                   }}
                   aria-selected={tab === t.id}
+                  style={{ padding: '7px 13px', fontSize: 12 }}
                 >
                   <i className={`ti ${t.icon}`}></i> {t.label}
                   {t.count != null && <span className="tab-count">{t.count}</span>}
@@ -829,11 +851,11 @@ export default function DossiesPage() {
                   )}
                 </div>
                 
-                <div style={{ padding: 20, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column' }}>
                   {editingHealth ? (
-                    <form onSubmit={handleSaveHealth} style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Dados Cadastrais</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <form onSubmit={handleSaveHealth} style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Dados Cadastrais</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div className="form-group">
                           <label className="form-label">CPF</label>
                           <input
@@ -864,7 +886,7 @@ export default function DossiesPage() {
                           />
                         </div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div className="form-group">
                           <label className="form-label">CNH (Número)</label>
                           <input
@@ -895,8 +917,8 @@ export default function DossiesPage() {
                           />
                         </div>
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Dados Clínicos</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>Dados Clínicos</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div className="form-group">
                           <label className="form-label">Epworth (Sonolência)</label>
                           <input
@@ -937,10 +959,10 @@ export default function DossiesPage() {
                           placeholder="Fadiga crônica, hipertensão, faz uso de medicação reguladora, queixa de sono insatisfatório..."
                           value={healthData.historico_clinico}
                           onChange={e => setHealthData(prev => ({ ...prev, historico_clinico: e.target.value }))}
-                          style={{ minHeight: 90, height: '100%' }}
+                          style={{ minHeight: 56, height: '100%' }}
                         />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div className="form-group">
                           <label className="form-label">Placa</label>
                           <input
@@ -962,7 +984,7 @@ export default function DossiesPage() {
                           />
                         </div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div className="form-group">
                           <label className="form-label">Frota</label>
                           <input
@@ -993,61 +1015,60 @@ export default function DossiesPage() {
                       </div>
                     </form>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CPF</span>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: healthData.cpf ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 8 }}>
-                            {healthData.cpf || 'Não informado'}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CPF</span>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: healthData.cpf ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {healthData.cpf || '—'}
                           </div>
                         </div>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>RG</span>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: healthData.rg ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 8 }}>
-                            {healthData.rg || 'Não informado'}
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>RG</span>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: healthData.rg ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {healthData.rg || '—'}
                           </div>
                         </div>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nascimento</span>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>
-                            {healthData.data_nascimento ? new Date(healthData.data_nascimento).toLocaleDateString('pt-BR') : 'Não informado'}
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nascimento</span>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {healthData.data_nascimento ? new Date(healthData.data_nascimento).toLocaleDateString('pt-BR') : '—'}
                           </div>
                         </div>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CNH</span>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            {healthData.cnh_numero ? `${healthData.cnh_numero}${healthData.cnh_categoria ? ' · ' + healthData.cnh_categoria : ''}` : 'Não informado'}
-                            {cnhWarning && <span className={`badge badge-${cnhWarning.class}`} style={{ fontSize: 9.5 }}>{cnhWarning.text}</span>}
+                        <div style={{ gridColumn: 'span 2', background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CNH</span>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                            {healthData.cnh_numero ? `${healthData.cnh_numero}${healthData.cnh_categoria ? ' · ' + healthData.cnh_categoria : ''}` : '—'}
+                            {cnhWarning && <span className={`badge badge-${cnhWarning.class}`} style={{ fontSize: 8 }}>{cnhWarning.text}</span>}
                           </div>
                         </div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Escala Epworth</span>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Epworth</span>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
                             {healthData.escala_epworth} pts
-                            <span className={`badge badge-${epworthWarning.class}`} style={{ fontSize: 9.5 }}>{epworthWarning.text}</span>
-                          </div>
-                        </div>
-                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Última Revisão Clínica</span>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>
-                            {healthData.ultimo_exame_em ? new Date(healthData.ultimo_exame_em).toLocaleDateString('pt-BR') : 'Sem registro'}
                           </div>
                         </div>
                       </div>
-                      
-                      <div>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Polissonografia / Apneia</span>
-                        <div style={{ fontSize: 13, color: healthData.polissonografia ? 'var(--text-primary)' : 'var(--text-muted)', background: 'var(--surface-0)', border: '1px solid var(--border)', padding: '10px 12px', borderRadius: 8 }}>
-                          {healthData.polissonografia || 'Nenhum exame cadastrado no prontuário.'}
-                        </div>
+
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <span className={`badge badge-${epworthWarning.class}`} style={{ fontSize: 9 }}>{epworthWarning.text}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          Última revisão: {healthData.ultimo_exame_em ? new Date(healthData.ultimo_exame_em).toLocaleDateString('pt-BR') : 'sem registro'}
+                        </span>
                       </div>
-                      
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Histórico Clínico e Sintomas</span>
-                        <div style={{ fontSize: 13, color: healthData.historico_clinico ? 'var(--text-primary)' : 'var(--text-muted)', background: 'var(--surface-0)', border: '1px solid var(--border)', padding: '10px 12px', borderRadius: 8, minHeight: 90, whiteSpace: 'pre-wrap' }}>
-                          {healthData.historico_clinico || 'Sem anotações de sintomas ou medicamentos.'}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flex: 1 }}>
+                        <div>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 3 }}>Polissonografia / Apneia</span>
+                          <div style={{ fontSize: 11.5, color: healthData.polissonografia ? 'var(--text-primary)' : 'var(--text-muted)', background: 'var(--surface-0)', border: '1px solid var(--border)', padding: '6px 8px', borderRadius: 6, minHeight: 44 }}>
+                            {healthData.polissonografia || 'Nenhum exame cadastrado.'}
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 3 }}>Histórico Clínico e Sintomas</span>
+                          <div style={{ fontSize: 11.5, color: healthData.historico_clinico ? 'var(--text-primary)' : 'var(--text-muted)', background: 'var(--surface-0)', border: '1px solid var(--border)', padding: '6px 8px', borderRadius: 6, minHeight: 44, maxHeight: 66, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {healthData.historico_clinico || 'Sem anotações.'}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1065,7 +1086,7 @@ export default function DossiesPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginBottom: 10 }}>
                   {DOC_TYPES.map(dt => (
                     <label
                       key={dt.id}
@@ -1090,7 +1111,7 @@ export default function DossiesPage() {
                   ))}
                 </div>
 
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.4 }}>
                   Leitura automática por OCR e preenchimento assistido por I.A chegam na próxima etapa. Por enquanto, os documentos ficam arquivados aqui e os dados seguem sendo cadastrados manualmente na aba Clínico.
                 </div>
 
@@ -1100,18 +1121,18 @@ export default function DossiesPage() {
                     Nenhum documento enviado para este motorista ainda.
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {documents.map(doc => {
                       const st = DOC_STATUS[doc.status] || DOC_STATUS.pendente;
                       const dt = DOC_TYPES.find(d => d.id === doc.tipo_documento);
                       return (
-                        <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                          <i className={`ti ${dt?.icon || 'ti-file'}`} style={{ fontSize: 18, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                        <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <i className={`ti ${dt?.icon || 'ti-file'}`} style={{ fontSize: 15, color: 'var(--text-muted)', flexShrink: 0 }}></i>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {dt?.label || doc.tipo_documento} · {doc.file_name}
                             </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
                               {new Date(doc.created_at).toLocaleString('pt-BR')}
                             </div>
                           </div>
@@ -1148,41 +1169,50 @@ export default function DossiesPage() {
               </div>
             )}
 
-            {/* Atendimentos & Ações realizadas (Tratativas) */}
+            {/* Histórico & Tratativas — telemetria (alertas de fadiga) e ações operacionais unificadas numa única linha do tempo */}
             {tab === 'tratativas' && (
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 400 }}>
-                <div className="card-header">
+              <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-title">
-                    <i className="ti ti-history" style={{ color: 'var(--accent-500)' }}></i> Atendimentos & Ações Realizadas
+                    <i className="ti ti-history" style={{ color: 'var(--accent-500)' }}></i> Histórico & Tratativas
                   </div>
+                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                    {telemetryTotal} alerta{telemetryTotal === 1 ? '' : 's'} · {atendimentosList.length} ação{atendimentosList.length === 1 ? '' : 'ões'}
+                    {telemetryTotal > telemetryEvents.length && ` · exibindo ${telemetryEvents.length} alertas mais recentes`}
+                  </span>
                 </div>
-                
-                <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
+
+                <div style={{ maxHeight: 560, overflowY: 'auto' }}>
                   {loadingHistory ? (
-                    <div className="empty-state" style={{ height: '100%' }}><i className="ti ti-loader-2 ti-spin"></i></div>
-                  ) : atendimentosList.length === 0 ? (
-                    <div className="empty-state" style={{ height: '100%', fontSize: 12 }}>Nenhum contato operacional registrado para este motorista.</div>
+                    <div className="empty-state" style={{ height: 150 }}><i className="ti ti-loader-2 ti-spin"></i></div>
+                  ) : combinedHistory.length === 0 ? (
+                    <div className="empty-state" style={{ height: 150, fontSize: 12 }}>Nenhum alerta ou tratativa registrada para este motorista.</div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {atendimentosList.map(item => (
-                        <div key={item.id} style={{ display: 'flex', gap: 10, borderLeft: `2px solid var(--${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'border-md'})`, paddingLeft: 10, paddingBottom: 4 }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between' }}>
-                              <span>
-                                <span className={`badge badge-${item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'info'}`} style={{ marginRight: 6, fontSize: 8.5 }}>{item.tipo.toUpperCase()}</span>
-                                {item.obs}
-                              </span>
-                              <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400 }}>
-                                {new Date(item.created_at).toLocaleDateString('pt-BR')} {item.hora}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                              Operador: {item.operador_nome || item.operador || '—'}
-                            </div>
-                          </div>
+                    combinedHistory.map(item => {
+                      const isEvento = item.kind === 'evento';
+                      const icon = isEvento
+                        ? 'ti-activity-heartbeat'
+                        : item.tipo === 'intervencao' ? 'ti-phone-call' : item.tipo === 'reportar' ? 'ti-building' : 'ti-history';
+                      const badgeClass = isEvento
+                        ? (String(item.severidade).toLowerCase().includes('graviss') || String(item.severidade).toLowerCase() === 'grave' ? 'danger' : 'info')
+                        : item.tipo === 'intervencao' ? 'danger' : item.tipo === 'reportar' ? 'warning' : 'info';
+                      const badgeLabel = isEvento ? (item.severidade || 'Normal') : String(item.tipo).toUpperCase();
+                      return (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))' }}>
+                          <i className={`ti ${icon}`} style={{ fontSize: 13, width: 15, textAlign: 'center', flexShrink: 0, color: isEvento ? severityColor(item.severidade) : 'var(--accent-500)' }}></i>
+                          <span className={`badge badge-${badgeClass}`} style={{ fontSize: 8, flexShrink: 0 }}>{badgeLabel}</span>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: isEvento ? 400 : 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.label}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.meta}
+                          </span>
+                          <span style={{ fontSize: 9.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                            {new Date(item.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1208,28 +1238,28 @@ export default function DossiesPage() {
                 </button>
               </div>
               
-              <div style={{ padding: 20 }}>
+              <div style={{ padding: 12 }}>
                 {generatingReport ? (
-                  <div className="empty-state" style={{ minHeight: 200 }}>
-                    <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 24, marginBottom: 8 }}></i>
+                  <div className="empty-state" style={{ minHeight: 90, padding: '20px 24px' }}>
+                    <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 20, marginBottom: 6 }}></i>
                     Cruzar histórico de {stats.total} alertas de fadiga com exames médicos...
                   </div>
                 ) : aiReport ? (
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                       <button className="btn btn-sm" onClick={() => { navigator.clipboard?.writeText(aiReport); toast('Laudo copiado!', 'success'); }}>
                         <i className="ti ti-copy"></i> Copiar Laudo
                       </button>
                     </div>
                     <div
                       className="report-body"
-                      style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', background: 'var(--surface-0)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}
+                      style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--text-primary)', background: 'var(--surface-0)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(aiReport) }}
                     />
                   </div>
                 ) : (
-                  <div className="empty-state" style={{ minHeight: 180, fontSize: 12.5 }}>
-                    <i className="ti ti-sparkles" style={{ fontSize: 32, marginBottom: 8, color: 'var(--text-muted)' }}></i>
+                  <div className="empty-state" style={{ minHeight: 70, fontSize: 11.5, padding: '18px 24px' }}>
+                    <i className="ti ti-sparkles" style={{ fontSize: 24, marginBottom: 6, color: 'var(--text-muted)' }}></i>
                     Clique no botão acima para consolidar os alertas de fadiga do condutor e o prontuário de exames médicos em uma análise de perfil clínico-operacional.
                   </div>
                 )}
@@ -1237,58 +1267,6 @@ export default function DossiesPage() {
             </div>
             )}
 
-            {/* Telemetria — eventos brutos (clínico) */}
-            {tab === 'clinico' && (
-            <div className="card">
-              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="card-title">
-                  <i className="ti ti-activity-heartbeat" style={{ color: 'var(--accent-500)' }}></i> Histórico de Telemetria (Eventos Brutos de Fadiga)
-                </div>
-                {telemetryTotal > telemetryEvents.length && (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Exibindo {telemetryEvents.length} de {telemetryTotal} eventos
-                  </span>
-                )}
-              </div>
-              
-              <div style={{ padding: 16, maxHeight: 400, overflowY: 'auto' }}>
-                {loadingHistory ? (
-                  <div className="empty-state" style={{ height: 150 }}><i className="ti ti-loader-2 ti-spin"></i></div>
-                ) : telemetryEvents.length === 0 ? (
-                  <div className="empty-state" style={{ height: 150, fontSize: 12 }}>Nenhum evento registrado no histórico permanente para este veículo/placa.</div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: 8 }}>Evento</th>
-                        <th style={{ padding: 8 }}>Severidade</th>
-                        <th style={{ padding: 8 }}>Plataforma</th>
-                        <th style={{ padding: 8 }}>Velocidade</th>
-                        <th style={{ padding: 8 }}>Turno</th>
-                        <th style={{ padding: 8 }}>Data/Hora Ocorrido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {telemetryEvents.map(e => (
-                        <tr key={e.id} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.02))' }}>
-                          <td style={{ padding: 8, fontWeight: 600, color: 'var(--text-primary)' }}>{e.nome_evento}</td>
-                          <td style={{ padding: 8 }}>
-                            <span style={{ color: severityColor(e.severidade), fontWeight: 600 }}>{e.severidade || 'Normal'}</span>
-                          </td>
-                          <td style={{ padding: 8, textTransform: 'capitalize' }}>{e.platform_id}</td>
-                          <td style={{ padding: 8 }}>{e.velocidade_kmh != null ? `${e.velocidade_kmh} km/h` : '—'}</td>
-                          <td style={{ padding: 8, textTransform: 'capitalize' }}>{e.turno || 'Diurno'}</td>
-                          <td style={{ padding: 8, fontFamily: 'var(--font-mono)' }}>
-                            {new Date(e.ocorrido_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-            )}
           </>
         ) : (
           <div className="card empty-state" style={{ flex: 1 }}>

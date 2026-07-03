@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { PLATFORMS } from '../../../utils/fatigueParser.js';
 import { supabase } from '../../../supabase.js';
 import { useToast } from '../../../hooks/useToast.jsx';
+import { useConfirm } from '../../../hooks/useConfirm.jsx';
 import { apiFetch, buildAnalyticsQuery } from '../../../lib/analyticsApi.js';
 import { exportToCSV as exportCSVUtil, exportToHTML as exportHTMLUtil } from '../utils/exportUtils.js';
 import { formatMonthKey } from '../utils/formatUtils.js';
@@ -88,7 +89,8 @@ export function useAnalyticsState() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const toast = useToast();
-  
+  const confirm = useConfirm();
+
   const lastLoadedRef = useRef({
     activeId: null,
     compare: false,
@@ -613,9 +615,12 @@ export function useAnalyticsState() {
     const targetSource = sourcesList.find((s) => s.id === id);
     if (!targetSource) return;
 
-    const confirmed = window.confirm(
-      `Deseja realmente excluir todos os registros de "${targetSource.platformName}" do banco de dados? Esta ação não pode ser desfeita.`
-    );
+    const confirmed = await confirm({
+      title: 'Excluir registros',
+      message: `Deseja realmente excluir todos os registros de "${targetSource.platformName}" do banco de dados? Esta ação não pode ser desfeita.`,
+      confirmText: 'Excluir',
+      danger: true
+    });
     if (!confirmed) return;
 
     try {

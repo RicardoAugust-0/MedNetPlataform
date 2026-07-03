@@ -1,6 +1,9 @@
+import { AnimatedNumber } from '../../components/AnimatedNumber';
+
 export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
   const kpiData = d ? d.kpis : {};
-  const pct = (v) => (v == null ? '—' : v + '%');
+  const pct = (v) => (v == null ? '—' : <><AnimatedNumber value={v} decimals={1} />%</>);
+  const num = (v, suffix = '', decimals = 0) => (v == null ? '—' : <><AnimatedNumber value={v} decimals={decimals} />{suffix}</>);
 
   const iconStyle = (accent, soft) => ({
     width: '30px',
@@ -65,7 +68,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'total',
       icon: 'ti-alert-triangle',
       label: 'Total de alertas',
-      value: d ? kpiData?.total?.toLocaleString('pt-BR') : '—',
+      value: d && kpiData?.total != null ? <AnimatedNumber value={kpiData.total} /> : '—',
       sub: d
         ? `${d.meta.motoristas.toLocaleString('pt-BR')} motoristas · ${d.meta.veiculos.toLocaleString('pt-BR')} veículos`
         : 'aguardando importação',
@@ -103,7 +106,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'velocidade',
       icon: 'ti-gauge',
       label: 'Velocidade mediana',
-      value: d && kpiData?.vel_mediana != null ? kpiData.vel_mediana + ' km/h' : '—',
+      value: d ? num(kpiData?.vel_mediana, ' km/h') : '—',
       sub: d && kpiData?.pct_vel_alta != null ? `${kpiData.pct_vel_alta}% acima de 60 km/h` : 'sem dados de velocidade',
       iconStyle: iconStyle('#2A8DD9', '#E6F1FB'),
       trend: renderTrend(kpiData?.vel_mediana, prevD?.kpis?.vel_mediana, false, 'Velocidade mediana'),
@@ -112,7 +115,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'evidencia',
       icon: 'ti-video',
       label: 'Com evidência',
-      value: d && kpiData?.pct_evidencia != null ? pct(kpiData.pct_evidencia) : '—',
+      value: d ? pct(kpiData?.pct_evidencia) : '—',
       sub: 'vídeo disponível p/ auditoria',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
       trend: renderTrend(kpiData?.pct_evidencia, prevD?.kpis?.pct_evidencia, true, 'Com evidência'),
@@ -121,7 +124,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'tempo_tratar',
       icon: 'ti-clock-play',
       label: 'Tempo até tratar',
-      value: d && kpiData?.t_ini_mediana != null ? kpiData.t_ini_mediana + ' min' : '—',
+      value: d ? num(kpiData?.t_ini_mediana, ' min', 1) : '—',
       sub: 'mediana do início da tratativa',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
       trend: renderTrend(kpiData?.t_ini_mediana, prevD?.kpis?.t_ini_mediana, false, 'Tempo até tratar'),
@@ -130,7 +133,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       id: 'tempo_finalizar',
       icon: 'ti-clock-check',
       label: 'Tempo até finalizar',
-      value: d && kpiData?.t_fin_mediana != null ? kpiData.t_fin_mediana + ' min' : '—',
+      value: d ? num(kpiData?.t_fin_mediana, ' min', 1) : '—',
       sub: 'mediana até finalização',
       iconStyle: iconStyle('#2DA75A', '#E5F5EA'),
       trend: renderTrend(kpiData?.t_fin_mediana, prevD?.kpis?.t_fin_mediana, false, 'Tempo até finalizar'),

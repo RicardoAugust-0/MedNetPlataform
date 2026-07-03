@@ -1,4 +1,5 @@
 import React from 'react';
+import { AnimatedNumber } from '../../components/AnimatedNumber';
 
 export default function MetricsGrid({ dispatches = [] }) {
   // Today metrics
@@ -36,7 +37,7 @@ export default function MetricsGrid({ dispatches = [] }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: 'var(--text-muted)', letterSpacing: '0.8px', display: 'block' }}>Enviados Hoje</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>{totalToday}</span>
+            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}><AnimatedNumber value={totalToday} /></span>
           </div>
         </div>
       </div>
@@ -56,7 +57,7 @@ export default function MetricsGrid({ dispatches = [] }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: 'var(--text-muted)', letterSpacing: '0.8px', display: 'block' }}>Taxa de Leitura</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>{readRateToday}%</span>
+            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}><AnimatedNumber value={readRateToday} />%</span>
           </div>
         </div>
       </div>
@@ -76,7 +77,7 @@ export default function MetricsGrid({ dispatches = [] }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: 'var(--text-muted)', letterSpacing: '0.8px', display: 'block' }}>Falhas do Dia</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>{failedToday}</span>
+            <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}><AnimatedNumber value={failedToday} /></span>
           </div>
         </div>
       </div>
@@ -96,7 +97,7 @@ export default function MetricsGrid({ dispatches = [] }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: 'var(--text-muted)', letterSpacing: '0.8px', display: 'block' }}>Custos (Hoje)</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-            <span style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>R$ {costToday.toFixed(2).replace('.', ',')}</span>
+            <span style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>R$ <AnimatedNumber value={costToday} decimals={2} /></span>
           </div>
         </div>
       </div>
