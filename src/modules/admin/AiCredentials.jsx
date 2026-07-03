@@ -38,6 +38,7 @@ export default function AiCredentials() {
   const [provState, setProvState] = useState({
     anthropic: { configured: false, apiKey: '', saving: false },
     google:    { configured: false, apiKey: '', saving: false },
+    mistral:   { configured: false, apiKey: '', saving: false },
   });
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function AiCredentials() {
       setProvState(prev => ({
         anthropic: { ...prev.anthropic, configured: configured.has('anthropic') },
         google:    { ...prev.google,    configured: configured.has('google') },
+        mistral:   { ...prev.mistral,   configured: configured.has('mistral') },
       }));
     });
 
@@ -98,7 +100,8 @@ export default function AiCredentials() {
       );
       if (error) throw error;
       setProvState(prev => ({ ...prev, [provider]: { ...prev[provider], configured: true, apiKey: '', saving: false } }));
-      toast(`Chave do ${provider === 'anthropic' ? 'Anthropic' : 'Google'} salva`, 'success');
+      const providerLabel = provider === 'anthropic' ? 'Anthropic' : provider === 'google' ? 'Google' : 'Mistral';
+      toast(`Chave do ${providerLabel} salva`, 'success');
     } catch (err) {
       toast('Erro ao salvar chave: ' + err.message, 'error');
       setProvState(prev => ({ ...prev, [provider]: { ...prev[provider], saving: false } }));
@@ -199,6 +202,38 @@ export default function AiCredentials() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title"><i className="ti ti-scan"></i> OCR de Documentos (Mistral)</div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
+          Chave usada exclusivamente para leitura de documentos do motorista (CNH, ASO, Polissonografia) na aba Documentos do Dossiê. Independente do provedor de laudo escolhido acima.
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
+            <label className="form-label" htmlFor="api-key-mistral">Mistral (OCR)</label>
+            <input
+              id="api-key-mistral"
+              className="form-control"
+              type="password"
+              value={provState.mistral.apiKey}
+              onChange={e => setProvState(prev => ({ ...prev, mistral: { ...prev.mistral, apiKey: e.target.value } }))}
+              placeholder={provState.mistral.configured ? '••••••••  (chave configurada, digite nova para alterar)' : 'Chave de API da Mistral'}
+              disabled={provState.mistral.saving}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => saveProviderKey('mistral')}
+            disabled={provState.mistral.saving || !provState.mistral.apiKey.trim()}
+            style={{ flexShrink: 0 }}
+          >
+            {provState.mistral.saving ? <><i className="ti ti-loader-2"></i> Salvando…</> : <><i className="ti ti-key"></i> {provState.mistral.configured ? 'Substituir' : 'Salvar'}</>}
+          </button>
         </div>
       </div>
     </div>

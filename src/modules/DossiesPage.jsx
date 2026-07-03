@@ -3,8 +3,46 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
+import { useConfirm } from '../hooks/useConfirm.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { uploadDriverDocument, getDriverDocumentUrl, removeDriverDocument } from '../lib/uploadDriverDocument.js';
+
+const DOC_TYPES = [
+  { id: 'cnh',             label: 'CNH',             icon: 'ti-id-badge-2' },
+  { id: 'aso',              label: 'ASO',             icon: 'ti-stethoscope' },
+  { id: 'polissonografia',  label: 'Polissonografia', icon: 'ti-moon' },
+];
+const DOC_STATUS = {
+  pendente:   { label: 'Aguardando processamento', class: '' },
+  processado: { label: 'Processado por IA',        class: 'info' },
+  revisado:   { label: 'Revisado e aplicado',       class: 'success' },
+  erro:       { label: 'Erro no processamento',     class: 'danger' },
+};
+
+// Campos extraídos por tipo de documento — usados no modal de revisão e no mapeamento para driver_health.
+const REVIEW_FIELDS = {
+  cnh: [
+    { key: 'nome',             label: 'Nome (conferência)', type: 'text', readOnly: true },
+    { key: 'cpf',              label: 'CPF',                type: 'text' },
+    { key: 'rg',               label: 'RG',                 type: 'text' },
+    { key: 'data_nascimento',  label: 'Data de Nascimento', type: 'date' },
+    { key: 'cnh_numero',       label: 'CNH Número',         type: 'text' },
+    { key: 'cnh_categoria',    label: 'CNH Categoria',      type: 'text' },
+    { key: 'cnh_validade',     label: 'CNH Validade',       type: 'date' },
+  ],
+  aso: [
+    { key: 'data_exame',   label: 'Data do Exame', type: 'date' },
+    { key: 'aptidao',      label: 'Aptidão',        type: 'text' },
+    { key: 'observacoes',  label: 'Observações',    type: 'textarea' },
+  ],
+  polissonografia: [
+    { key: 'diagnostico',              label: 'Diagnóstico',                       type: 'text' },
+    { key: 'indice_apneia_hipopneia',  label: 'Índice Apneia-Hipopneia (IAH)',      type: 'text' },
+    { key: 'gravidade',                label: 'Gravidade',                          type: 'text' },
+  ],
+};
 
 // Converte markdown simples em HTML
 function renderMarkdown(md) {
@@ -27,10 +65,24 @@ function renderMarkdown(md) {
   return '<p>' + html + '</p>';
 }
 
+// Detecta se o "nome" é de fato um nome de motorista, ou apenas a placa do veículo
+// preenchida no lugar (problema comum de qualidade de dados nas fontes de telemetria).
+const PLATE_RE = /^[A-Z]{3}\d[A-Z0-9]\d{2}$|^[A-Z]{3}\d{4}$/;
+function isValidDriverName(nome, placa) {
+  const n = String(nome || '').trim();
+  if (!n) return false;
+  const compact = n.replace(/[\s-]/g, '').toUpperCase();
+  if (PLATE_RE.test(compact)) return false;
+  if (placa && compact === String(placa).replace(/[\s-]/g, '').toUpperCase()) return false;
+  return true;
+}
+
 let cachedDriversList = null;
 
 export default function DossiesPage() {
   const toast = useToast();
+  const confirm = useConfirm();
+  const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { tab = 'clinico' } = useParams();
   const navigate = useNavigate();
@@ -47,7 +99,7 @@ export default function DossiesPage() {
   // Motorista selecionado
   const [selectedDriver, setSelectedDriver] = useState(null);
 
-  // Ficha clínica / Dados de saúde
+  // Ficha clínica / Dados de saúde / Dados cadastrais
   const [healthData, setHealthData] = useState({
     escala_epworth: 0,
     polissonografia: '',
@@ -57,6 +109,12 @@ export default function DossiesPage() {
     transportadora: '',
     frota: '',
     turno: 'diurno',
+    cpf: '',
+    rg: '',
+    data_nascimento: '',
+    cnh_numero: '',
+    cnh_categoria: '',
+    cnh_validade: '',
   });
   const [savingHealth, setSavingHealth] = useState(false);
   const [editingHealth, setEditingHealth] = useState(false);
@@ -66,6 +124,14 @@ export default function DossiesPage() {
   const [telemetryTotal, setTelemetryTotal] = useState(0);
   const [atendimentosList, setAtendimentosList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Documentos do motorista (upload + OCR/IA)
+  const [documents, setDocuments] = useState([]);
+  const [uploadingType, setUploadingType] = useState(null);
+  const [processingDocId, setProcessingDocId] = useState(null);
+  const [reviewingDoc, setReviewingDoc] = useState(null);
+  const [reviewFields, setReviewFields] = useState({});
+  const [applyingReview, setApplyingReview] = useState(false);
 
   // Geração de Laudo Clínico IA
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -179,7 +245,26 @@ export default function DossiesPage() {
           });
         }
 
-        const consolidated = Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+        // Separa registros com nome real dos que só têm placa (sem identificação de motorista).
+        // Registros só-placa ficam ocultos da listagem, mas enriquecem um registro nomeado
+        // da mesma placa (caso exista) com dados complementares antes de serem descartados.
+        const namedRecords = [];
+        const plateOnlyByPlaca = new Map();
+        for (const rec of map.values()) {
+          if (isValidDriverName(rec.nome, rec.placa)) {
+            namedRecords.push(rec);
+          } else if (rec.placa) {
+            plateOnlyByPlaca.set(rec.placa.trim().toUpperCase(), rec);
+          }
+        }
+        namedRecords.forEach(rec => {
+          const po = rec.placa && plateOnlyByPlaca.get(rec.placa.trim().toUpperCase());
+          if (!po) return;
+          if (!rec.transportadora || rec.transportadora === '—') rec.transportadora = po.transportadora;
+          if (!rec.frota) rec.frota = po.frota;
+        });
+
+        const consolidated = namedRecords.sort((a, b) => a.nome.localeCompare(b.nome));
         setDriversList(consolidated);
       } catch (err) {
         console.warn('Erro ao carregar lista de motoristas:', err);
@@ -232,10 +317,17 @@ export default function DossiesPage() {
         transportadora: selectedDriver.transportadora || '',
         frota: selectedDriver.frota || '',
         turno: selectedDriver.turno || 'diurno',
+        cpf: '',
+        rg: '',
+        data_nascimento: '',
+        cnh_numero: '',
+        cnh_categoria: '',
+        cnh_validade: '',
       });
       setTelemetryEvents([]);
       setTelemetryTotal(0);
       setAtendimentosList([]);
+      setDocuments([]);
 
       if (!isSupabaseConfigured) {
         setLoadingHistory(false);
@@ -263,6 +355,12 @@ export default function DossiesPage() {
             transportadora: healthRecord.transportadora ?? selectedDriver.transportadora ?? '',
             frota: healthRecord.frota ?? selectedDriver.frota ?? '',
             turno: healthRecord.turno ?? selectedDriver.turno ?? 'diurno',
+            cpf: healthRecord.cpf ?? '',
+            rg: healthRecord.rg ?? '',
+            data_nascimento: healthRecord.data_nascimento ?? '',
+            cnh_numero: healthRecord.cnh_numero ?? '',
+            cnh_categoria: healthRecord.cnh_categoria ?? '',
+            cnh_validade: healthRecord.cnh_validade ?? '',
           });
         }
 
@@ -295,6 +393,15 @@ export default function DossiesPage() {
 
         if (atendData) setAtendimentosList(atendData);
 
+        // 4. Busca documentos já enviados (CNH/ASO/Polissonografia)
+        const { data: docsData } = await supabase
+          .from('driver_documents')
+          .select('*')
+          .eq('motorista_nome', name)
+          .order('created_at', { ascending: false });
+
+        if (docsData) setDocuments(docsData);
+
       } catch (err) {
         console.warn('Erro ao carregar prontuário do motorista:', err);
       } finally {
@@ -322,6 +429,12 @@ export default function DossiesPage() {
         transportadora: healthData.transportadora || null,
         frota: healthData.frota || null,
         turno: healthData.turno || null,
+        cpf: healthData.cpf || null,
+        rg: healthData.rg || null,
+        data_nascimento: healthData.data_nascimento || null,
+        cnh_numero: healthData.cnh_numero || null,
+        cnh_categoria: healthData.cnh_categoria || null,
+        cnh_validade: healthData.cnh_validade || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -391,6 +504,137 @@ export default function DossiesPage() {
     }
   };
 
+  // Upload de documento do motorista (CNH/ASO/Polissonografia) — OCR/IA chega na próxima etapa
+  const handleUploadDocument = async (tipoDocumento, file) => {
+    if (!selectedDriver || !file) return;
+    setUploadingType(tipoDocumento);
+    try {
+      const doc = await uploadDriverDocument(file, {
+        motorista: selectedDriver.nome,
+        placa: selectedDriver.placa,
+        tipoDocumento,
+      });
+      setDocuments(prev => [doc, ...prev]);
+      toast('Documento enviado com sucesso!', 'success');
+    } catch (err) {
+      toast('Erro ao enviar documento: ' + err.message, 'error');
+    } finally {
+      setUploadingType(null);
+    }
+  };
+
+  const handleViewDocument = async (doc) => {
+    try {
+      const url = await getDriverDocumentUrl(doc.storage_path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast('Erro ao abrir documento: ' + err.message, 'error');
+    }
+  };
+
+  const handleDeleteDocument = async (doc) => {
+    if (!(await confirm({ title: 'Excluir documento', message: `Excluir "${doc.file_name}"?`, danger: true }))) return;
+    try {
+      await removeDriverDocument(doc);
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      toast('Documento excluído.', 'success');
+    } catch (err) {
+      toast('Erro ao excluir documento: ' + err.message, 'error');
+    }
+  };
+
+  // Envia o documento pro OCR (Mistral) + extração estruturada por IA; abre revisão ao final
+  const handleProcessDocument = async (doc) => {
+    setProcessingDocId(doc.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('process-driver-document', {
+        body: { document_id: doc.id },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+
+      if (error) {
+        const errMsg = await getFunctionErrorMessage(error);
+        throw new Error(errMsg);
+      }
+      if (data?.error) throw new Error(data.error);
+
+      const updatedDoc = data.document;
+      setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+      setReviewFields(updatedDoc.extracted_data || {});
+      setReviewingDoc(updatedDoc);
+      toast('Documento processado! Revise os dados antes de aplicar.', 'success');
+    } catch (err) {
+      toast('Erro ao processar documento: ' + err.message, 'error');
+      const { data: freshDoc } = await supabase.from('driver_documents').select('*').eq('id', doc.id).maybeSingle();
+      if (freshDoc) setDocuments(prev => prev.map(d => d.id === doc.id ? freshDoc : d));
+    } finally {
+      setProcessingDocId(null);
+    }
+  };
+
+  const openReview = (doc) => {
+    setReviewFields(doc.extracted_data || {});
+    setReviewingDoc(doc);
+  };
+
+  // Grava os campos revisados na ficha do motorista (driver_health) e marca o documento como revisado
+  const handleApplyReview = async () => {
+    if (!reviewingDoc || !selectedDriver) return;
+    setApplyingReview(true);
+    try {
+      let healthPatch = {};
+      if (reviewingDoc.tipo_documento === 'cnh') {
+        healthPatch = {
+          cpf: reviewFields.cpf || null,
+          rg: reviewFields.rg || null,
+          data_nascimento: reviewFields.data_nascimento || null,
+          cnh_numero: reviewFields.cnh_numero || null,
+          cnh_categoria: reviewFields.cnh_categoria || null,
+          cnh_validade: reviewFields.cnh_validade || null,
+        };
+      } else if (reviewingDoc.tipo_documento === 'aso') {
+        const dataExameFmt = reviewFields.data_exame ? new Date(reviewFields.data_exame).toLocaleDateString('pt-BR') : null;
+        const summary = `ASO${dataExameFmt ? ` (${dataExameFmt})` : ''}: ${reviewFields.aptidao || 'Sem resultado informado'}${reviewFields.observacoes ? ' — ' + reviewFields.observacoes : ''}`;
+        healthPatch = {
+          ultimo_exame_em: reviewFields.data_exame || null,
+          historico_clinico: [summary, healthData.historico_clinico].filter(Boolean).join('\n'),
+        };
+      } else if (reviewingDoc.tipo_documento === 'polissonografia') {
+        healthPatch = {
+          polissonografia: [
+            reviewFields.diagnostico,
+            reviewFields.indice_apneia_hipopneia ? `IAH: ${reviewFields.indice_apneia_hipopneia}` : null,
+            reviewFields.gravidade,
+          ].filter(Boolean).join(' — '),
+        };
+      }
+
+      const { error: healthErr } = await supabase.from('driver_health').upsert({
+        motorista_nome: selectedDriver.nome,
+        ...healthPatch,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'motorista_nome' });
+      if (healthErr) throw healthErr;
+
+      const { error: docErr } = await supabase.from('driver_documents').update({
+        status: 'revisado',
+        reviewed_by: profile?.id || null,
+        reviewed_at: new Date().toISOString(),
+      }).eq('id', reviewingDoc.id);
+      if (docErr) throw docErr;
+
+      setHealthData(prev => ({ ...prev, ...healthPatch }));
+      setDocuments(prev => prev.map(d => d.id === reviewingDoc.id ? { ...d, status: 'revisado' } : d));
+      toast('Dados aplicados na ficha do motorista!', 'success');
+      setReviewingDoc(null);
+    } catch (err) {
+      toast('Erro ao aplicar dados na ficha: ' + err.message, 'error');
+    } finally {
+      setApplyingReview(false);
+    }
+  };
+
   // Filtragem local da lista de motoristas do sidebar
   const filteredDrivers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -422,9 +666,19 @@ export default function DossiesPage() {
     return { text: 'Sonolência Normal', class: 'success' };
   };
 
+  const getCnhWarning = (validade) => {
+    if (!validade) return null;
+    const days = Math.ceil((new Date(validade) - new Date()) / 86400000);
+    if (days < 0) return { text: 'CNH Vencida', class: 'danger' };
+    if (days <= 30) return { text: `CNH vence em ${days}d`, class: 'warning' };
+    return null;
+  };
+
   const epworthWarning = getEpworthWarning(healthData.escala_epworth);
+  const cnhWarning = getCnhWarning(healthData.cnh_validade);
 
   return (
+    <>
     <div style={{ display: 'flex', height: 'calc(100vh - 120px)', gap: 20 }}>
       {/* Painel Esquerdo: Busca e Lista de Motoristas */}
       <div className="card" style={{ width: 300, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -434,13 +688,14 @@ export default function DossiesPage() {
           </div>
         </div>
         <div style={{ padding: 12, borderBottom: '1px solid var(--border)' }}>
-          <input
-            className="form-control"
-            placeholder="Buscar por nome ou placa..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{ fontSize: 12.5 }}
-          />
+          <div className="search-wrap">
+            <i className="ti ti-search"></i>
+            <input
+              placeholder="Buscar por nome ou placa..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
         
         {loadingList ? (
@@ -514,53 +769,58 @@ export default function DossiesPage() {
                     </span>
                   </div>
                 </div>
-                
-                {/* KPIs Rápidos */}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <div style={{ textAlign: 'center', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 14px', minWidth: 90 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{stats.total}</div>
-                    <div style={{ fontSize: 9.5, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Alertas Totais</div>
-                  </div>
-                  <div style={{ textAlign: 'center', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 14px', minWidth: 90 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: stats.critical > 0 ? 'var(--danger-500)' : 'var(--text-primary)' }}>{stats.critical}</div>
-                    <div style={{ fontSize: 9.5, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Críticos</div>
-                  </div>
-                  <div style={{ textAlign: 'center', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 14px', minWidth: 90 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{stats.yawning}</div>
-                    <div style={{ fontSize: 9.5, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Bocejos</div>
-                  </div>
+              </div>
+
+              {/* KPIs Rápidos */}
+              <div className="stat-strip" style={{ marginTop: 16, marginBottom: 0 }}>
+                <div className="stat-box">
+                  <div className="stat-label">Alertas Totais</div>
+                  <div className="stat-value">{stats.total}</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-label">Críticos</div>
+                  <div className={`stat-value${stats.critical > 0 ? ' danger' : ''}`}>{stats.critical}</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-label">Bocejos</div>
+                  <div className="stat-value">{stats.yawning}</div>
                 </div>
               </div>
             </div>
 
-            {/* Navegação de abas: Clínico × Tratativas (vira /dossies/:tab) */}
-            <div style={{ display: 'flex', gap: 6, borderBottom: '1px solid var(--border)', paddingBottom: 2 }}>
+            {/* Navegação de abas: Clínico × Documentos × Tratativas (vira /dossies/:tab) */}
+            <nav className="tabs" aria-label="Abas do Dossiê do Motorista">
               {[
-                { id: 'clinico',    label: 'Clínico',    icon: 'ti-activity' },
-                { id: 'tratativas', label: 'Tratativas', icon: 'ti-history' },
+                { id: 'clinico',     label: 'Clínico',     icon: 'ti-activity' },
+                { id: 'documentos',  label: 'Documentos',  icon: 'ti-files', count: documents.length },
+                { id: 'tratativas',  label: 'Tratativas',  icon: 'ti-history', count: atendimentosList.length },
               ].map(t => (
-                <button
+                <div
                   key={t.id}
+                  className={`tab ${tab === t.id ? 'active' : ''}`}
                   onClick={() => navigate({ pathname: `/dossies/${t.id}`, search: searchParams.toString() })}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                    border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-                    fontWeight: tab === t.id ? 600 : 500,
-                    color: tab === t.id ? '#9E1A45' : 'var(--text-muted)',
-                    borderBottom: tab === t.id ? '2.5px solid #9E1A45' : '2.5px solid transparent',
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate({ pathname: `/dossies/${t.id}`, search: searchParams.toString() });
+                    }
                   }}
+                  aria-selected={tab === t.id}
                 >
                   <i className={`ti ${t.icon}`}></i> {t.label}
-                </button>
+                  {t.count != null && <span className="tab-count">{t.count}</span>}
+                </div>
               ))}
-            </div>
+            </nav>
 
             {/* Ficha de Saúde (Dados Clínicos) */}
             {tab === 'clinico' && (
               <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-title">
-                    <i className="ti ti-activity" style={{ color: 'var(--accent-500)' }}></i> Ficha Clínica & Dados de Saúde
+                    <i className="ti ti-activity" style={{ color: 'var(--accent-500)' }}></i> Ficha Clínica & Dados Cadastrais
                   </div>
                   {!editingHealth && (
                     <button className="btn btn-sm btn-ghost" onClick={() => setEditingHealth(true)}>
@@ -572,6 +832,70 @@ export default function DossiesPage() {
                 <div style={{ padding: 20, flex: 1, display: 'flex', flexDirection: 'column' }}>
                   {editingHealth ? (
                     <form onSubmit={handleSaveHealth} style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Dados Cadastrais</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <div className="form-group">
+                          <label className="form-label">CPF</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.cpf}
+                            onChange={e => setHealthData(prev => ({ ...prev, cpf: e.target.value }))}
+                            placeholder="000.000.000-00"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">RG</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.rg}
+                            onChange={e => setHealthData(prev => ({ ...prev, rg: e.target.value }))}
+                            placeholder="Número do RG"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Data de Nascimento</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={healthData.data_nascimento}
+                            onChange={e => setHealthData(prev => ({ ...prev, data_nascimento: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <div className="form-group">
+                          <label className="form-label">CNH (Número)</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.cnh_numero}
+                            onChange={e => setHealthData(prev => ({ ...prev, cnh_numero: e.target.value }))}
+                            placeholder="Número de registro"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">CNH (Categoria)</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={healthData.cnh_categoria}
+                            onChange={e => setHealthData(prev => ({ ...prev, cnh_categoria: e.target.value }))}
+                            placeholder="Ex: AE"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">CNH (Validade)</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={healthData.cnh_validade}
+                            onChange={e => setHealthData(prev => ({ ...prev, cnh_validade: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Dados Clínicos</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div className="form-group">
                           <label className="form-label">Epworth (Sonolência)</label>
@@ -670,6 +994,33 @@ export default function DossiesPage() {
                     </form>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CPF</span>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: healthData.cpf ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 8 }}>
+                            {healthData.cpf || 'Não informado'}
+                          </div>
+                        </div>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>RG</span>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: healthData.rg ? 'var(--text-primary)' : 'var(--text-muted)', marginTop: 8 }}>
+                            {healthData.rg || 'Não informado'}
+                          </div>
+                        </div>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nascimento</span>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>
+                            {healthData.data_nascimento ? new Date(healthData.data_nascimento).toLocaleDateString('pt-BR') : 'Não informado'}
+                          </div>
+                        </div>
+                        <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>CNH</span>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {healthData.cnh_numero ? `${healthData.cnh_numero}${healthData.cnh_categoria ? ' · ' + healthData.cnh_categoria : ''}` : 'Não informado'}
+                            {cnhWarning && <span className={`badge badge-${cnhWarning.class}`} style={{ fontSize: 9.5 }}>{cnhWarning.text}</span>}
+                          </div>
+                        </div>
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div style={{ background: 'var(--surface-0, rgba(255,255,255,0.01))', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Escala Epworth</span>
@@ -702,6 +1053,98 @@ export default function DossiesPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Documentos do motorista — upload (OCR + extração por IA chegam na próxima etapa) */}
+            {tab === 'documentos' && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">
+                    <i className="ti ti-files" style={{ color: 'var(--accent-500)' }}></i> Documentos do Motorista
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 14 }}>
+                  {DOC_TYPES.map(dt => (
+                    <label
+                      key={dt.id}
+                      className="upload-area collapsed"
+                      style={{ cursor: uploadingType ? 'wait' : 'pointer' }}
+                    >
+                      <div className="upload-icon">
+                        <i className={`ti ${uploadingType === dt.id ? 'ti-loader-2 ti-spin' : dt.icon}`}></i>
+                      </div>
+                      <div className="upload-text">
+                        <div className="upload-title">{dt.label}</div>
+                        <div className="upload-hint">JPG, PNG, WebP ou PDF · até 10MB</div>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                        hidden
+                        disabled={!!uploadingType}
+                        onChange={e => e.target.files[0] && handleUploadDocument(dt.id, e.target.files[0])}
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                  Leitura automática por OCR e preenchimento assistido por I.A chegam na próxima etapa. Por enquanto, os documentos ficam arquivados aqui e os dados seguem sendo cadastrados manualmente na aba Clínico.
+                </div>
+
+                {documents.length === 0 ? (
+                  <div className="empty-state">
+                    <i className="ti ti-file-off"></i>
+                    Nenhum documento enviado para este motorista ainda.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {documents.map(doc => {
+                      const st = DOC_STATUS[doc.status] || DOC_STATUS.pendente;
+                      const dt = DOC_TYPES.find(d => d.id === doc.tipo_documento);
+                      return (
+                        <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                          <i className={`ti ${dt?.icon || 'ti-file'}`} style={{ fontSize: 18, color: 'var(--text-muted)', flexShrink: 0 }}></i>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {dt?.label || doc.tipo_documento} · {doc.file_name}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                              {new Date(doc.created_at).toLocaleString('pt-BR')}
+                            </div>
+                          </div>
+                          {st.class ? (
+                            <span className={`badge badge-${st.class}`} style={{ flexShrink: 0 }} title={doc.status === 'erro' ? doc.error_message : undefined}>{st.label}</span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{st.label}</span>
+                          )}
+                          {(doc.status === 'pendente' || doc.status === 'erro') && (
+                            <button className="btn btn-sm btn-primary" onClick={() => handleProcessDocument(doc)} disabled={processingDocId === doc.id}>
+                              {processingDocId === doc.id ? (
+                                <><i className="ti ti-loader-2 ti-spin"></i> Processando...</>
+                              ) : (
+                                <><i className="ti ti-sparkles"></i> {doc.status === 'erro' ? 'Tentar novamente' : 'Processar com IA'}</>
+                              )}
+                            </button>
+                          )}
+                          {doc.status === 'processado' && (
+                            <button className="btn btn-sm btn-primary" onClick={() => openReview(doc)}>
+                              <i className="ti ti-clipboard-check"></i> Revisar
+                            </button>
+                          )}
+                          <button className="btn btn-sm btn-ghost btn-icon-only" onClick={() => handleViewDocument(doc)} title="Visualizar">
+                            <i className="ti ti-eye"></i>
+                          </button>
+                          <button className="btn btn-sm btn-ghost btn-icon-only btn-danger" onClick={() => handleDeleteDocument(doc)} title="Excluir">
+                            <i className="ti ti-trash"></i>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -855,5 +1298,61 @@ export default function DossiesPage() {
         )}
       </div>
     </div>
+
+    {/* Modal de revisão dos dados extraídos por OCR/IA antes de aplicar na ficha */}
+    {reviewingDoc && (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ width: 560 }}>
+          <div className="modal-header">
+            <div className="modal-title">
+              <i className="ti ti-sparkles" style={{ color: 'var(--accent-500)' }}></i>
+              Revisar dados extraídos — {DOC_TYPES.find(d => d.id === reviewingDoc.tipo_documento)?.label || reviewingDoc.tipo_documento}
+            </div>
+            <button className="btn-icon" onClick={() => setReviewingDoc(null)}><i className="ti ti-x"></i></button>
+          </div>
+
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+            Confira e corrija os dados lidos por OCR antes de aplicar na ficha do motorista. Nada é salvo até você confirmar.
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
+            {(REVIEW_FIELDS[reviewingDoc.tipo_documento] || []).map(f => (
+              <div className="form-group" key={f.key} style={{ marginBottom: 0 }}>
+                <label className="form-label">{f.label}</label>
+                {f.type === 'textarea' ? (
+                  <textarea
+                    className="form-control"
+                    value={reviewFields[f.key] || ''}
+                    onChange={e => setReviewFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    disabled={f.readOnly}
+                  />
+                ) : (
+                  <input
+                    type={f.type}
+                    className="form-control"
+                    value={reviewFields[f.key] || ''}
+                    onChange={e => setReviewFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    disabled={f.readOnly}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 18, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm btn-ghost" onClick={() => handleViewDocument(reviewingDoc)}>
+              <i className="ti ti-eye"></i> Ver documento original
+            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setReviewingDoc(null)} disabled={applyingReview}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleApplyReview} disabled={applyingReview}>
+                {applyingReview ? <><i className="ti ti-loader-2 ti-spin"></i> Aplicando...</> : <><i className="ti ti-check"></i> Confirmar e aplicar na ficha</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
