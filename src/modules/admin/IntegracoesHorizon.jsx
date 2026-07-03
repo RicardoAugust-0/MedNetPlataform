@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabase.js';
 import { useToast } from '../../hooks/useToast.jsx';
 import { useConfirm } from '../../hooks/useConfirm';
+import EmptyState from '../../components/EmptyState.jsx';
 
 const STATUS_INFO = {
   ok:               { label: 'OK',       bg: 'rgba(45, 167, 90, 0.18)', color: 'var(--success-500)' },
@@ -155,9 +156,7 @@ export default function IntegracoesHorizon() {
         </div>
 
         {accounts.length === 0 ? (
-          <div className="empty-state" style={{ padding: '20px 0' }}>
-            <i className="ti ti-inbox"></i> Nenhuma conta cadastrada ainda.
-          </div>
+          <EmptyState icon="ti-inbox" msg="Nenhuma conta cadastrada ainda." style={{ padding: '20px 0' }} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 16 }}>
             {accounts.map(acc => {

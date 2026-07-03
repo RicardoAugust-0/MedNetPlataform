@@ -364,6 +364,14 @@ body {
   background: rgba(15, 23, 42, 0.56);
 }
 
+/* Baseline de foco por teclado — muitos componentes zeram outline em
+   :focus (inputs, botões sem estilo, cards clicáveis); isso restaura um
+   indicador visível só para navegação por teclado (não em clique/touch). */
+:focus-visible {
+  outline: 2px solid var(--accent-500, #9E1A45);
+  outline-offset: 2px;
+}
+
 @media (max-width: 900px) {
   :root {
     --sidebar-w: 212px;
@@ -379,6 +387,31 @@ body {
 
   .topbar-brand {
     display: none;
+  }
+
+  .topbar-menu-btn {
+    display: grid;
+  }
+
+  /* Sidebar vira drawer off-canvas — desliza sobre o conteúdo em vez de
+     empurrá-lo, com backdrop clicável para fechar. */
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 300;
+    width: min(80vw, 280px);
+    min-width: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop.open {
+    display: block;
   }
 }
 

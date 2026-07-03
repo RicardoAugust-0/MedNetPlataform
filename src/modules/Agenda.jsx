@@ -185,6 +185,9 @@ function CalendarView({ reminders, onSelectDay, selectedDay }) {
               key={i}
               className={`agenda-cal-day${!cell.current ? ' other-month' : ''}${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}
               onClick={() => onSelectDay(iso === selectedDay ? null : iso)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectDay(iso === selectedDay ? null : iso); } }}
             >
               <div className="agenda-cal-day-num">{cell.date.getDate()}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>

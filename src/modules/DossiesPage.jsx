@@ -4,6 +4,7 @@ import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured, getFunctionErrorMessage } from '../supabase.js';
 import { useToast } from '../hooks/useToast.jsx';
 import { useConfirm } from '../hooks/useConfirm.jsx';
+import EmptyState from '../components/EmptyState.jsx';
 import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -722,7 +723,7 @@ export default function DossiesPage() {
         {loadingList ? (
           <div className="empty-state" style={{ flex: 1 }}><i className="ti ti-loader-2 ti-spin"></i></div>
         ) : filteredDrivers.length === 0 ? (
-          <div className="empty-state" style={{ flex: 1, fontSize: 12 }}>Nenhum motorista cadastrado.</div>
+          <EmptyState msg="Nenhum motorista cadastrado." style={{ flex: 1, fontSize: 12 }} />
         ) : (
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
             {filteredDrivers.map(d => (
@@ -1116,10 +1117,7 @@ export default function DossiesPage() {
                 </div>
 
                 {documents.length === 0 ? (
-                  <div className="empty-state">
-                    <i className="ti ti-file-off"></i>
-                    Nenhum documento enviado para este motorista ainda.
-                  </div>
+                  <EmptyState icon="ti-file-off" msg="Nenhum documento enviado para este motorista ainda." />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {documents.map(doc => {
@@ -1186,7 +1184,7 @@ export default function DossiesPage() {
                   {loadingHistory ? (
                     <div className="empty-state" style={{ height: 150 }}><i className="ti ti-loader-2 ti-spin"></i></div>
                   ) : combinedHistory.length === 0 ? (
-                    <div className="empty-state" style={{ height: 150, fontSize: 12 }}>Nenhum alerta ou tratativa registrada para este motorista.</div>
+                    <EmptyState msg="Nenhum alerta ou tratativa registrada para este motorista." style={{ height: 150, fontSize: 12 }} />
                   ) : (
                     combinedHistory.map(item => {
                       const isEvento = item.kind === 'evento';

@@ -23,6 +23,8 @@ export function AppProvider({ children }) {
   const [vibe,        setVibeState]        = useState(() => load('vibe',     'sobrio'));
   const [rhythm,      setRhythmState]      = useState(() => load('rhythm',   'operacional'));
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => load('sidebarCollapsed', false));
+  // Drawer mobile (<900px) — estado transiente, não persiste entre sessões.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Setters memoizados — referência estável evita re-render dos consumers.
   const setPlatformId  = useCallback((v) => { setPlatformIdState(v);  save('platformId',  v); }, []);
@@ -46,6 +48,7 @@ export function AppProvider({ children }) {
     vibe, setVibe,
     rhythm, setRhythm,
     sidebarCollapsed, setSidebarCollapsed,
+    mobileNavOpen, setMobileNavOpen,
     sheetHistory,
   }), [
     drivers, driversLoading, driversLoadedAt, reloadDrivers, lastImportedAt,
@@ -58,6 +61,7 @@ export function AppProvider({ children }) {
     vibe, setVibe,
     rhythm, setRhythm,
     sidebarCollapsed, setSidebarCollapsed,
+    mobileNavOpen, setMobileNavOpen,
     sheetHistory,
   ]);
 

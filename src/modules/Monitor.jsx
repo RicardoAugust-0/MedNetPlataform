@@ -10,7 +10,8 @@ import { useToast } from '../hooks/useToast';
 import { getPlatform } from '../platforms';
 
 // Monitor Subcomponents
-import { EmptyState, applyTemplate } from './monitor/utils';
+import { DriverListSkeleton, applyTemplate } from './monitor/utils';
+import EmptyState from '../components/EmptyState';
 import DriverCard from './monitor/DriverCard';
 import MonitorFilters from './monitor/MonitorFilters';
 import UploadArea from './monitor/UploadArea';
@@ -726,7 +727,9 @@ export default function Monitor() {
 
       {/* Tab: Intervenção */}
       {activeTab === 'intervencao' && (
-        intervencaoList.length === 0
+        driversLoading && drivers.length === 0
+          ? <DriverListSkeleton />
+          : intervencaoList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista requer intervenção" sub="Bocejo ou Olho fechado" />
           : <div className="driver-list">
               {paginate(intervencaoList).reduce((acc, d, i, arr) => {
@@ -746,7 +749,9 @@ export default function Monitor() {
 
       {/* Tab: Reportar */}
       {activeTab === 'reportar' && (
-        reportarList.length === 0
+        driversLoading && drivers.length === 0
+          ? <DriverListSkeleton />
+          : reportarList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
               {paginate(reportarList).map(d => (
@@ -757,7 +762,9 @@ export default function Monitor() {
 
       {/* Tab: Só técnico */}
       {activeTab === 'tecnicos' && (
-        tecList.length === 0
+        driversLoading && drivers.length === 0
+          ? <DriverListSkeleton />
+          : tecList.length === 0
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum evento técnico isolado" />
           : <div className="driver-list">
               {paginate(tecList).map(d => (

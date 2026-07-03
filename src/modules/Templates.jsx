@@ -327,6 +327,15 @@ export default function Templates() {
                         setTestVariables({});
                       }}
                       className="template-card-hover"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedTemplate(tpl);
+                          setTestVariables({});
+                        }
+                      }}
                     >
                       <div style={{ marginTop: '2px', flexShrink: 0 }}>
                         <div 

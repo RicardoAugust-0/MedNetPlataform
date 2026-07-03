@@ -7,7 +7,7 @@ import { useOnline } from '../hooks/useOnline';
 import { usePwaUpdate } from '../hooks/usePwaUpdate';
 
 export default function Topbar() {
-  const { theme, setTheme } = useApp();
+  const { theme, setTheme, setMobileNavOpen } = useApp();
   const location = useLocation();
   const [clock, setClock] = useState(fmtTime());
   const online = useOnline();
@@ -30,6 +30,14 @@ export default function Topbar() {
 
   return (
     <header className="topbar">
+      <button
+        className="topbar-icon-btn topbar-menu-btn"
+        title="Abrir menu"
+        aria-label="Abrir menu"
+        onClick={() => setMobileNavOpen(true)}
+      >
+        <i className="ti ti-menu-2"></i>
+      </button>
       <div className="topbar-brand">
         <svg className="topbar-mark" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
           <defs>

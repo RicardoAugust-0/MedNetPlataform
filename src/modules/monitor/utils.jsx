@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Skeleton from '../../components/Skeleton.jsx';
 
 export function ElapsedTimer({ since }) {
   const [mins, setMins] = useState(() => since ? Math.floor((Date.now() - new Date(since)) / 60000) : 0);
@@ -58,10 +59,17 @@ export const applyTemplate = (rawText, d) => {
   return text;
 };
 
-export const EmptyState = ({ icon, msg, sub }) => (
-  <div className="empty-state">
-    <i className={`ti ${icon}`}></i>{msg}
-    {sub && <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>{sub}</div>}
+export const DriverListSkeleton = ({ count = 4 }) => (
+  <div className="driver-list" aria-busy="true">
+    {Array.from({ length: count }).map((_, i) => (
+      <div className="driver-item" key={i}>
+        <Skeleton circle width={40} height={40} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, marginLeft: 12 }}>
+          <Skeleton width="40%" height={13} />
+          <Skeleton width="65%" height={11} />
+        </div>
+      </div>
+    ))}
   </div>
 );
 

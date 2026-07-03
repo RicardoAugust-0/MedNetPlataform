@@ -10,7 +10,7 @@ import { usePWA } from '../hooks/usePWA.js';
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { drivers, sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const { drivers, sidebarCollapsed, setSidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useApp();
   const { profile, signOut } = useAuth();
   const [query, setQuery]   = useState('');
   const [open,  setOpen]    = useState(false);
@@ -52,6 +52,11 @@ export default function Sidebar() {
   useEffect(() => {
     if (open && !sidebarCollapsed) searchRef.current?.focus();
   }, [open, sidebarCollapsed]);
+
+  // Fecha o drawer mobile a cada navegação.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname, setMobileNavOpen]);
 
   // Visibilidade por hierarquia de role: operador < líder < admin.
   const myLevel = ROLE_LEVEL[profile?.role] ?? 0;
@@ -109,7 +114,13 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className={'sidebar' + (sidebarCollapsed ? ' collapsed' : '')}>
+    <>
+      <div
+        className={'sidebar-backdrop' + (mobileNavOpen ? ' open' : '')}
+        onClick={() => setMobileNavOpen(false)}
+        aria-hidden="true"
+      />
+      <aside className={'sidebar' + (sidebarCollapsed && !mobileNavOpen ? ' collapsed' : '') + (mobileNavOpen ? ' mobile-open' : '')}>
       <div className="sidebar-logo">
         <button
           className="logo-mark-btn"
@@ -247,6 +258,7 @@ export default function Sidebar() {
           )}
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

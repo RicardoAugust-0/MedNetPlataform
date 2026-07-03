@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLinks, PALETTE, AVAILABLE_ICONS } from '../hooks/useLinks';
 import { useConfirm } from "../hooks/useConfirm.jsx";
 import { useAuth } from '../auth/AuthContext.jsx';
+import EmptyState from '../components/EmptyState.jsx';
 
 export default function Links() {
   const { links, loading, add, update, remove, reorder } = useLinks();
@@ -108,7 +109,7 @@ export default function Links() {
         );
       })}
 
-      {!filt.length && <div className="empty-state"><i className="ti ti-link-off"></i>Nenhum link</div>}
+      {!filt.length && <EmptyState icon="ti-link-off" msg="Nenhum link" />}
 
       {(modal || editingLink) && (
         <LinkModal 

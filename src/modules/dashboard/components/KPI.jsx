@@ -37,6 +37,10 @@ export function KPI({
     <div
       className={`dg-kpi${hero ? ' is-hero' : ''}${active ? ' is-active' : ''}${executive ? ' is-exec' : ''}`}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      aria-pressed={onClick ? !!active : undefined}
       style={accent && !hero ? { borderTop: `3px solid ${accent}` } : null}
     >
       <div className="dg-kpi-head">

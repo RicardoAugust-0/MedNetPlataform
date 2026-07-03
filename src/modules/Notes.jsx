@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNotes } from '../hooks/useNotes';
 import { useAuth } from '../auth/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
+import EmptyState from '../components/EmptyState.jsx';
 
 export default function Notes() {
   const { notes, loading, add, update, remove } = useNotes();
@@ -55,7 +56,7 @@ export default function Notes() {
       <div className="notes-layout">
         <div className="notes-list-wrap">
           {visibleNotes.length === 0
-            ? <div className="empty-state" style={{ padding: '30px 12px' }}><i className="ti ti-note-off"></i>Sem notas</div>
+            ? <EmptyState icon="ti-note-off" msg="Sem notas" style={{ padding: '30px 12px' }} />
             : visibleNotes.map(n => (
               <div
                 key={n.id}
@@ -79,7 +80,7 @@ export default function Notes() {
         </div>
         <div>
           {!note
-            ? <div className="card empty-state"><i className="ti ti-file-text"></i>Selecione uma nota</div>
+            ? <EmptyState icon="ti-file-text" msg="Selecione uma nota" className="card" />
             : <div className="note-editor-card">
                 <div className="note-editor-header">
                   <input id="nt-title" className="note-title-input" aria-label="Título da nota" value={note.title} onChange={e => update(note.id, { title: e.target.value })} />

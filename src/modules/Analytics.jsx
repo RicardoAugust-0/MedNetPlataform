@@ -1,4 +1,5 @@
 import '../styles/analytics.css';
+import Skeleton from '../components/Skeleton.jsx';
 
 // Subcomponents
 import FadigaKPIs from './analytics/FadigaKPIs.jsx';
@@ -20,10 +21,21 @@ export default function Analytics() {
 
   if (state.loading) {
     return (
-      <div style={{ width: '100%', minHeight: '60vh', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-          <i className="ti ti-loader-2 fz-spin" style={{ fontSize: '38px', color: '#9E1A45' }}></i>
-          <span style={{ fontSize: '13.5px', fontWeight: 500 }}>Agregando dados...</span>
+      <div style={{ width: '100%', padding: '4px 0 24px' }} aria-busy="true">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <Skeleton width={220} height={28} radius={8} />
+          <Skeleton width={160} height={28} radius={8} style={{ marginLeft: 'auto' }} />
+          <Skeleton width={100} height={28} radius={8} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} height={90} radius={12} />
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} height={220} radius={14} />
+          ))}
         </div>
       </div>
     );

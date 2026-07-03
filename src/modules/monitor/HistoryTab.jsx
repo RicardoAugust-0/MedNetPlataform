@@ -1,6 +1,24 @@
 import { useState, useMemo } from 'react';
-import { exportCSV, EmptyState } from './utils';
+import { exportCSV } from './utils';
 import { useSheetHistory } from '../../hooks/useSheetHistory.js';
+import Skeleton from '../../components/Skeleton.jsx';
+import EmptyState from '../../components/EmptyState.jsx';
+
+function HistoryRowSkeleton() {
+  return (
+    <div className="history-item">
+      <Skeleton circle width={32} height={32} />
+      <div className="h-info" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Skeleton width={160} height={12} />
+        <Skeleton width={220} height={10} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+        <Skeleton width={70} height={10} />
+        <Skeleton width={60} height={14} radius={99} />
+      </div>
+    </div>
+  );
+}
 
 const SHEET_PAGE_SIZE = 15;
 
@@ -214,7 +232,9 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
 
       {/* Histórico Supabase */}
       {displayLoading ? (
-        <div className="empty-state"><i className="ti ti-loader-2"></i> Carregando histórico…</div>
+        <div className="driver-list" aria-busy="true">
+          {Array.from({ length: 5 }).map((_, i) => <HistoryRowSkeleton key={i} />)}
+        </div>
       ) : displayError ? (
         <div className="empty-state" style={{ color:'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {displayError}</div>
       ) : displayHistory.length === 0 ? (
@@ -279,7 +299,11 @@ export default function HistoryTab({ history, histLoading, histError, loadByRang
             )}
           </div>
 
-          {sheet.loading && <div className="empty-state"><i className="ti ti-loader-2 ti-spin"></i> Lendo planilha…</div>}
+          {sheet.loading && (
+            <div className="driver-list" aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => <HistoryRowSkeleton key={i} />)}
+            </div>
+          )}
           {sheet.error  && <div className="empty-state" style={{ color:'var(--danger-500)' }}><i className="ti ti-alert-circle"></i> {sheet.error}</div>}
           {sheet.loaded && sheetFiltered.length === 0 && <EmptyState icon="ti-table-off" msg="Nenhum registro encontrado na planilha" />}
           {sheet.loaded && sheetFiltered.length > 0 && (

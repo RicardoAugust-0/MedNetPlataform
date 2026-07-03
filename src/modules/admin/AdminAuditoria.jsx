@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import { useAtendimentos } from '../../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../../hooks/useCarrierAliases.js';
+import Skeleton from '../../components/Skeleton.jsx';
 
 // /admin/auditoria — trilha global e somente-leitura de todas as tratativas
 // (atendimentos) registradas pela equipe. Reaproveita o `history` já carregado
@@ -71,7 +72,11 @@ export default function AdminAuditoria() {
         </div>
 
         {loading && history.length === 0 ? (
-          <div className="empty-state"><i className="ti ti-loader-2 fz-spin"></i> Carregando trilha…</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} aria-busy="true">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} height={30} radius={6} />
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state" style={{ fontSize: 12.5 }}>Nenhuma tratativa encontrada com os filtros atuais.</div>
         ) : (

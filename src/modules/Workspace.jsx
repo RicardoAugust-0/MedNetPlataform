@@ -95,7 +95,13 @@ export default function Workspace() {
   const PageItem = ({ p }) => {
     const ic = WS_ICONS[p.icon] || WS_ICONS[0];
     return (
-      <div className={`ws-page-item ${current === p.id ? 'active' : ''}`} onClick={() => setCurrent(p.id)}>
+      <div
+        className={`ws-page-item ${current === p.id ? 'active' : ''}`}
+        onClick={() => setCurrent(p.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrent(p.id); } }}
+      >
         <i className={`ti ${ic.i}`} style={{ color: ic.ic }}></i>
         <span className="ws-page-label">{p.title}</span>
         {p.favorite && <i className="ti ti-star-filled ws-page-star"></i>}

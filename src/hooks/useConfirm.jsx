@@ -7,6 +7,7 @@ export function ConfirmProvider({ children }) {
   const [modal, setModal] = useState(null);
   const confirmBtnRef = useRef(null);
   const inputRef = useRef(null);
+  const modalRef = useRef(null);
 
   useEffect(() => {
     if (!modal) return;
@@ -19,6 +20,19 @@ export function ConfirmProvider({ children }) {
       } else if (e.key === 'Escape') {
         e.preventDefault();
         modal.onCancel();
+      } else if (e.key === 'Tab') {
+        // Focus trap — teclado não deve sair do modal enquanto ele estiver aberto.
+        const focusables = modalRef.current?.querySelectorAll(
+          'button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusables || focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -48,9 +62,16 @@ export function ConfirmProvider({ children }) {
       {children}
       {modal && createPortal(
         <div className="modal-overlay open" style={{ zIndex: 9999 }}>
-          <div className="modal" style={{ maxWidth: 420 }}>
+          <div
+            ref={modalRef}
+            className="modal"
+            style={{ maxWidth: 420 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-modal-title"
+          >
             <div className="modal-header">
-              <div className="modal-title">
+              <div className="modal-title" id="confirm-modal-title">
                 <i className={`ti ${modal.danger ? 'ti-alert-triangle text-danger' : 'ti-help'}`}></i>
                 {modal.title}
               </div>
