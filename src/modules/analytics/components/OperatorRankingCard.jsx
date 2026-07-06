@@ -9,14 +9,22 @@ import { apiFetch } from '../../../lib/analyticsApi.js';
 // FadigaCharts.jsx) e só aparece se a planilha atual tiver a coluna preenchida.
 export default function OperatorRankingCard({ platformId, selectedMonth, startDate, endDate, selectedSeverity }) {
   const [ranking, setRanking] = useState([]);
+  const [hourlyProductivity, setHourlyProductivity] = useState([]);
+  const [activeTab, setActiveTab] = useState('ranking'); // 'ranking' | 'hourly'
+  const [selectedOperator, setSelectedOperator] = useState('');
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     if (!platformId) return;
     let active = true;
-    setLoading(true);
-    setErrored(false);
+
+    Promise.resolve().then(() => {
+      if (active) {
+        setLoading(true);
+        setErrored(false);
+      }
+    });
 
     const params = new URLSearchParams();
     params.set('platformId', platformId);
@@ -29,7 +37,20 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
 
     apiFetch(`/api/analytics/operator-ranking?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Falha ao carregar ranking'))))
-      .then((data) => { if (active) setRanking(data.ranking || []); })
+      .then((data) => {
+        if (active) {
+          const rankList = data.ranking || [];
+          const hourlyList = data.hourlyProductivity || [];
+          setRanking(rankList);
+          setHourlyProductivity(hourlyList);
+          
+          if (hourlyList.length > 0) {
+            setSelectedOperator(hourlyList[0].operador);
+          } else {
+            setSelectedOperator('');
+          }
+        }
+      })
       .catch(() => { if (active) setErrored(true); })
       .finally(() => { if (active) setLoading(false); });
 
@@ -42,7 +63,18 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
     gravissimo: Number(r.gravissimo),
     grave: Number(r.grave),
     medio: Number(r.medio),
+    intervencoes: Number(r.intervencoes || 0),
   }));
+
+  const selectedOpStats = hourlyProductivity.find(o => o.operador === selectedOperator);
+
+  const hourlyChartData = selectedOpStats
+    ? Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        total: selectedOpStats.hourly[hour] || 0,
+        intervencoes: selectedOpStats.hourlyInterventions[hour] || 0,
+      }))
+    : [];
 
   // Sem coluna preenchida nesta planilha: nada pra mostrar — nem o card nem o
   // header da seção aparecem (evita título "Ranking de operadores" órfão,
@@ -60,11 +92,80 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
           Ranking de operadores
         </h4>
         <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-          Quem fechou os alertas da planilha MaxTrack no período — contagem, sem cálculo de remuneração ainda.
+          Quem fechou os alertas da planilha MaxTrack no período — contagem, intervenções e produtividade por hora.
         </p>
-        <div style={{ position: 'relative', width: '100%', height: '300px' }}>
-          {!loading && !errored && top.length > 0 && (
-            <ResponsiveContainer width="100%" height="100%">
+
+        {/* Tab switcher & Operator selector */}
+        {!loading && !errored && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setActiveTab('ranking')}
+                style={{
+                  padding: '3px 9px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: 4,
+                  background: activeTab === 'ranking' ? '#9E1A45' : 'transparent',
+                  color: activeTab === 'ranking' ? '#fff' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Ranking Geral
+              </button>
+              <button
+                onClick={() => setActiveTab('hourly')}
+                style={{
+                  padding: '3px 9px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: 4,
+                  background: activeTab === 'hourly' ? '#9E1A45' : 'transparent',
+                  color: activeTab === 'hourly' ? '#fff' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Produtividade Horária
+              </button>
+            </div>
+
+            {activeTab === 'hourly' && hourlyProductivity.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: 500 }}>Operador:</span>
+                <select
+                  value={selectedOperator}
+                  onChange={(e) => setSelectedOperator(e.target.value)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '11.5px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-strong, #CBD5E1)',
+                    background: 'var(--background-card, #fff)',
+                    color: 'var(--text-primary)',
+                    fontWeight: 600,
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {hourlyProductivity.map((op) => (
+                    <option key={op.operador} value={op.operador}>
+                      {op.operador}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab content area */}
+        <div style={{ position: 'relative', width: '100%', minHeight: '300px' }}>
+          {!loading && !errored && activeTab === 'ranking' && top.length > 0 && (
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={top} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
@@ -73,7 +174,7 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
                   content={
                     <ChartTooltip
                       formatter={(v) => `${fmt(v)} alertas fechados`}
-                      footer={(row) => `Gravíssimo: ${fmt(row.gravissimo)} · Grave: ${fmt(row.grave)} · Médio: ${fmt(row.medio)}`}
+                      footer={(row) => `Intervenções: ${fmt(row.intervencoes)} · Gravíssimo: ${fmt(row.gravissimo)} · Grave: ${fmt(row.grave)} · Médio: ${fmt(row.medio)}`}
                     />
                   }
                 />
@@ -81,13 +182,61 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
               </BarChart>
             </ResponsiveContainer>
           )}
+
+          {!loading && !errored && activeTab === 'hourly' && selectedOpStats && (
+            <div>
+              {/* Summary stat cards */}
+              <div style={{ marginBottom: '16px', background: 'rgba(158,26,69,0.03)', border: '1px solid rgba(158,26,69,0.15)', borderRadius: '8px', padding: '12px 14px' }}>
+                <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.4 }}>
+                  {selectedOpStats.operador} fecha em média <span style={{ color: '#9E1A45', fontSize: '14.5px', fontWeight: 700 }}>{selectedOpStats.average.toFixed(1)}</span> alertas por hora ativa.
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Total de <strong>{selectedOpStats.total}</strong> alertas fechados (sendo <strong>{selectedOpStats.intervencoes}</strong> intervenções) ao longo de <strong>{selectedOpStats.activeHours}</strong> {selectedOpStats.activeHours === 1 ? 'hora ativa' : 'horas ativas'}.
+                </div>
+              </div>
+
+              {/* Hourly Chart */}
+              <ResponsiveContainer width="100%" height={230}>
+                <BarChart data={hourlyChartData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="hour" {...axisLineProps} tick={{ ...axisLineProps.tick, fontSize: 9.5 }} />
+                  <YAxis {...axisLineProps} tickFormatter={fmt} />
+                  <Tooltip
+                    content={
+                      <ChartTooltip
+                        formatter={(v, name) => {
+                          const label = name === 'total' ? 'Alertas fechados' : 'Intervenções';
+                          return `${fmt(v)} ${label.toLowerCase()}`;
+                        }}
+                      />
+                    }
+                  />
+                  <Bar dataKey="total" name="total" fill="rgba(158,26,69,0.75)" radius={[3, 3, 0, 0]} maxBarSize={15} />
+                  <Bar dataKey="intervencoes" name="intervencoes" fill="rgba(42,141,217,0.75)" radius={[3, 3, 0, 0]} maxBarSize={15} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Legend */}
+              <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '12px', fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(158,26,69,0.75)', borderRadius: '2px' }}></span>
+                  Total de Alertas
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(42,141,217,0.75)', borderRadius: '2px' }}></span>
+                  Intervenções
+                </span>
+              </div>
+            </div>
+          )}
+
           {loading && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', minHeight: '300px' }}>
               <i className="ti ti-loader-2" style={{ fontSize: '24px', color: 'var(--text-muted)', animation: 'spin 1s linear infinite' }}></i>
             </div>
           )}
           {!loading && errored && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px', minHeight: '300px' }}>
               <i className="ti ti-alert-triangle" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
               <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Não foi possível carregar o ranking</div>
             </div>

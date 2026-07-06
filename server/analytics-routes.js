@@ -599,30 +599,197 @@ export function registerAnalyticsRoutes(app, supabase) {
     handleImportEvents(supabase, req, res, clearAnalyticsCache);
   });
 
-  // 6. Ranking de operadores (só MaxTrack) — só ranking/contagem, sem R$ ainda.
+  // 6. Ranking de operadores (só MaxTrack) — contagem, severidades, intervenções e produtividade horária.
   app.get('/api/analytics/operator-ranking', requireAdmin, async (req, res) => {
     const { platformId, month, startDate, endDate, severity } = req.query;
     if (!platformId) {
       return res.status(400).json({ error: 'Parâmetro platformId é obrigatório.' });
     }
     try {
-      const cacheKey = `op-ranking|${req.originalUrl}`;
-      const cached = resultCache.get(cacheKey);
-      if (cached && (Date.now() - cached.ts < RESULT_TTL)) {
-        return res.json(cached.data);
+      const { from, to } = deriveDateParams(month, startDate, endDate);
+
+      let query = supabase
+        .from('driver_events')
+        .select('operador, fim_tratativa, ocorrido_em, sev_norm, categoria_bucket')
+        .eq('platform_id', platformId)
+        .not('operador', 'is', null)
+        .neq('sev_norm', 'Leve')
+        .limit(5000);
+
+      if (from) query = query.gte('ocorrido_em', from);
+      if (to) query = query.lte('ocorrido_em', to);
+
+      if (severity && severity !== 'all') {
+        if (severity === 'high') {
+          query = query.in('sev_norm', ['Grave', 'Gravíssimo']);
+        } else if (severity === 'medium') {
+          query = query.eq('sev_norm', 'Médio');
+        } else {
+          query = query.eq('sev_norm', severity);
+        }
       }
 
-      const { from, to } = deriveDateParams(month, startDate, endDate);
-      const { data, error } = await supabase.rpc('get_operator_ranking', {
-        p_platform_id: platformId,
-        p_date_from: from,
-        p_date_to: to,
-        p_severity: severity || null,
-      });
+      const { data: events, error } = await query;
       if (error) throw error;
 
-      const payload = { ranking: data || [] };
-      resultCache.set(cacheKey, { data: payload, ts: Date.now() });
+      // Query interventions from sheet Integration
+      let sheetQuery = supabase
+        .from('intervencoes_sheet')
+        .select('realizado_por, created_at, sistema')
+        .ilike('sistema', platformId)
+        .not('realizado_por', 'is', null)
+        .neq('realizado_por', '')
+        .limit(5000);
+
+      if (from) sheetQuery = sheetQuery.gte('created_at', from);
+      if (to) sheetQuery = sheetQuery.lte('created_at', to);
+
+      const { data: sheetRows, error: sheetError } = await sheetQuery;
+      if (sheetError) throw sheetError;
+
+      // Query profiles for name resolution
+      const { data: dbProfiles } = await supabase
+        .from('profiles')
+        .select('nome')
+        .in('role', ['operador', 'admin']);
+      const profileNames = (dbProfiles || []).map(p => p.nome).filter(Boolean);
+      const allFullNames = [...new Set([...profileNames, ...(events || []).map(e => e.operador).filter(Boolean)])];
+
+      const getFullOperatorName = (shortName) => {
+        if (!shortName) return null;
+        const norm = shortName.trim().toLowerCase();
+        const skipSet = new Set(['—', '-', 'auto-descarte', 'limpeza', 'descarte', 'não realizado', 'nao realizado', 'sem contato', 'sistema']);
+        if (skipSet.has(norm)) return null;
+
+        // Normaliza Kaiky Salviano / Kaiky Souza / Kaiky para Kaiky Salviano
+        if (norm === 'kaiky' || norm === 'kaiky souza' || norm === 'kaiky salviano') {
+          return 'Kaiky Salviano';
+        }
+
+        let match = allFullNames.find(f => f.toLowerCase() === norm);
+        if (match) return match;
+
+        match = allFullNames.find(f => {
+          const parts = f.toLowerCase().split(' ');
+          return parts[0] === norm || parts.includes(norm);
+        });
+        if (match) return match;
+
+        return shortName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      };
+
+      const rankingMap = {};
+      const hourlyMap = {};
+
+      for (const e of (events || [])) {
+        const op = getFullOperatorName(e.operador) || e.operador;
+
+        // 1. Ranking Geral
+        if (!rankingMap[op]) {
+          rankingMap[op] = {
+            operador: op,
+            total_eventos: 0,
+            gravissimo: 0,
+            grave: 0,
+            medio: 0,
+            intervencoes: 0
+          };
+        }
+
+        rankingMap[op].total_eventos++;
+        if (e.sev_norm === 'Gravíssimo') rankingMap[op].gravissimo++;
+        else if (e.sev_norm === 'Grave') rankingMap[op].grave++;
+        else if (e.sev_norm === 'Médio') rankingMap[op].medio++;
+
+        // 2. Produtividade Horária
+        if (!hourlyMap[op]) {
+          hourlyMap[op] = {
+            operador: op,
+            total: 0,
+            intervencoes: 0,
+            hourly: Array(24).fill(0),
+            hourlyInterventions: Array(24).fill(0),
+            slots: new Set(),
+          };
+        }
+
+        const dateVal = e.fim_tratativa || e.ocorrido_em;
+        if (dateVal) {
+          const dateObj = new Date(dateVal);
+          const hourStr = dateObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false });
+          const dateStr = dateObj.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+          const hour = parseInt(hourStr, 10);
+          const slotKey = `${dateStr} ${hourStr}`;
+
+          hourlyMap[op].total++;
+          hourlyMap[op].hourly[hour]++;
+          hourlyMap[op].slots.add(slotKey);
+        }
+      }
+
+      // Aggregate sheet interventions
+      for (const r of (sheetRows || [])) {
+        const resolved = getFullOperatorName(r.realizado_por);
+        if (!resolved) continue;
+
+        if (!rankingMap[resolved]) {
+          rankingMap[resolved] = {
+            operador: resolved,
+            total_eventos: 0,
+            gravissimo: 0,
+            grave: 0,
+            medio: 0,
+            intervencoes: 0
+          };
+        }
+
+        if (!hourlyMap[resolved]) {
+          hourlyMap[resolved] = {
+            operador: resolved,
+            total: 0,
+            intervencoes: 0,
+            hourly: Array(24).fill(0),
+            hourlyInterventions: Array(24).fill(0),
+            slots: new Set(),
+          };
+        }
+
+        rankingMap[resolved].intervencoes++;
+        hourlyMap[resolved].intervencoes++;
+
+        const dateVal = r.created_at;
+        if (dateVal) {
+          const dateObj = new Date(dateVal);
+          const hourStr = dateObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false });
+          const dateStr = dateObj.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+          const hour = parseInt(hourStr, 10);
+          const slotKey = `${dateStr} ${hourStr}`;
+
+          hourlyMap[resolved].hourlyInterventions[hour]++;
+          hourlyMap[resolved].slots.add(slotKey);
+        }
+      }
+
+      const ranking = Object.values(rankingMap).sort((a, b) => b.total_eventos - a.total_eventos);
+
+      const hourlyProductivity = Object.keys(hourlyMap).map(op => {
+        const hStats = hourlyMap[op];
+        const activeHours = hStats.slots.size;
+        const average = activeHours > 0 ? (hStats.total / activeHours) : 0;
+        return {
+          operador: op,
+          total: hStats.total,
+          intervencoes: hStats.intervencoes,
+          activeHours,
+          average: parseFloat(average.toFixed(2)),
+          hourly: hStats.hourly,
+          hourlyInterventions: hStats.hourlyInterventions,
+        };
+      });
+
+      const payload = { ranking, hourlyProductivity };
       res.json(payload);
     } catch (err) {
       console.error('[MedNet Backend] Erro no /api/analytics/operator-ranking:', err);

@@ -4,11 +4,19 @@ import { C, fmt, ChartTooltip, CenterLabel } from './ChartUtils.jsx';
 export function AlertasCategoriaCard({ d, noData }) {
   if (noData || !d || !d.categorias || Object.keys(d.categorias).length === 0) return null;
 
-  const catLabels = Object.keys(d.categorias);
-  const catValores = Object.values(d.categorias);
+  const truncatedCategorias = {};
+  Object.keys(d.categorias).forEach(cat => {
+    const truncatedKey = cat.split(';')[0].trim();
+    if (truncatedKey) {
+      truncatedCategorias[truncatedKey] = (truncatedCategorias[truncatedKey] || 0) + d.categorias[cat];
+    }
+  });
+
+  const catLabels = Object.keys(truncatedCategorias).sort((a, b) => truncatedCategorias[b] - truncatedCategorias[a]);
+  const catValores = Object.values(truncatedCategorias);
   const total = catValores.reduce((a, b) => a + b, 0) || 1;
   const cols = [C.vinho, C.info, C.warning, C.success, C.vinho2, C.orange];
-  const rows = catLabels.map((cat, i) => ({ name: cat, value: d.categorias[cat], fill: cols[i % cols.length] }));
+  const rows = catLabels.map((cat, i) => ({ name: cat, value: truncatedCategorias[cat], fill: cols[i % cols.length] }));
 
   return (
     <div style={{ marginTop: '14px' }}>
@@ -53,7 +61,7 @@ export function AlertasCategoriaCard({ d, noData }) {
               </thead>
               <tbody>
                 {catLabels.map((cat) => {
-                  const val = d.categorias[cat];
+                  const val = truncatedCategorias[cat];
                   const pctVal = ((val / total) * 100).toFixed(1);
                   return (
                     <tr key={cat} style={{ borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))' }}>
