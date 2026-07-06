@@ -1,59 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Chart from 'chart.js/auto';
-import { fmt, kf, _ax } from './ChartUtils.js';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { fmt, kf, axisLineProps, gridProps, ChartTooltip } from './ChartUtils.jsx';
+
+function EmptyState({ icon, paddingTop = '150px' }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop }}>
+      <i className={`ti ${icon}`} style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
+      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
+    </div>
+  );
+}
 
 export function MotoristasMaisAlertasCard({ d, noData }) {
   const [driversViewMode, setDriversViewMode] = useState('chart');
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.top_motoristas || !d.top_motoristas.labels.length) return;
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.top_motoristas.labels,
-        datasets: [
-          {
-            data: d.top_motoristas.valores,
-            backgroundColor: 'rgba(158,26,69,0.7)',
-            borderRadius: 5,
-            maxBarThickness: 18,
-          },
-        ],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
-        },
-        scales: {
-          x: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          y: _ax({ grid: { display: false }, ticks: { font: { size: 10.5 } } }),
-        },
-      },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData, driversViewMode]); // Re-create chart if view mode toggles back to chart
+  const empty = noData || !d || !d.top_motoristas || !d.top_motoristas.labels.length;
+  const rows = empty ? [] : d.top_motoristas.labels.map((l, i) => ({ name: l, valor: d.top_motoristas.valores[i] }));
 
   return (
-    <div data-card className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
+    <div data-card data-accent="vinho" className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Motoristas com mais alertas</h4>
@@ -97,17 +62,23 @@ export function MotoristasMaisAlertasCard({ d, noData }) {
         </div>
       </div>
       <div style={{ position: 'relative', width: '100%', height: '400px', display: driversViewMode === 'chart' ? 'block' : 'none', marginTop: '14px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '150px' }}>
-            <i className="ti ti-user-exclamation" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
-          </div>
+        {empty ? (
+          <EmptyState icon="ti-user-exclamation" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid {...gridProps} horizontal={false} />
+              <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
+              <YAxis type="category" dataKey="name" {...axisLineProps} width={160} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)} alertas`} />} />
+              <Bar dataKey="valor" fill="rgba(158,26,69,0.7)" radius={[0, 5, 5, 0]} maxBarSize={18} />
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
       {driversViewMode === 'table' && (
         <div style={{ overflowY: 'auto', height: '400px', marginTop: '14px' }}>
-          {noData || !d?.top_motoristas?.labels?.length ? (
+          {empty ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', height: '100%' }}>
               <i className="ti ti-user-exclamation" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
               <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
@@ -164,66 +135,28 @@ export function MotoristasMaisAlertasCard({ d, noData }) {
 }
 
 export function VeiculosMaisAlertasCard({ d, noData }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.top_placas || !d.top_placas.labels.length) return;
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.top_placas.labels,
-        datasets: [
-          {
-            data: d.top_placas.valores,
-            backgroundColor: 'rgba(42,141,217,0.7)',
-            borderRadius: 5,
-            maxBarThickness: 18,
-          },
-        ],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
-        },
-        scales: {
-          x: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          y: _ax({ grid: { display: false }, ticks: { font: { size: 10.5 } } }),
-        },
-      },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData]);
+  const empty = noData || !d || !d.top_placas || !d.top_placas.labels.length;
+  const rows = empty ? [] : d.top_placas.labels.map((l, i) => ({ name: l, valor: d.top_placas.valores[i] }));
 
   return (
-    <div data-card className="card" style={{ padding: '16px 18px' }}>
+    <div data-card data-accent="info" className="card" style={{ padding: '16px 18px' }}>
       <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Top 15 veículos (placa)</h4>
       <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
         Maior número de alertas no período selecionado.
       </p>
       <div style={{ position: 'relative', width: '100%', height: '400px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '150px' }}>
-            <i className="ti ti-truck" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
-          </div>
+        {empty ? (
+          <EmptyState icon="ti-truck" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid {...gridProps} horizontal={false} />
+              <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
+              <YAxis type="category" dataKey="name" {...axisLineProps} width={90} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)} alertas`} />} />
+              <Bar dataKey="valor" fill="rgba(42,141,217,0.7)" radius={[0, 5, 5, 0]} maxBarSize={18} />
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>

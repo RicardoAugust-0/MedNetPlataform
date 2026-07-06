@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
-import Chart from 'chart.js/auto';
-import { C, fmt, kf, _ax } from './ChartUtils.js';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from 'recharts';
+import { C, fmt, kf, axisLineProps, gridProps, ChartTooltip } from './ChartUtils.jsx';
 
 // Custom range <= 31 dias mostra granularidade diária (mesmo corte usado no backend,
 // ver deriveDateParams em server/analytics-rpc.js) — mantém front/back em sincronia.
@@ -10,76 +9,20 @@ function isCustomDaily(selectedMonth, startDate, endDate) {
   return span > 0 && span <= 31;
 }
 
+function VariacaoLabel({ x, y, width, value }) {
+  if (value == null) return null;
+  const up = value >= 0;
+  return (
+    <text x={x + width / 2} y={y - 8} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={up ? C.danger : C.success} fontFamily="'Poppins', sans-serif">
+      {(up ? '+' : '') + value + '%'}
+    </text>
+  );
+}
+
 export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey, startDate, endDate }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.mensal || !d.mensal.labels.length) return;
-
-    const v = d.mensal.variacao;
-    const momLabels = {
-      id: 'momLabels',
-      afterDatasetsDraw: (chart) => {
-        if (d.mensal.valores.length > 15) return;
-        const ctx = chart.ctx;
-        const meta = chart.getDatasetMeta(0);
-        ctx.save();
-        ctx.font = "600 10.5px 'Poppins', sans-serif";
-        ctx.textAlign = 'center';
-        meta.data.forEach((bar, i) => {
-          if (v[i] == null) return;
-          const up = v[i] >= 0;
-          ctx.fillStyle = up ? C.danger : C.success;
-          ctx.fillText((up ? '+' : '') + v[i] + '%', bar.x, bar.y - 9);
-        });
-        ctx.restore();
-      },
-    };
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.mensal.labels,
-        datasets: [
-          {
-            data: d.mensal.valores,
-            backgroundColor: 'rgba(158,26,69,0.55)',
-            borderColor: C.vinho,
-            borderWidth: 1.5,
-            borderRadius: d.mensal.valores.length > 15 ? 4 : 8,
-            maxBarThickness: d.mensal.valores.length > 15 ? 30 : 80,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 24 } },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt(c.parsed.y) + ' alertas' } },
-        },
-        scales: {
-          x: _ax(),
-          y: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-        },
-      },
-      plugins: [momLabels],
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData, selectedMonth]);
+  const empty = noData || !d || !d.mensal || !d.mensal.labels.length;
+  const rows = empty ? [] : d.mensal.labels.map((l, i) => ({ label: l, valor: d.mensal.valores[i], variacao: d.mensal.variacao[i] }));
+  const showLabels = rows.length <= 15;
 
   const isSpecificMonth = selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'custom';
   const customDaily = isCustomDaily(selectedMonth, startDate, endDate);
@@ -90,7 +33,7 @@ export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey, sta
   else if (customDaily) title = `Alertas por dia · ${d?.meta?.periodo ? `${d.meta.periodo[0]} a ${d.meta.periodo[1]}` : `${startDate} a ${endDate}`}`;
 
   return (
-    <div data-card className="card" style={{ padding: '18px 18px 14px' }}>
+    <div data-card data-accent="vinho" className="card" style={{ padding: '18px 18px 14px' }}>
       <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
         {title}
       </h4>
@@ -100,13 +43,31 @@ export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey, sta
           : 'Contagem consolidada de eventos mensais e variação em relação ao mês anterior.'}
       </p>
       <div style={{ position: 'relative', width: '100%', height: '320px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
+        {empty ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px' }}>
             <i className="ti ti-chart-bar" style={{ fontSize: '30px', color: 'var(--border-strong, #C9CDD6)' }}></i>
             <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Importe uma planilha para visualizar</div>
           </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={{ top: 24, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="label" {...axisLineProps} />
+              <YAxis {...axisLineProps} tickFormatter={kf} />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)} alertas`} />} />
+              <Bar
+                dataKey="valor"
+                fill="rgba(158,26,69,0.55)"
+                stroke={C.vinho}
+                strokeWidth={1.5}
+                radius={rows.length > 15 ? [4, 4, 0, 0] : [8, 8, 0, 0]}
+                maxBarSize={rows.length > 15 ? 30 : 80}
+              >
+                {showLabels && <LabelList dataKey="variacao" content={VariacaoLabel} />}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>
@@ -114,91 +75,27 @@ export function VolumeMensalCard({ d, noData, selectedMonth, formatMonthKey, sta
 }
 
 export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, endDate, selectedSeverity, setSelectedSeverity }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.mensal_crit || !d.mensal_crit.labels.length) return;
-
-    const cc = { Gravíssimo: C.danger, Grave: C.warning, Médio: C.info };
-    const groupOf = (s) => (s === 'Médio' ? 'medium' : 'high');
-    const alpha = (hex, a) => hex + a;
-    const seriesKeys = Object.keys(d.mensal_crit.series);
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.mensal_crit.labels,
-        datasets: seriesKeys.map((s) => ({
-          label: s,
-          data: d.mensal_crit.series[s],
-          backgroundColor: selectedSeverity !== 'all' && groupOf(s) !== selectedSeverity ? alpha(cc[s], '55') : cc[s],
-          borderRadius: d.mensal_crit.labels.length > 15 ? 2 : 4,
-          maxBarThickness: d.mensal_crit.labels.length > 15 ? 20 : 54,
-        })),
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
-        onClick: (evt, elements) => {
-          if (!elements.length) return;
-          const group = groupOf(seriesKeys[elements[0].datasetIndex]);
-          setSelectedSeverity(selectedSeverity === group ? 'all' : group);
-        },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'bottom',
-            labels: {
-              boxWidth: 10,
-              boxHeight: 10,
-              padding: 12,
-              usePointStyle: true,
-              pointStyle: 'rectRounded',
-            },
-            onClick: (evt, item) => {
-              const group = groupOf(seriesKeys[item.datasetIndex]);
-              setSelectedSeverity(selectedSeverity === group ? 'all' : group);
-            },
-          },
-          tooltip: {
-            callbacks: {
-              label: (c) => {
-                const barTotal = c.chart.data.datasets.reduce((sum, ds) => sum + (ds.data[c.dataIndex] || 0), 0);
-                const pct = barTotal ? ((c.parsed.y / barTotal) * 100).toFixed(1) : '0.0';
-                return ` ${c.dataset.label}: ${fmt(c.parsed.y)} (${pct}%)`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: _ax({ stacked: true }),
-          y: _ax({ stacked: true, beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-        },
-      },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData, selectedSeverity, setSelectedSeverity]);
+  const empty = noData || !d || !d.mensal_crit || !d.mensal_crit.labels.length;
+  const seriesKeys = empty ? [] : Object.keys(d.mensal_crit.series);
+  const rows = empty ? [] : d.mensal_crit.labels.map((l, i) => {
+    const row = { label: l };
+    seriesKeys.forEach((s) => { row[s] = d.mensal_crit.series[s][i]; });
+    return row;
+  });
+  const cc = { Gravíssimo: C.danger, Grave: C.warning, Médio: C.info };
+  const groupOf = (s) => (s === 'Médio' ? 'medium' : 'high');
+  const alpha = (hex, a) => hex + a;
+  const isSmall = rows.length > 15;
 
   const calcTotal = (seriesName) => {
     if (!d || !d.mensal_crit || !d.mensal_crit.series || !d.mensal_crit.series[seriesName]) return 0;
     return d.mensal_crit.series[seriesName].reduce((a, b) => a + b, 0);
   };
 
+  const toggleGroup = (group) => setSelectedSeverity(selectedSeverity === group ? 'all' : group);
+
   return (
-    <div data-card className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
+    <div data-card data-accent="danger" className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Volume por criticidade</h4>
@@ -233,7 +130,7 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
           })}
         </div>
       </div>
-      {!noData && d && d.mensal_crit && d.mensal_crit.series && (
+      {!empty && (
         <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(226,75,74,0.06)', border: '1px solid rgba(226,75,74,0.15)', padding: '4px 10px', borderRadius: '6px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E24B4A' }}></span>
@@ -256,12 +153,41 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
         </div>
       )}
       <div style={{ position: 'relative', width: '100%', height: '260px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
+        {empty ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '80px' }}>
             <i className="ti ti-chart-bar" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
             <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
           </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="label" {...axisLineProps} />
+              <YAxis {...axisLineProps} tickFormatter={kf} />
+              <Tooltip content={<ChartTooltip formatter={(v, name, entry, allPayload) => {
+                const barTotal = allPayload.reduce((sum, p) => sum + (p.value || 0), 0);
+                const pct = barTotal ? ((v / barTotal) * 100).toFixed(1) : '0.0';
+                return `${name}: ${fmt(v)} (${pct}%)`;
+              }} />} />
+              <Legend
+                wrapperStyle={{ fontSize: 11.5, paddingTop: 8, cursor: 'pointer' }}
+                iconType="rect"
+                onClick={(entry) => toggleGroup(groupOf(entry.dataKey))}
+              />
+              {seriesKeys.map((s) => (
+                <Bar
+                  key={s}
+                  dataKey={s}
+                  stackId="crit"
+                  fill={selectedSeverity !== 'all' && groupOf(s) !== selectedSeverity ? alpha(cc[s], '55') : cc[s]}
+                  radius={isSmall ? [2, 2, 0, 0] : [4, 4, 0, 0]}
+                  maxBarSize={isSmall ? 20 : 54}
+                  cursor="pointer"
+                  onClick={() => toggleGroup(groupOf(s))}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useMemo } from 'react';
-import Chart from 'chart.js/auto';
-import { C, fmt, kf, _ax, initChartDefaults } from './components/ChartUtils.js';
+import { useMemo } from 'react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { C, fmt, kf, axisLineProps, gridProps, ChartTooltip } from './components/ChartUtils.jsx';
 
 export default function ComparisonView({
   sources,
@@ -8,16 +8,8 @@ export default function ComparisonView({
   formatMonthKey,
   compareCompanies = {},
   setCompareCompanies,
-  selectedSeverity,
   compareMode = 'platforms'
 }) {
-  initChartDefaults();
-
-  const canvasCmpRef = useRef(null);
-  const chartRef = useRef(null);
-  const canvasCritRef = useRef(null);
-  const chartCritRef = useRef(null);
-
   // Derived calculations for compare rows
   const compareRows = useMemo(() => {
     const cmpCols = ['#9E1A45', '#2A8DD9', '#E8A020', '#2DA75A', '#C24A6A', '#F26931', '#7A1235', '#6F6A88'];
@@ -36,129 +28,33 @@ export default function ComparisonView({
     }).filter(Boolean);
   }, [sources]);
 
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-    if (chartCritRef.current) {
-      chartCritRef.current.destroy();
-      chartCritRef.current = null;
-    }
+  const volumeRows = useMemo(() => {
+    if (sources.length < 2) return [];
+    return sources.map((s) => {
+      const total = s.data?.kpis?.total || 0;
+      const pctPos = s.data?.kpis?.pct_positivo || 0;
+      return {
+        name: s.label || s.platformName,
+        Total: total,
+        Positivos: Math.round((total * pctPos) / 100),
+      };
+    });
+  }, [sources]);
 
-    if (sources.length >= 2 && canvasCmpRef.current) {
-      const labels = sources.map((s) => s.label || s.platformName);
-      const datasetsTotal = sources.map((s) => (s.data?.kpis?.total || 0));
-      const datasetsPos = sources.map((s) => {
-        const total = s.data?.kpis?.total || 0;
-        const pctPos = s.data?.kpis?.pct_positivo || 0;
-        return Math.round((total * pctPos) / 100);
-      });
+  // Criticidade por plataforma (barras empilhadas). Soma as séries mensais que o
+  // aggregate já devolve em `mensal_crit.series`.
+  const critRows = useMemo(() => {
+    if (sources.length < 2) return [];
+    const sumSeries = (agg, key) => ((agg?.mensal_crit?.series?.[key]) || []).reduce((a, b) => a + b, 0);
+    return sources.map((s) => ({
+      name: s.label || s.platformName,
+      Gravíssimo: sumSeries(s.data, 'Gravíssimo'),
+      Grave: sumSeries(s.data, 'Grave'),
+      Médio: sumSeries(s.data, 'Médio'),
+    }));
+  }, [sources]);
 
-      chartRef.current = new Chart(canvasCmpRef.current, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: 'Total',
-              data: datasetsTotal,
-              backgroundColor: 'rgba(158,26,69,0.65)',
-              borderColor: C.vinho,
-              borderWidth: 1,
-              borderRadius: 5,
-              maxBarThickness: 34,
-            },
-            {
-              label: 'Positivos',
-              data: datasetsPos,
-              backgroundColor: 'rgba(42,141,217,0.55)',
-              borderColor: C.info,
-              borderWidth: 1,
-              borderRadius: 5,
-              maxBarThickness: 34,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'bottom',
-              labels: {
-                boxWidth: 10,
-                boxHeight: 10,
-                padding: 14,
-                usePointStyle: true,
-                pointStyle: 'rectRounded',
-              },
-            },
-            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } },
-          },
-          scales: {
-            x: _ax(),
-            y: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          },
-        },
-      });
-    }
-
-    // Criticidade por plataforma (barras empilhadas). Soma as séries mensais que o
-    // aggregate já devolve em `mensal_crit.series`.
-    if (sources.length >= 2 && canvasCritRef.current) {
-      const labels = sources.map((s) => s.label || s.platformName);
-      const sumSeries = (agg, key) => ((agg?.mensal_crit?.series?.[key]) || []).reduce((a, b) => a + b, 0);
-      const critDefs = [
-        { key: 'Gravíssimo', color: '#C62F2F' },
-        { key: 'Grave', color: '#E8A020' },
-        { key: 'Médio', color: '#2A8DD9' },
-      ];
-
-      chartCritRef.current = new Chart(canvasCritRef.current, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: critDefs.map((cd) => ({
-            label: cd.key,
-            data: sources.map((s) => sumSeries(s.data, cd.key)),
-            backgroundColor: cd.color,
-            borderWidth: 0,
-            borderRadius: 4,
-            maxBarThickness: 34,
-          })),
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'bottom',
-              labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' },
-            },
-            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } },
-          },
-          scales: {
-            x: _ax({ stacked: true }),
-            y: _ax({ stacked: true, beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          },
-        },
-      });
-    }
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-      if (chartCritRef.current) {
-        chartCritRef.current.destroy();
-        chartCritRef.current = null;
-      }
-    };
-  }, [sources, selectedMonth, compareCompanies, selectedSeverity]);
+  const critColors = { Gravíssimo: '#C62F2F', Grave: '#E8A020', Médio: '#2A8DD9' };
 
   return (
     <div style={{ marginTop: '20px' }}>
@@ -245,7 +141,23 @@ export default function ComparisonView({
             Total de alertas e positivos confirmados em cada fonte.
           </p>
           <div style={{ position: 'relative', width: '100%', height: '280px' }}>
-            <canvas ref={canvasCmpRef}></canvas>
+            {volumeRows.length === 0 ? (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                Sem dados para comparação.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={volumeRows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="name" {...axisLineProps} />
+                  <YAxis {...axisLineProps} tickFormatter={kf} />
+                  <Tooltip content={<ChartTooltip formatter={(v, name) => `${name}: ${fmt(v)}`} />} />
+                  <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 10 }} iconType="rect" />
+                  <Bar dataKey="Total" fill="rgba(158,26,69,0.65)" stroke={C.vinho} strokeWidth={1} radius={[5, 5, 0, 0]} maxBarSize={34} />
+                  <Bar dataKey="Positivos" fill="rgba(42,141,217,0.55)" stroke={C.info} strokeWidth={1} radius={[5, 5, 0, 0]} maxBarSize={34} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
         <div data-card className="card" style={{ padding: '16px 18px', overflowX: 'auto' }}>
@@ -295,7 +207,24 @@ export default function ComparisonView({
           Distribuição de Gravíssimo / Grave / Médio em cada fonte (eventos Leve ficam fora da análise).
         </p>
         <div style={{ position: 'relative', width: '100%', height: '280px' }}>
-          <canvas ref={canvasCritRef}></canvas>
+          {critRows.length === 0 ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+              Sem dados para comparação.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={critRows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="name" {...axisLineProps} />
+                <YAxis {...axisLineProps} tickFormatter={kf} />
+                <Tooltip content={<ChartTooltip formatter={(v, name) => `${name}: ${fmt(v)}`} />} />
+                <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 10 }} iconType="rect" />
+                {Object.keys(critColors).map((k) => (
+                  <Bar key={k} dataKey={k} stackId="crit" fill={critColors[k]} radius={[4, 4, 0, 0]} maxBarSize={34} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>

@@ -1,65 +1,22 @@
-import { useEffect, useRef } from 'react';
-import Chart from 'chart.js/auto';
-import { fmt, kf, _ax } from './ChartUtils.js';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { fmt, kf, axisLineProps, gridProps, ChartTooltip } from './ChartUtils.jsx';
+
+function EmptyState({ icon }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px' }}>
+      <i className={`ti ${icon}`} style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
+      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
+    </div>
+  );
+}
 
 export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelectedUf, availableUfs = [] }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.uf || !d.uf.labels.length) return;
-
-    const isFiltered = !compare && !!selectedUf;
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.uf.labels,
-        datasets: [
-          {
-            data: d.uf.valores,
-            backgroundColor: d.uf.labels.map((l) => (isFiltered && selectedUf !== l ? 'rgba(42,141,217,0.28)' : 'rgba(42,141,217,0.7)')),
-            borderRadius: 5,
-            maxBarThickness: 18,
-          },
-        ],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        onHover: (evt, elements) => { evt.native.target.style.cursor = !compare && elements.length ? 'pointer' : 'default'; },
-        onClick: (evt, elements) => {
-          if (compare || !elements.length) return;
-          const label = d.uf.labels[elements[0].index];
-          setSelectedUf(selectedUf === label ? '' : label);
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
-        },
-        scales: {
-          x: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          y: _ax({ grid: { display: false }, ticks: { font: { size: 10.5 } } }),
-        },
-      },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData, selectedUf, setSelectedUf, compare]);
+  const empty = noData || !d || !d.uf || !d.uf.labels.length;
+  const rows = empty ? [] : d.uf.labels.map((l, i) => ({ name: l, valor: d.uf.valores[i] }));
+  const isFiltered = !compare && !!selectedUf;
 
   return (
-    <div data-card className="card" style={{ padding: '16px 18px' }}>
+    <div data-card data-accent="info" className="card" style={{ padding: '16px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Distribuição por UF</h4>
@@ -97,12 +54,28 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
         )}
       </div>
       <div style={{ position: 'relative', width: '100%', height: '300px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px' }}>
-            <i className="ti ti-map-pin" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
-          </div>
+        {empty ? (
+          <EmptyState icon="ti-map-pin" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid {...gridProps} horizontal={false} />
+              <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
+              <YAxis type="category" dataKey="name" {...axisLineProps} width={40} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)} alertas`} />} />
+              <Bar
+                dataKey="valor"
+                radius={[0, 5, 5, 0]}
+                maxBarSize={18}
+                cursor={compare ? 'default' : 'pointer'}
+                onClick={(data) => { if (!compare) setSelectedUf(selectedUf === data.name ? '' : data.name); }}
+              >
+                {rows.map((r, i) => (
+                  <Cell key={i} fill={isFiltered && selectedUf !== r.name ? 'rgba(42,141,217,0.28)' : 'rgba(42,141,217,0.7)'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>
@@ -110,67 +83,13 @@ export function DistribuicaoUfCard({ d, noData, compare, selectedUf, setSelected
 }
 
 export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelectedCompany, availableCompanies = [] }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
-
-    if (!canvasRef.current || noData || !d || !d.frota || !d.frota.labels.length) return;
-
-    const short = (s) => (s.length > 20 ? s.slice(0, 18) + '…' : s);
-    const isFiltered = !compare && !!selectedCompany;
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: d.frota.labels.map(short),
-        datasets: [
-          {
-            data: d.frota.valores,
-            backgroundColor: d.frota.labels.map((l, i) => {
-              if (isFiltered) return selectedCompany === l ? 'rgba(158,26,69,0.75)' : 'rgba(158,26,69,0.18)';
-              return i === 0 ? 'rgba(158,26,69,0.65)' : 'rgba(194,74,106,0.55)';
-            }),
-            borderRadius: 5,
-            maxBarThickness: 22,
-          },
-        ],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        onHover: (evt, elements) => { evt.native.target.style.cursor = !compare && elements.length ? 'pointer' : 'default'; },
-        onClick: (evt, elements) => {
-          if (compare || !elements.length) return;
-          const label = d.frota.labels[elements[0].index];
-          setSelectedCompany(selectedCompany === label ? '' : label);
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmt(c.parsed.x) + ' alertas' } },
-        },
-        scales: {
-          x: _ax({ beginAtZero: true, ticks: { callback: kf, padding: 8 } }),
-          y: _ax({ grid: { display: false }, ticks: { font: { size: 10.5 } } }),
-        },
-      },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [d, noData, selectedCompany, setSelectedCompany, compare]);
+  const empty = noData || !d || !d.frota || !d.frota.labels.length;
+  const short = (s) => (s.length > 20 ? s.slice(0, 18) + '…' : s);
+  const rows = empty ? [] : d.frota.labels.map((l, i) => ({ name: short(l), fullName: l, valor: d.frota.valores[i] }));
+  const isFiltered = !compare && !!selectedCompany;
 
   return (
-    <div data-card className="card" style={{ padding: '16px 18px' }}>
+    <div data-card data-accent="vinho" className="card" style={{ padding: '16px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Por frota / base</h4>
@@ -208,12 +127,31 @@ export function FrotaBaseCard({ d, noData, compare, selectedCompany, setSelected
         )}
       </div>
       <div style={{ position: 'relative', width: '100%', height: '300px' }}>
-        <canvas ref={canvasRef}></canvas>
-        {noData && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', textAlign: 'center', paddingTop: '100px' }}>
-            <i className="ti ti-building-warehouse" style={{ fontSize: '28px', color: 'var(--border-strong, #C9CDD6)' }}></i>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
-          </div>
+        {empty ? (
+          <EmptyState icon="ti-building-warehouse" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid {...gridProps} horizontal={false} />
+              <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
+              <YAxis type="category" dataKey="name" {...axisLineProps} width={100} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)} alertas`} />} />
+              <Bar
+                dataKey="valor"
+                radius={[0, 5, 5, 0]}
+                maxBarSize={22}
+                cursor={compare ? 'default' : 'pointer'}
+                onClick={(data) => { if (!compare) setSelectedCompany(selectedCompany === data.fullName ? '' : data.fullName); }}
+              >
+                {rows.map((r, i) => {
+                  if (isFiltered) {
+                    return <Cell key={i} fill={selectedCompany === r.fullName ? 'rgba(158,26,69,0.75)' : 'rgba(158,26,69,0.18)'} />;
+                  }
+                  return <Cell key={i} fill={i === 0 ? 'rgba(158,26,69,0.65)' : 'rgba(194,74,106,0.55)'} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>

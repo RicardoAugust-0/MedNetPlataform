@@ -177,21 +177,18 @@ export default function FadigaCharts({
         </div>
       </div>
 
-      {/* Ranking de operadores — só MaxTrack, fora do modo comparação */}
+      {/* Ranking de operadores — só MaxTrack, fora do modo comparação. Header
+          da seção vive dentro do próprio card (ver OperatorRankingCard.jsx):
+          sem isso, o título aparecia sozinho quando a planilha não tem a
+          coluna de operador preenchida (card retorna null, header ficava órfão). */}
       {!compare && platformId === 'maxtrack' && (
-        <div>
-          <div style={headerStyle}>
-            <span style={lineIndicatorStyle}></span>
-            Ranking de operadores
-          </div>
-          <OperatorRankingCard
-            platformId={platformId}
-            selectedMonth={selectedMonth}
-            startDate={startDate}
-            endDate={endDate}
-            selectedSeverity={selectedSeverity}
-          />
-        </div>
+        <OperatorRankingCard
+          platformId={platformId}
+          selectedMonth={selectedMonth}
+          startDate={startDate}
+          endDate={endDate}
+          selectedSeverity={selectedSeverity}
+        />
       )}
     </>
   );
