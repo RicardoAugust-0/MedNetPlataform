@@ -55,15 +55,15 @@ export function AtendimentosProvider({ children }) {
     };
   }, []);
 
-  const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, obs, platformId }) => {
+  const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, bucket, obs, platformId }) => {
     if (!profile) return;
     const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const optimistic = { id: crypto.randomUUID(), motorista, placa, transportadora, tipo, obs, hora, operador: profile.nome, created_at: new Date().toISOString(), _pending: true };
+    const optimistic = { id: crypto.randomUUID(), motorista, placa, transportadora, tipo, bucket, obs, hora, operador: profile.nome, created_at: new Date().toISOString(), _pending: true };
     setHistory(prev => [optimistic, ...prev]);
 
     const { data, error } = await supabase
       .from('atendimentos')
-      .insert({ motorista, placa: placa || null, transportadora: transportadora || null, operador_id: profile.id, operador_nome: profile.nome, tipo, obs, hora })
+      .insert({ motorista, placa: placa || null, transportadora: transportadora || null, operador_id: profile.id, operador_nome: profile.nome, tipo, bucket: bucket || null, obs, hora })
       .select().single();
 
     if (error) {
@@ -216,6 +216,7 @@ function toLocal(row) {
     transportadora: row.transportadora,
     operador:       row.operador_nome,
     tipo:           row.tipo,
+    bucket:         row.bucket,
     obs:            row.obs,
     hora:           row.hora,
     created_at:     row.created_at,

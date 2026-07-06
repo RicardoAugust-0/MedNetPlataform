@@ -211,26 +211,51 @@ export function aggregate(events, history, platform, options = {}) {
   }
 
   // 6. Calcular SLA (slaAgeMin e slaBreached) sobre motoristas com alertas de intervenção pendentes
-  const now = Date.now();
+  const now = options.now ?? Date.now();
+  const criticalAlertsCount = rules.criticalAlertsCount ?? 5;
+  const slaLimitMin = rules.slaLimitMin ?? 30;
+  let filtradosPorBurst = 0;
+
   const driversWithSla = histFiltered.map(d => {
+    let { alertas, tipos, ultimoEvento, eventosDetalhados } = d;
     let slaAgeMin = 0;
     let slaBreached = false;
 
-    if (d.alertas > 0) {
-      const intervencaoEvs = d.eventosDetalhados.filter(e => e.bucket === 'intervencao' && e.ts);
+    if (alertas > 0) {
+      const intervencaoEvs = eventosDetalhados.filter(e => e.bucket === 'intervencao' && e.ts);
       if (intervencaoEvs.length > 0) {
         const oldestTs = Math.min(...intervencaoEvs.map(e => e.ts.getTime()));
         slaAgeMin = Math.max(0, (now - oldestTs) / 60000);
-        slaBreached = slaAgeMin > (rules.slaLimitMin || 30);
+        slaBreached = slaAgeMin > slaLimitMin;
+      }
+
+      // Regra de burst: um motorista só é considerado crítico (aparece na fila
+      // de intervenção) quando acumula >= criticalAlertsCount alertas E o
+      // último ainda está dentro da janela de slaLimitMin minutos. Depois
+      // disso, sem novo evento, o burst se encerra e ele sai da fila — os
+      // eventos brutos continuam intactos em driver_events/Analytics.
+      const ageSinceLastMin = ultimoEvento ? (now - ultimoEvento.getTime()) / 60000 : Infinity;
+      if (alertas < criticalAlertsCount || ageSinceLastMin > slaLimitMin) {
+        filtradosPorBurst += alertas;
+        alertas = 0;
+        tipos = [];
+        ultimoEvento = null;
+        eventosDetalhados = eventosDetalhados.filter(e => e.bucket !== 'intervencao');
+        slaAgeMin = 0;
+        slaBreached = false;
       }
     }
 
     return {
       ...d,
+      alertas,
+      tipos,
+      ultimoEvento,
+      eventosDetalhados,
       slaAgeMin,
       slaBreached,
     };
-  });
+  }).filter(d => d.alertas > 0 || d.reportaveis > 0 || d.tecnicos > 0);
 
   // 7. Retornar dados agregados e estatísticas de fila
   const finalDrivers = driversWithSla;
@@ -242,6 +267,7 @@ export function aggregate(events, history, platform, options = {}) {
     soTecnico:              finalDrivers.filter(d => d.alertas === 0 && d.reportaveis === 0 && d.tecnicos > 0).length,
     totalEventos,
     falsosPositivos,
+    filtradosPorBurst,
     filtradosPorVelocidade,
     filtradosPorHistorico,
     autoDescartes,

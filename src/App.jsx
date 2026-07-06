@@ -11,6 +11,7 @@ import { useMaintenance } from "./hooks/useMaintenance.jsx";
 import { RemindersProvider, useReminders } from "./hooks/useReminders.jsx";
 import { useToast } from "./hooks/useToast.jsx";
 import { useNotifications } from "./hooks/useNotifications.jsx";
+import { useDailyBriefing } from "./hooks/useDailyBriefing.js";
 import { DataProvider } from "./components/DataProvider.jsx";
 const AdminLayout = lazy(() => import("./modules/admin/AdminLayout.jsx"));
 const AdminEquipe = lazy(() => import("./modules/admin/EquipeTab.jsx"));
@@ -113,6 +114,11 @@ function ReminderNotifier() {
   return null;
 }
 
+function DailyBriefingNotifier() {
+  useDailyBriefing();
+  return null;
+}
+
 function AppShell() {
   const { theme, density, mode, vibe, rhythm, accent } = useApp();
   const { profile } = useAuth();
@@ -147,6 +153,7 @@ function AppShell() {
       <DataProvider>
         <div id="app" className={isChat ? "is-chat-page" : ""}>
           <ReminderNotifier />
+          <DailyBriefingNotifier />
           <Sidebar />
           <div className="main-area">
             {!isChat && <Topbar />}

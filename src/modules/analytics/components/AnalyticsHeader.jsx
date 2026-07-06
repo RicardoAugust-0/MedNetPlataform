@@ -1,4 +1,5 @@
 import SavedViewsMenu from './SavedViewsMenu.jsx';
+import FadigaZeroGauge from './FadigaZeroGauge.jsx';
 
 export default function AnalyticsHeader({
   activeId,
@@ -25,6 +26,7 @@ export default function AnalyticsHeader({
   promptSaveCurrentView,
   applySavedView,
   removeSavedView,
+  fadigaScore,
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
@@ -35,10 +37,13 @@ export default function AnalyticsHeader({
             Consolidação multi-plataforma de alertas de fadiga e desatenção
           </p>
         </div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px', marginTop: '6px' }}>
-          <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
-          {d && d.meta?.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+          {fadigaScore != null && <FadigaZeroGauge score={fadigaScore} />}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
+            <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
+            {d && d.meta?.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
+          </span>
+        </div>
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         

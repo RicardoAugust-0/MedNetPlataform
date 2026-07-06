@@ -11,7 +11,6 @@ export function AutomationsProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
   const [healthUrl, setHealthUrl] = useState('https://botsplaywright.duckdns.org/health');
-  const [vncUrl, setVncUrl] = useState('');
   const timers = useRef({});
 
   // Helper to map DB row to frontend automation model
@@ -120,11 +119,6 @@ export function AutomationsProvider({ children }) {
         } catch {
           // Keep default
         }
-      }
-
-      // Set VNC URL from Supabase config
-      if (settingsRes.data?.value?.vnc_url) {
-        setVncUrl(settingsRes.data.value.vnc_url);
       }
     } catch (err) {
       console.error('[useAutomations] Error loading data:', err);
@@ -463,7 +457,7 @@ export function AutomationsProvider({ children }) {
 
   return createElement(
     AutomationsContext.Provider,
-    { value: { automations, logs, loading, vpsHealth, vncUrl, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
+    { value: { automations, logs, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
     children
   );
 }

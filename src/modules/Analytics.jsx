@@ -15,9 +15,12 @@ import ComparisonModal from './analytics/components/ComparisonModal.jsx';
 
 // Custom Hook
 import { useAnalyticsState } from './analytics/hooks/useAnalyticsState.js';
+import { useFadigaScore } from './analytics/hooks/useFadigaScore.js';
 
 export default function Analytics() {
   const state = useAnalyticsState();
+  const fadigaScoreResult = useFadigaScore(state.d);
+  const fadigaScore = (state.activeId || state.compare) ? fadigaScoreResult?.score ?? null : null;
 
   if (state.loading) {
     return (
@@ -70,6 +73,7 @@ export default function Analytics() {
           promptSaveCurrentView={state.promptSaveCurrentView}
           applySavedView={state.applySavedView}
           removeSavedView={state.removeSavedView}
+          fadigaScore={fadigaScore}
         />
 
         <SourceChips
@@ -216,6 +220,7 @@ export default function Analytics() {
             setSelectedUf={state.setSelectedUf}
             availableUfs={state.availableUfs}
             compare={state.compare}
+            platformId={state.activeSource?.platformId}
           />
         )}
 

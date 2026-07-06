@@ -25,7 +25,7 @@ function triggerLabelFor(a) {
   return 'Manual';
 }
 
-function VpsStrip({ vpsHealth, vncUrl, onOpenVnc }) {
+function VpsStrip({ vpsHealth, onStopBot }) {
   if (vpsHealth.checking && !vpsHealth.data) {
     return (
       <div className="vps-strip">
@@ -84,12 +84,12 @@ function VpsStrip({ vpsHealth, vncUrl, onOpenVnc }) {
           <div className="vps-bar"><span style={{ width: ram + '%' }}></span></div>
         </div>
       </div>
-      {vncUrl && (
+      {onStopBot && (
         <>
           <div className="vps-divider"></div>
-          <button className="btn btn-secondary btn-sm" onClick={onOpenVnc} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <i className="ti ti-device-desktop"></i>
-            <span>Ver Tela (VNC)</span>
+          <button className="btn btn-danger btn-sm" onClick={onStopBot} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <i className="ti ti-player-stop"></i>
+            <span>Parar Robô</span>
           </button>
         </>
       )}
@@ -370,7 +370,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   );
 }
 
-export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRun, onToggle, onSave, onDelete }) {
+export function HooksTab({ automations, logs, vpsHealth, onStopBot, onRun, onToggle, onSave, onDelete }) {
   const [activeSubTab, setActiveSubTab] = useState('vps'); // 'vps', 'whatsapp'
   const [drawer, setDrawer] = useState(null);
   const [modal, setModal] = useState(null);
@@ -509,7 +509,7 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
             </div>
           </div>
 
-          <VpsStrip vpsHealth={vpsHealth} vncUrl={vncUrl} onOpenVnc={onOpenVnc} />
+          <VpsStrip vpsHealth={vpsHealth} onStopBot={onStopBot} />
 
           <div className="hooks-toolbar">
             <span className="ht-label"><b>{automations.filter(a => a.active).length}</b> de {automations.length} automações ativas</span>
@@ -684,38 +684,5 @@ export function HooksTab({ automations, logs, vpsHealth, vncUrl, onOpenVnc, onRu
       {drawer && <HookDrawer hook={drawer} logs={logs[drawer.id] || []} onClose={() => setDrawer(null)} />}
       {modal && <AutomationModal automation={modal === 'new' ? null : modal} onSave={save} onDelete={onDelete} onClose={() => setModal(null)} />}
     </div>
-  );
-}
-
-export function VncModal({ vncUrl, onStopBot, onClose }) {
-  const iframeUrl = `${vncUrl}/vnc.html?autoconnect=true&resize=scale&quality=6&compression=7`;
-
-  return (
-    <Modal open onClose={onClose} width={960} labelledBy="vnc-modal-title">
-        <div className="modal-header">
-          <div className="modal-title" id="vnc-modal-title"><i className="ti ti-device-desktop"></i> Transmissão de Tela da VPS (noVNC)</div>
-          <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
-        </div>
-        <div className="modal-body" style={{ padding: 0, background: '#111', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <iframe
-            src={iframeUrl}
-            title="VNC Stream"
-            style={{ width: '100%', height: '580px', border: 'none', background: '#000' }}
-            allow="fullscreen"
-          />
-        </div>
-        <div className="modal-footer">
-          <div className="field-hint" style={{ marginTop: 0 }}>
-            <i className="ti ti-info-circle"></i> Use esta tela para digitar, clicar e resolver o Captcha caso o robô Horizon trave.
-          </div>
-          <div className="spacer"></div>
-          {onStopBot && (
-            <button className="btn btn-danger" onClick={onStopBot} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 8, background: 'var(--danger-500)', borderColor: 'var(--danger-500)', color: '#fff' }}>
-              <i className="ti ti-player-stop"></i> Parar Robô
-            </button>
-          )}
-          <button className="btn btn-primary" onClick={onClose}><i className="ti ti-check"></i> Concluir</button>
-        </div>
-    </Modal>
   );
 }

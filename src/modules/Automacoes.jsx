@@ -3,15 +3,14 @@ import { useAutomations } from '../hooks/useAutomations';
 import { useConfirm } from '../hooks/useConfirm';
 import { useToast } from '../hooks/useToast.jsx';
 import '../styles/automacoes.css';
-import { HooksTab, VncModal } from './automacoes/HooksTab.jsx';
+import { HooksTab } from './automacoes/HooksTab.jsx';
 import DisparosTab from './automacoes/DisparosTab.jsx';
 import ChatTab from './automacoes/ChatTab.jsx';
 
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, loading, vpsHealth, vncUrl, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
+  const { automations, logs, loading, vpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
   const confirm = useConfirm();
-  const [showVnc, setShowVnc] = useState(false);
   const [initialChatParams, setInitialChatParams] = useState(null);
 
   useEffect(() => {
@@ -37,6 +36,17 @@ export default function Automacoes() {
       await update(id, data);
     } else {
       await add(data);
+    }
+  };
+
+  const handleStopBot = async () => {
+    const confirmed = await confirm({
+      title: 'Encerrar Robô',
+      message: 'Deseja realmente forçar o encerramento do robô na VPS? O navegador será fechado e os recursos da máquina serão liberados.',
+      danger: true
+    });
+    if (confirmed) {
+      await stopRunningTasks();
     }
   };
 
@@ -117,39 +127,20 @@ export default function Automacoes() {
       </nav>
       
       {tab === 'hooks' ? (
-        <HooksTab 
-          automations={automations} 
-          logs={logs} 
-          vpsHealth={vpsHealth} 
-          vncUrl={vncUrl}
-          onOpenVnc={() => setShowVnc(true)}
-          onRun={run} 
-          onToggle={handleToggle} 
-          onSave={handleSave} 
-          onDelete={handleDelete} 
+        <HooksTab
+          automations={automations}
+          logs={logs}
+          vpsHealth={vpsHealth}
+          onStopBot={handleStopBot}
+          onRun={run}
+          onToggle={handleToggle}
+          onSave={handleSave}
+          onDelete={handleDelete}
         />
       ) : tab === 'chat' ? (
         <ChatTab initialParams={initialChatParams} clearInitialParams={() => setInitialChatParams(null)} />
       ) : (
         <DisparosTab />
-      )}
-      
-      {showVnc && vncUrl && (
-        <VncModal 
-          vncUrl={vncUrl} 
-          onStopBot={async () => {
-            const confirmed = await confirm({
-              title: 'Encerrar Robô',
-              message: 'Deseja realmente forçar o encerramento do robô na VPS? O navegador será fechado e os recursos da máquina serão liberados.',
-              danger: true
-            });
-            if (confirmed) {
-              await stopRunningTasks();
-              setShowVnc(false);
-            }
-          }}
-          onClose={() => setShowVnc(false)} 
-        />
       )}
     </div>
   );

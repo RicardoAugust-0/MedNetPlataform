@@ -97,6 +97,7 @@ function buildImportRows(stage, operatorEmail) {
       evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
       inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
       fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
+      operador: getVal(row, 'operator') ? String(getVal(row, 'operator')).trim() : null,
     });
   }
 

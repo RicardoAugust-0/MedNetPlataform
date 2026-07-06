@@ -9,6 +9,7 @@ import PlatformBadge from "./PlatformBadge";
 import { supabase, isSupabaseConfigured } from "../supabase.js";
 import { buildMesesLookback } from "./dashboard/_helpers";
 import {
+  ActivityFeedCard,
   Banner,
   CriticalSLA,
   FilterBar,
@@ -19,6 +20,7 @@ import {
   TechAlerts,
   TransportadoraRanking,
 } from "./dashboard/components";
+import { useActivityFeed } from "../hooks/useActivityFeed";
 import "./dashboard/dashboard.css";
 import { EmAbertoDrill, FechadosDrill, VolumeDrill } from "./dashboard/drills";
 import { useDashboardFilters } from "./dashboard/hooks/useDashboardFilters";
@@ -58,6 +60,7 @@ export default function Dashboard() {
   const { filters, setFilters, showTipo, showResultado, empresaFilterFn } =
     useDashboardFilters(resolveAlias);
   const [activeKpi, setActiveKpi] = useState(null);
+  const [rankingPeriod, setRankingPeriod] = useState('hoje'); // 'hoje' | 'semana' | 'mes'
 
   // ── Total de eventos brutos da última planilha carregada (via Supabase / localStorage)
   const readPlatRawTotal = () => {
@@ -166,7 +169,10 @@ export default function Dashboard() {
     profiles,
     compareYesterday: COMPARE_YESTERDAY,
     slaLimit: SLA_LIMIT_MIN,
+    rankingPeriod,
   });
+
+  const activityFeed = useActivityFeed({ platRaw });
 
   const formattedDate = useMemo(() => fmtDate(now), [now]);
 
@@ -472,6 +478,11 @@ export default function Dashboard() {
             transportadoras={m.transpStats.slice(0, 6)}
           />
         )}
+        {deferRest ? (
+          <div className="dg-card-sk" style={{ height: 320 }} />
+        ) : (
+          <ActivityFeedCard items={activityFeed.items} lastImport={activityFeed.lastImport} />
+        )}
       </div>
 
       {/* Seção: Produtividade */}
@@ -479,7 +490,7 @@ export default function Dashboard() {
       {deferRest ? (
         <div className="dg-card-sk" style={{ height: 240 }} />
       ) : (
-        <ProductivityRanking equipe={m.equipe} />
+        <ProductivityRanking equipe={m.equipe} period={rankingPeriod} onPeriodChange={setRankingPeriod} />
       )}
 
       {/* Spacer final */}

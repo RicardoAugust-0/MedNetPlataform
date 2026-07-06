@@ -22,6 +22,7 @@ export function useDashboardMetrics({
   filters, showTipo, showResultado, empresaFilterFn,
   resolveAlias, profiles,
   compareYesterday, slaLimit,
+  rankingPeriod = 'hoje',
 }) {
   // ── Janela de período: hoje (00h-now) vs turno atual (diurno 06-18 / noturno 18-06)
   const periodoWindow = useMemo(() => {
@@ -529,6 +530,43 @@ export function useDashboardMetrics({
     return Object.values(techMap);
   }, [drivers, empresaFilterFn]);
 
+  // ── Janela do ranking de produtividade (hoje/semana/mês) ───────────────────
+  // Independente da janela "hoje" usada pelo resto do dashboard — reaproveita
+  // os mesmos buffers já carregados (atHistory ~ últimos 1000 atendimentos,
+  // sheetHistory.rows ~ 3 meses de lookback), sem requisição nova ao Supabase.
+  const rankingWindow = useMemo(() => {
+    const start = new Date(now);
+    if (rankingPeriod === 'semana') start.setDate(start.getDate() - 6);
+    else if (rankingPeriod === 'mes') start.setDate(start.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    return { start, end: new Date(now) };
+  }, [now, rankingPeriod]);
+
+  const equipeAtendimentosBase = useMemo(() => {
+    if (rankingPeriod === 'hoje') return atendimentosHoje;
+    return atHistory.filter(a => {
+      const d = new Date(a.created_at);
+      if (d < rankingWindow.start || d > rankingWindow.end) return false;
+      if (filters.operador !== 'todos' && a.operador !== filters.operador) return false;
+      if (!empresaFilterFn(a.transportadora)) return false;
+      if (filters.tipo.length > 0) {
+        if (a.tipo === 'intervencao' && !showTipo('fadiga')) return false;
+        if (a.tipo === 'reportar' && !showTipo('comportamento')) return false;
+      }
+      return true;
+    });
+  }, [rankingPeriod, atendimentosHoje, atHistory, rankingWindow, filters.operador, filters.tipo, empresaFilterFn, showTipo]);
+
+  const equipeSheetRowsBase = useMemo(() => {
+    if (rankingPeriod === 'hoje') return sheetRowsPeriodo;
+    return sheetHistory.rows.filter(r => {
+      const d = parseSheetRowDate(r);
+      if (!d || d < rankingWindow.start || d > rankingWindow.end) return false;
+      if (!empresaFilterFn(r.empresa)) return false;
+      return true;
+    });
+  }, [rankingPeriod, sheetRowsPeriodo, sheetHistory.rows, rankingWindow, empresaFilterFn]);
+
   // ── Produtividade da equipe ─────────────────────────────────────────────────
   // Optimization: memoized and optimized with local caching to avoid O(N * M) lookup complexity.
   const equipe = useMemo(() => {
@@ -578,7 +616,7 @@ export function useDashboardMetrics({
     };
 
     const opMap = {};
-    atendimentosHoje.forEach(a => {
+    equipeAtendimentosBase.forEach(a => {
       if (!a.operador || a.tipo === 'limpeza') return;
       const opName = getFullOperatorName(a.operador);
       if (!opName) return;
@@ -591,7 +629,7 @@ export function useDashboardMetrics({
       }
     });
 
-    sheetRowsPeriodo.forEach(r => {
+    equipeSheetRowsBase.forEach(r => {
       const raw = (r.realizadoPor || '').trim();
       if (!raw) return;
       // Descarta horários (00:52), datas (27/05) e números puros antes de usar como nome
@@ -623,7 +661,7 @@ export function useDashboardMetrics({
         const tb = b.tratados.fadigaPos + b.tratados.fadigaPP + b.tratados.compPos;
         return tb - ta;
       });
-  }, [atendimentosHoje, sheetRowsPeriodo, profiles, placasPrevia7d]);
+  }, [equipeAtendimentosBase, equipeSheetRowsBase, profiles, placasPrevia7d]);
 
   // Contagem de drivers ativos por plataforma — base absoluta
   const platformCounts = useMemo(() => {

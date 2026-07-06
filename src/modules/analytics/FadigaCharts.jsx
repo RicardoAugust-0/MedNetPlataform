@@ -4,6 +4,7 @@ import { HoraDiaCard, DiaSemanaCard, VelocidadeAlertaCard } from './components/T
 import { AlertasCategoriaCard, EvidenciaVideoCard } from './components/CategoryEvidenceCharts.jsx';
 import { MotoristasMaisAlertasCard, VeiculosMaisAlertasCard } from './components/DriverVehicleCharts.jsx';
 import { DistribuicaoUfCard, FrotaBaseCard } from './components/DistributionCharts.jsx';
+import OperatorRankingCard from './components/OperatorRankingCard.jsx';
 
 export default function FadigaCharts({
   d,
@@ -25,7 +26,8 @@ export default function FadigaCharts({
   selectedUf,
   setSelectedUf,
   availableUfs = [],
-  compare
+  compare,
+  platformId
 }) {
   const headerStyle = {
     fontSize: '10px',
@@ -174,6 +176,23 @@ export default function FadigaCharts({
           />
         </div>
       </div>
+
+      {/* Ranking de operadores — só MaxTrack, fora do modo comparação */}
+      {!compare && platformId === 'maxtrack' && (
+        <div>
+          <div style={headerStyle}>
+            <span style={lineIndicatorStyle}></span>
+            Ranking de operadores
+          </div>
+          <OperatorRankingCard
+            platformId={platformId}
+            selectedMonth={selectedMonth}
+            startDate={startDate}
+            endDate={endDate}
+            selectedSeverity={selectedSeverity}
+          />
+        </div>
+      )}
     </>
   );
 }

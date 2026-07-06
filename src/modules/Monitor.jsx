@@ -496,20 +496,40 @@ export default function Monitor() {
   };
 
   const clearQueue = async () => {
-    if (!(await confirm({ title: 'Limpar fila', message: 'Tem certeza que deseja limpar toda a fila de motoristas (isso apagará os eventos importados hoje)?', danger: true }))) return;
+    const allActive = [...intervencaoList, ...reportarList, ...tecList];
+    if (allActive.length === 0) {
+      toast('A fila já está vazia.', 'info');
+      return;
+    }
+    if (!(await confirm({
+      title: 'Limpar fila',
+      message: `Limpar a fila do Monitor para ${allActive.length} motorista(s)? Os eventos continuam preservados no Analytics — só saem da fila de atendimento.`,
+      danger: true,
+    }))) return;
+
     setLoading(true);
+    setStatusMsg('Limpando fila…');
     try {
-      const startISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase
-        .from('driver_events')
-        .delete()
-        .gte('ocorrido_em', startISO);
-      if (error) throw error;
+      const jobs = [];
+      for (const d of allActive) {
+        if (d.alertas > 0) jobs.push({ d, bucket: 'intervencao', count: d.alertas });
+        if (d.reportaveis > 0) jobs.push({ d, bucket: 'reportar', count: d.reportaveis });
+        if (d.tecnicos > 0) jobs.push({ d, bucket: 'tecnico', count: d.tecnicos });
+      }
+
+      const results = await Promise.allSettled(jobs.map(({ d, bucket, count }) => registrar({
+        motorista: d.nome, placa: d.placa, transportadora: d.transportadora,
+        tipo: 'limpeza', bucket, obs: `Fila limpa em massa · ${count} evento(s)`,
+        platformId: d._platformId,
+      })));
+      const ok = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
+      const fail = jobs.length - ok;
+
       await reloadDrivers();
       setLoadStats(null);
-      setStatusKind('idle');
-      setStatusMsg('Fila limpa. Aguardando nova planilha.');
-      toast('Fila limpa.', 'success');
+      setStatusKind(fail > 0 ? 'error' : 'idle');
+      setStatusMsg(fail > 0 ? `Fila limpa com ${fail} falha(s).` : 'Fila limpa. Aguardando novos eventos ou planilha.');
+      toast(fail > 0 ? `Fila limpa com ${fail} falha(s).` : 'Fila limpa.', fail > 0 ? 'error' : 'success');
     } catch (err) {
       console.warn('[Monitor] Erro ao limpar fila:', err.message);
       toast('Não foi possível limpar a fila.', 'error');

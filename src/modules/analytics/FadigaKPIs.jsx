@@ -1,4 +1,5 @@
 import { AnimatedNumber } from '../../components/AnimatedNumber';
+import Sparkline from '../../components/Sparkline';
 
 export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
   const kpiData = d ? d.kpis : {};
@@ -74,6 +75,8 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
         : 'aguardando importação',
       iconStyle: iconStyle('#9E1A45', 'rgba(158,26,69,0.10)'),
       trend: renderTrend(kpiData?.total, prevD?.kpis?.total, false, 'Total de alertas'),
+      spark: d?.mensal?.valores,
+      sparkColor: '#9E1A45',
     },
     {
       id: 'positivo',
@@ -92,6 +95,8 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
       sub: d ? `${kpiData?.pct_naoclass}% sem classificação` : ' ',
       iconStyle: iconStyle('#E8A020', '#FAEEDA'),
       trend: renderTrend(kpiData?.pct_falso, prevD?.kpis?.pct_falso, true, 'Falso positivo'),
+      spark: d?.falso_mensal?.pct,
+      sparkColor: '#E8A020',
     },
     {
       id: 'naoclass',
@@ -193,6 +198,11 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', minHeight: '15px' }}>
               {k.sub}
             </div>
+            {k.spark && k.spark.length > 1 && (
+              <div style={{ marginTop: '8px' }}>
+                <Sparkline data={k.spark} color={k.sparkColor} height={20} />
+              </div>
+            )}
           </div>
         );
       })}

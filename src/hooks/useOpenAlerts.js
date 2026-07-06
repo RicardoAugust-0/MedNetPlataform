@@ -225,6 +225,7 @@ export function useOpenAlerts() {
       falsosPositivos: 0,
       filtradosPorVelocidade: 0,
       filtradosPorHistorico: 0,
+      filtradosPorBurst: 0,
       autoDescartes: [],
     };
 
@@ -244,6 +245,7 @@ export function useOpenAlerts() {
       totalStats.falsosPositivos += platStats.falsosPositivos || 0;
       totalStats.filtradosPorVelocidade += platStats.filtradosPorVelocidade || 0;
       totalStats.filtradosPorHistorico += platStats.filtradosPorHistorico || 0;
+      totalStats.filtradosPorBurst += platStats.filtradosPorBurst || 0;
       if (platStats.autoDescartes) {
         totalStats.autoDescartes.push(...platStats.autoDescartes);
       }

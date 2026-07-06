@@ -11,3 +11,4 @@ export { HourlyActivity } from './HourlyActivity';
 export { Banner } from './Banner';
 export { Section } from './Section';
 export { SheetInsights } from './SheetInsights';
+export { ActivityFeedCard } from './ActivityFeedCard';

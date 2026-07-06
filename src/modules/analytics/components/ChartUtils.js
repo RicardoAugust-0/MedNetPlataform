@@ -17,6 +17,15 @@ export function initChartDefaults() {
   Chart.defaults.plugins.tooltip.padding = 10;
   Chart.defaults.plugins.tooltip.cornerRadius = 8;
   Chart.defaults.plugins.tooltip.titleFont = { family: "'Poppins', sans-serif", weight: '600' };
+  // Estilo "Power BI": tooltip com marcador de cor do dataset + sombra suave,
+  // hover que dispara pela coluna inteira (não só quando o mouse acerta a barra
+  // exata) e transição consistente entre filtros/períodos.
+  Chart.defaults.plugins.tooltip.usePointStyle = true;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.bodySpacing = 6;
+  Chart.defaults.interaction = { mode: 'nearest', axis: 'x', intersect: false };
+  Chart.defaults.animation = { duration: 400, easing: 'easeOutQuart' };
+  Chart.defaults.animations.colors = { duration: 250 };
 }
 
 export const C = {

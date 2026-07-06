@@ -4,6 +4,7 @@ import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppProvider } from "./context";
+import { CommandPaletteProvider } from "./hooks/useCommandPalette";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import { NotificationsProvider } from "./hooks/useNotifications";
 import { ReauthProvider } from "./hooks/useReauth";
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root")).render(
               <NotificationsProvider>
                 <SheetHistoryProvider>
                   <AppProvider>
-                    <App />
+                    <CommandPaletteProvider>
+                      <App />
+                    </CommandPaletteProvider>
                   </AppProvider>
                 </SheetHistoryProvider>
               </NotificationsProvider>

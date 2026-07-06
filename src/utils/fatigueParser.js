@@ -53,6 +53,8 @@ export const FIELD_DEFS = [
     aliases: ['fim da tratativa', 'fim tratativa', 'finalizado em', 'encerramento', 'data fim tratativa', 'conclusao', 'data finalizacao evento'] },
   { key: 'description',    label: 'Descrição / Categoria', req: false,
     aliases: ['descricao', 'categoria', 'description', 'category', 'justificativa'] },
+  { key: 'operator',       label: 'Operador (MaxTrack)', req: false,
+    aliases: ['operador - ultima atualizacao', 'operador ultima atualizacao'] },
 ];
 
 // ── Mapas determinísticos de colunas por plataforma conhecida ──
@@ -96,6 +98,10 @@ export const PLATFORM_COLUMN_MAPS = {
     // Cross-Check (server/auto-crosscheck.js) lê esse campo pra sugerir a
     // opção de "Intervenção" na Horizon (ver PLANO_AUTOMACAO_HORIZON.md, B3).
     description:    ['Motivo', 'Categoria', 'Descrição'],
+    // Operador que fechou o alerta na planilha — só MaxTrack, usado pro ranking
+    // por operador (ver OperatorRankingCard). Campo opcional: outras plataformas
+    // não têm essa coluna, e nem todo export MaxTrack a preenche.
+    operator:       ['Operador - Última Atualização'],
   },
   omnilink: {
     datetime:       ['Data da ocorrência', 'Data de cadastro'],
@@ -704,6 +710,7 @@ export function buildImportRows(stage, operatorEmail) {
       evidencia: getVal(row, 'evidence') ? String(getVal(row, 'evidence')).trim() : null,
       inicio_tratativa: getVal(row, 'treatStart') ? toDate(getVal(row, 'treatStart'))?.toISOString() : null,
       fim_tratativa: getVal(row, 'treatEnd') ? toDate(getVal(row, 'treatEnd'))?.toISOString() : null,
+      operador: getVal(row, 'operator') ? String(getVal(row, 'operator')).trim() : null,
     });
   }
 

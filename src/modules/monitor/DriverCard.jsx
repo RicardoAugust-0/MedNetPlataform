@@ -1,6 +1,7 @@
 import { iniciais } from '../../utils';
 import { sevClass, TiposBadge, ElapsedTimer } from './utils';
 import PlatformBadge from '../PlatformBadge';
+import DriverPeek from '../../components/DriverPeek';
 
 export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry, expanded, onToggleExpand }) {
   const sev = sevClass(d);
@@ -23,7 +24,9 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry, 
 
         {/* Identidade: nome + plataforma + SLA */}
         <div className="d-toprow">
-          <span className="d-name-text">{d.nome}</span>
+          <DriverPeek driver={d} sheetsEntry={sheetsEntry}>
+            <span className="d-name-text">{d.nome}</span>
+          </DriverPeek>
           <PlatformBadge platformId={d._platformId} />
           {type !== 'tecnicos' && d.slaAgeMin > 0 && (
             <span

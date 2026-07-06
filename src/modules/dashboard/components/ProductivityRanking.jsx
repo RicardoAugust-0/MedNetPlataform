@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { iniciais } from '../../../utils';
 import { COLORS } from './_shared';
 
-export function ProductivityRanking({ equipe }) {
+const PERIOD_LABEL = { hoje: 'hoje', semana: '7 dias', mes: '30 dias' };
+
+export function ProductivityRanking({ equipe, period = 'hoje', onPeriodChange }) {
   const [showAll, setShowAll] = useState(false);
   const C = COLORS;
   const enriched = equipe.map(op => {
@@ -24,8 +26,30 @@ export function ProductivityRanking({ equipe }) {
       <div className="dg-card-head">
         <div className="ic" style={{ background: 'var(--success-bg)', color: 'var(--success-500)' }}><i className="ti ti-trophy"></i></div>
         <h3>Produtividade da equipe</h3>
-        <span className="sub">· volume × qualidade · hoje</span>
+        <span className="sub">· volume × qualidade · {PERIOD_LABEL[period]}</span>
         <div className="right">
+          {onPeriodChange && (
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
+              {[['hoje', 'Hoje'], ['semana', '7d'], ['mes', '30d']].map(([v, l]) => (
+                <button
+                  key={v}
+                  onClick={() => onPeriodChange(v)}
+                  style={{
+                    padding: '3px 9px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: 4,
+                    background: period === v ? 'var(--surface-0, #fff)' : 'transparent',
+                    color: period === v ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
           <span className="pillc">{grand} tratados</span>
           <span className="pillc" title="Taxa média de reincidência da equipe">
             <i className="ti ti-refresh" style={{ fontSize: 10, marginRight: 3 }}></i>
@@ -44,7 +68,7 @@ export function ProductivityRanking({ equipe }) {
       <div className="dg-rank">
         {enriched.length === 0 ? (
           <div style={{ display: 'grid', placeItems: 'center', height: 120, color: 'var(--text-muted)', fontSize: 13 }}>
-            Nenhum atendimento realizado hoje
+            Nenhum atendimento realizado {period === 'hoje' ? 'hoje' : `nos últimos ${PERIOD_LABEL[period]}`}
           </div>
         ) : (
           visibleEquipe.map((op, idx) => {

@@ -1,5 +1,5 @@
 import { aggregate, PLATFORMS, normClf, toUF } from '../src/utils/fatigueParser.js';
-import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets } from './analytics-rpc.js';
+import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets, deriveDateParams } from './analytics-rpc.js';
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 
 // In-memory caches
@@ -597,6 +597,37 @@ export function registerAnalyticsRoutes(app, supabase) {
   // 5. Importação de planilhas gigantes no backend
   app.post('/api/analytics/import', requireAdmin, uploadMiddleware, (req, res) => {
     handleImportEvents(supabase, req, res, clearAnalyticsCache);
+  });
+
+  // 6. Ranking de operadores (só MaxTrack) — só ranking/contagem, sem R$ ainda.
+  app.get('/api/analytics/operator-ranking', requireAdmin, async (req, res) => {
+    const { platformId, month, startDate, endDate, severity } = req.query;
+    if (!platformId) {
+      return res.status(400).json({ error: 'Parâmetro platformId é obrigatório.' });
+    }
+    try {
+      const cacheKey = `op-ranking|${req.originalUrl}`;
+      const cached = resultCache.get(cacheKey);
+      if (cached && (Date.now() - cached.ts < RESULT_TTL)) {
+        return res.json(cached.data);
+      }
+
+      const { from, to } = deriveDateParams(month, startDate, endDate);
+      const { data, error } = await supabase.rpc('get_operator_ranking', {
+        p_platform_id: platformId,
+        p_date_from: from,
+        p_date_to: to,
+        p_severity: severity || null,
+      });
+      if (error) throw error;
+
+      const payload = { ranking: data || [] };
+      resultCache.set(cacheKey, { data: payload, ts: Date.now() });
+      res.json(payload);
+    } catch (err) {
+      console.error('[MedNet Backend] Erro no /api/analytics/operator-ranking:', err);
+      res.status(500).json({ error: err.message || String(err) });
+    }
   });
 }
 

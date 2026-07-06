@@ -167,6 +167,15 @@ export function VolumeCriticidadeCard({ d, noData, selectedMonth, startDate, end
               setSelectedSeverity(selectedSeverity === group ? 'all' : group);
             },
           },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const barTotal = c.chart.data.datasets.reduce((sum, ds) => sum + (ds.data[c.dataIndex] || 0), 0);
+                const pct = barTotal ? ((c.parsed.y / barTotal) * 100).toFixed(1) : '0.0';
+                return ` ${c.dataset.label}: ${fmt(c.parsed.y)} (${pct}%)`;
+              },
+            },
+          },
         },
         scales: {
           x: _ax({ stacked: true }),
