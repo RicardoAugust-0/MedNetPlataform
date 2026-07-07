@@ -3,11 +3,17 @@
    ============================================================= */
 
 :root {
-  --chart-grid: rgba(15, 25, 35, 0.025);
+  --chart-grid: rgba(18, 22, 28, 0.07);
+  --analytics-panel-shadow: 0 1px 2px rgba(18, 22, 28, 0.04), 0 8px 20px -14px rgba(18, 22, 28, 0.16);
+  --analytics-panel-shadow-hover: 0 2px 6px rgba(18, 22, 28, 0.06), 0 14px 28px -18px rgba(18, 22, 28, 0.22);
+  --analytics-panel-border: var(--border, #E1E6EB);
+  --analytics-muted-panel: var(--surface-1, #F4F6F8);
 }
 
 [data-theme="dark"] {
-  --chart-grid: rgba(255, 255, 255, 0.035);
+  --chart-grid: rgba(255, 255, 255, 0.075);
+  --analytics-panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 10px 26px -16px rgba(0, 0, 0, 0.55);
+  --analytics-panel-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.22), 0 18px 34px -18px rgba(0, 0, 0, 0.65);
 }
 
 
@@ -40,6 +46,84 @@
 .analytics-container {
   max-width: 1320px;
   margin: 0 auto;
+}
+
+.analytics-container [data-card] {
+  border: 1px solid var(--analytics-panel-border);
+  border-radius: 10px;
+  box-shadow: var(--analytics-panel-shadow);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.analytics-container [data-card]:hover {
+  border-color: var(--border-strong, rgba(18, 22, 28, 0.16));
+  box-shadow: var(--analytics-panel-shadow-hover);
+}
+
+.analytics-container [data-card] h4 {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 11.5px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary, #5B6572) !important;
+}
+
+.analytics-container [data-card] p {
+  color: var(--text-muted, #5B6572);
+}
+
+/* Recharts cria elementos SVG focáveis. Em browsers Chromium isso aparece como
+   uma borda preta/azul ao clicar em barras, fatias ou linhas; visualmente parece
+   erro de gráfico, então removemos só dentro da área de Analytics. */
+.analytics-container .recharts-wrapper,
+.analytics-container .recharts-wrapper *,
+.analytics-container .recharts-surface,
+.analytics-container .recharts-surface *,
+.analytics-container svg,
+.analytics-container svg * {
+  outline: none !important;
+}
+
+.analytics-container .recharts-wrapper:focus,
+.analytics-container .recharts-wrapper:focus-visible,
+.analytics-container .recharts-surface:focus,
+.analytics-container .recharts-surface:focus-visible,
+.analytics-container .recharts-layer:focus,
+.analytics-container .recharts-layer:focus-visible,
+.analytics-container .recharts-sector:focus,
+.analytics-container .recharts-sector:focus-visible,
+.analytics-container .recharts-rectangle:focus,
+.analytics-container .recharts-rectangle:focus-visible,
+.analytics-container .recharts-curve:focus,
+.analytics-container .recharts-curve:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.analytics-container .recharts-cartesian-grid line {
+  stroke-dasharray: 2 5;
+}
+
+.analytics-container .recharts-legend-wrapper {
+  color: var(--text-muted);
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+}
+
+.analytics-container .recharts-default-legend {
+  display: flex;
+  gap: 10px 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.analytics-container .recharts-tooltip-cursor {
+  fill: rgba(18, 22, 28, 0.035);
+  stroke: rgba(18, 22, 28, 0.10);
+}
+
+[data-theme="dark"] .analytics-container .recharts-tooltip-cursor {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.09);
 }
 
 .kpi-grid {

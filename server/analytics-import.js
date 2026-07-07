@@ -126,12 +126,9 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
 
     while (i < totalRows) {
       const chunk = uniqueRows.slice(i, i + chunkSize);
-      const { error: upsertError } = await supabase
-        .from('driver_events')
-        .upsert(chunk, {
-          onConflict: 'platform_id,placa,ocorrido_em,nome_evento',
-          ignoreDuplicates: true,
-        });
+      const { error: upsertError } = await supabase.rpc('upsert_driver_events_preserve', {
+        p_rows: chunk,
+      });
 
       if (upsertError) {
         console.error('[Import Backend] Erro no upsert do Supabase:', upsertError);
