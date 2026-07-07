@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from './useToast.jsx';
 
 const PAGE_SIZE = 1000;
+const ATENDIMENTO_COLUMNS = 'id, motorista, placa, transportadora, operador_nome, tipo, bucket, obs, hora, created_at';
 
 const AtendimentosContext = createContext(null);
 
@@ -20,7 +21,7 @@ export function AtendimentosProvider({ children }) {
     setLoading(true);
     const { data, error } = await supabase
       .from('atendimentos')
-      .select('*')
+      .select(ATENDIMENTO_COLUMNS)
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
     if (error) { setError(error.message); toast('Erro ao carregar histórico', 'error'); }
@@ -64,7 +65,7 @@ export function AtendimentosProvider({ children }) {
     const { data, error } = await supabase
       .from('atendimentos')
       .insert({ motorista, placa: placa || null, transportadora: transportadora || null, operador_id: profile.id, operador_nome: profile.nome, tipo, bucket: bucket || null, obs, hora })
-      .select().single();
+      .select(ATENDIMENTO_COLUMNS).single();
 
     if (error) {
       setHistory(prev => prev.filter(h => h.id !== optimistic.id));
@@ -101,7 +102,7 @@ export function AtendimentosProvider({ children }) {
     const endUTC   = new Date(end   + 'T23:59:59.999').toISOString();
     const { data, error } = await supabase
       .from('atendimentos')
-      .select('*')
+      .select(ATENDIMENTO_COLUMNS)
       .gte('created_at', startUTC)
       .lte('created_at', endUTC)
       .order('created_at', { ascending: false });
@@ -113,7 +114,7 @@ export function AtendimentosProvider({ children }) {
     if (!isSupabaseConfigured) return { data: [], error: null };
     const { data, error } = await supabase
       .from('atendimentos')
-      .select('*')
+      .select(ATENDIMENTO_COLUMNS)
       .eq('motorista', motorista)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -157,7 +158,7 @@ export function AtendimentosProvider({ children }) {
     const all = [];
     let cursor = 0;
     while (true) {
-      let q = supabase.from('atendimentos').select('*').order('created_at', { ascending: false }).range(cursor, cursor + pageSize - 1);
+      let q = supabase.from('atendimentos').select(ATENDIMENTO_COLUMNS).order('created_at', { ascending: false }).range(cursor, cursor + pageSize - 1);
       if (from) q = q.gte('created_at', new Date(from + 'T00:00:00').toISOString());
       if (to)   q = q.lte('created_at', new Date(to   + 'T23:59:59.999').toISOString());
       if (tipos && tipos.length > 0) q = q.in('tipo', tipos);

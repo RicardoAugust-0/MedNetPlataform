@@ -11,6 +11,7 @@ const STATUS_INFO = {
   credential_error: { label: 'Erro de senha', bg: 'rgba(226, 75, 74, 0.18)', color: 'var(--danger-500)' },
   session_expired:  { label: 'Sessão expirada', bg: 'rgba(232, 160, 32, 0.18)', color: 'var(--warning-500)' },
 };
+const HORIZON_CREDENTIAL_COLUMNS = 'id, label, email, password, password_candidates, status, last_login_at, last_error';
 
 function StatusPill({ status }) {
   const info = STATUS_INFO[status] || STATUS_INFO.ok;
@@ -49,7 +50,7 @@ export default function IntegracoesHorizon() {
     setLoading(true);
     const { data, error } = await supabase
       .from('horizon_credentials')
-      .select('*')
+      .select(HORIZON_CREDENTIAL_COLUMNS)
       .order('label', { ascending: true });
     if (error) {
       toast('Erro ao carregar contas Horizon: ' + error.message, 'error');

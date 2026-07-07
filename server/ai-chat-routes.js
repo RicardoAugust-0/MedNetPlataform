@@ -32,9 +32,10 @@ export function registerAiChatRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('ai_chat_threads')
-        .select('*')
+        .select('id, user_id, title, created_at, updated_at')
         .eq('user_id', req.authUser.id)
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(100);
       if (error) throw error;
       return res.status(200).json(data);
     } catch (err) {
@@ -49,7 +50,7 @@ export function registerAiChatRoutes(app, supabase) {
       const { data, error } = await supabase
         .from('ai_chat_threads')
         .insert({ user_id: req.authUser.id, title })
-        .select();
+        .select('id, user_id, title, created_at, updated_at');
       if (error) throw error;
       return res.status(200).json(data[0]);
     } catch (err) {
@@ -65,7 +66,8 @@ export function registerAiChatRoutes(app, supabase) {
       const { error } = await supabase
         .from('ai_chat_threads')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', req.authUser.id);
       if (error) throw error;
       return res.status(200).json({ success: true });
     } catch (err) {
@@ -82,12 +84,13 @@ export function registerAiChatRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('ai_chat_messages')
-        .select('*')
+        .select('id, user_id, role, text, chart, created_at, thread_id')
         .eq('user_id', req.authUser.id)
         .eq('thread_id', thread_id)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(200);
       if (error) throw error;
-      return res.status(200).json(data);
+      return res.status(200).json((data || []).reverse());
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -123,7 +126,7 @@ export function registerAiChatRoutes(app, supabase) {
         const { data: newThread, error: threadErr } = await supabase
           .from('ai_chat_threads')
           .insert({ user_id: req.authUser.id, title: cleanTitle })
-          .select();
+          .select('id');
         if (threadErr || !newThread) throw new Error(threadErr?.message || 'Falha ao criar tópico.');
         activeThreadId = newThread[0].id;
       }
@@ -131,7 +134,7 @@ export function registerAiChatRoutes(app, supabase) {
       // Carrega histórico da thread (máximo 10 mensagens) para alimentar a memória da IA
       const { data: dbHistory } = await supabase
         .from('ai_chat_messages')
-        .select('*')
+        .select('role, text, chart, created_at')
         .eq('user_id', req.authUser.id)
         .eq('thread_id', activeThreadId)
         .order('created_at', { ascending: false })
@@ -207,20 +210,23 @@ export function registerAiChatRoutes(app, supabase) {
         .from('ai_chat_threads')
         .select('title')
         .eq('id', activeThreadId)
+        .eq('user_id', req.authUser.id)
         .maybeSingle();
       if (curThread && curThread.title === 'Nova conversa') {
         const cleanTitle = message.length > 25 ? message.substring(0, 25) + '...' : message;
         await supabase
           .from('ai_chat_threads')
           .update({ title: cleanTitle })
-          .eq('id', activeThreadId);
+          .eq('id', activeThreadId)
+          .eq('user_id', req.authUser.id);
       }
 
       // Atualiza o timestamp da thread para ordenar por mais recente
       await supabase
         .from('ai_chat_threads')
         .update({ updated_at: new Date().toISOString() })
-        .eq('id', activeThreadId);
+        .eq('id', activeThreadId)
+        .eq('user_id', req.authUser.id);
 
       return res.status(200).json({ text, chart, thread_id: activeThreadId });
     } catch (err) {
@@ -257,8 +263,9 @@ export function registerAiChatRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('ai_generated_reports')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, created_by, title, content, chart_payload, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (error) throw error;
       return res.status(200).json(data);
     } catch (err) {
@@ -281,7 +288,7 @@ export function registerAiChatRoutes(app, supabase) {
           content,
           chart_payload
         })
-        .select();
+        .select('id, created_by, title, content, chart_payload, created_at');
       if (error) throw error;
       return res.status(200).json(data[0]);
     } catch (err) {

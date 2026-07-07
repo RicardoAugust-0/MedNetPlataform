@@ -4,6 +4,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf
 const EXT_MAP = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 const MAX_BYTES = 10 * 1024 * 1024;
 const BUCKET = 'driver-documents';
+const DRIVER_DOCUMENT_COLUMNS = 'id, motorista_nome, placa, tipo_documento, file_name, storage_path, status, extracted_data, error_message, created_at, reviewed_by, reviewed_at';
 
 function slugify(name) {
   return String(name || 'motorista')
@@ -32,7 +33,7 @@ export async function uploadDriverDocument(file, { motorista, placa, tipoDocumen
     tipo_documento: tipoDocumento,
     storage_path: path,
     file_name: file.name,
-  }).select().single();
+  }).select(DRIVER_DOCUMENT_COLUMNS).single();
 
   if (error) throw error;
   return data;
@@ -42,7 +43,7 @@ export async function listDriverDocuments(motorista) {
   if (!motorista) return [];
   const { data, error } = await supabase
     .from('driver_documents')
-    .select('*')
+    .select(DRIVER_DOCUMENT_COLUMNS)
     .eq('motorista_nome', motorista)
     .order('created_at', { ascending: false });
   if (error) throw error;

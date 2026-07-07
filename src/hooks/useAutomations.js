@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
 const AutomationsContext = createContext(null);
+const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, event_type, token, position';
 
 export function AutomationsProvider({ children }) {
   const toast = useToast();
@@ -80,8 +81,15 @@ export function AutomationsProvider({ children }) {
 
     try {
       const [autosRes, logsRes, settingsRes] = await Promise.all([
-        supabase.from('automations').select('*').order('position', { ascending: true }),
-        supabase.from('automation_logs').select('*').order('created_at', { ascending: false }),
+        supabase
+          .from('automations')
+          .select(AUTOMATION_COLUMNS)
+          .order('position', { ascending: true }),
+        supabase
+          .from('automation_logs')
+          .select('id, automation_id, status, duration, detail, logs, created_at')
+          .order('created_at', { ascending: false })
+          .limit(500),
         supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle()
       ]);
 
@@ -229,7 +237,7 @@ export function AutomationsProvider({ children }) {
     const { data: inserted, error } = await supabase
       .from('automations')
       .insert(dbRow)
-      .select()
+      .select(AUTOMATION_COLUMNS)
       .single();
 
     if (error) {
@@ -258,7 +266,7 @@ export function AutomationsProvider({ children }) {
       .from('automations')
       .update(dbRow)
       .eq('id', id)
-      .select()
+      .select(AUTOMATION_COLUMNS)
       .single();
 
     if (error) {

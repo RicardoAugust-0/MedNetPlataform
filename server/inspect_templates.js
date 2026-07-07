@@ -15,7 +15,9 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function main() {
-  const { data, error } = await supabase.from('whatsapp_templates').select('*');
+  const { data, error } = await supabase
+    .from('whatsapp_templates')
+    .select('id, name, category, language, status, components, updated_at');
   if (error) {
     console.error('Error:', error);
   } else {

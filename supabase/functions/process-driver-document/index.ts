@@ -4,6 +4,8 @@ const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+const DRIVER_DOCUMENT_PROCESS_COLUMNS = 'id, storage_path, tipo_documento';
+const DRIVER_DOCUMENT_RESPONSE_COLUMNS = 'id, motorista_nome, placa, tipo_documento, file_name, storage_path, status, extracted_data, error_message, created_at, reviewed_by, reviewed_at';
 
 interface RequestBody {
   document_id: string;
@@ -111,7 +113,7 @@ Deno.serve(async (req) => {
     documentId = body.document_id;
     if (!documentId) return json({ error: 'document_id é obrigatório' }, 400);
 
-    const { data: doc, error: docErr } = await sbSvc.from('driver_documents').select('*').eq('id', documentId).single();
+    const { data: doc, error: docErr } = await sbSvc.from('driver_documents').select(DRIVER_DOCUMENT_PROCESS_COLUMNS).eq('id', documentId).single();
     if (docErr || !doc) throw new Error('Documento não encontrado');
 
     // 1. URL assinada temporária do arquivo (o bucket é privado)
@@ -161,7 +163,7 @@ ${ocrText.slice(0, 12000)}
       status: 'processado',
       error_message: null,
       updated_at: new Date().toISOString(),
-    }).eq('id', documentId).select().single();
+    }).eq('id', documentId).select(DRIVER_DOCUMENT_RESPONSE_COLUMNS).single();
     if (updateErr) throw updateErr;
 
     return json({ document: updated });

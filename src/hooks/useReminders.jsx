@@ -9,6 +9,7 @@ function toLocal(row) {
 }
 
 const RemindersContext = createContext(null);
+const REMINDER_COLUMNS = 'id, title, sub, time, urgent, done, reminder_date, icon';
 
 export function RemindersProvider({ children }) {
   const toast = useToast();
@@ -18,7 +19,7 @@ export function RemindersProvider({ children }) {
   useEffect(() => { remindersRef.current = reminders; }, [reminders]);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('reminders').select('*').order('reminder_date').order('time');
+    const { data, error } = await supabase.from('reminders').select(REMINDER_COLUMNS).order('reminder_date').order('time');
     if (error) toast('Erro ao carregar lembretes', 'error');
     else if (data) setReminders(data.map(toLocal));
     setLoading(false);
@@ -49,7 +50,7 @@ export function RemindersProvider({ children }) {
     const { data, error } = await supabase
       .from('reminders')
       .insert({ title, sub: sub || '', time: time || '10:00', urgent: !!urgent, done: false, reminder_date: date || today(), icon: icon || null })
-      .select().single();
+      .select(REMINDER_COLUMNS).single();
     if (error) {
       setReminders(prev => prev.filter(r => r.id !== opt.id));
       toast('Erro ao criar lembrete', 'error');

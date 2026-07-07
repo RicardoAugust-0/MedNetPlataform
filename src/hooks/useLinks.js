@@ -15,6 +15,7 @@ export const AVAILABLE_ICONS = [
 ];
 
 const LinksContext = createContext(null);
+const LINK_COLUMNS = 'id, section, name, description, url, icon, bg, ic, position';
 
 export function LinksProvider({ children }) {
   const toast = useToast();
@@ -22,7 +23,7 @@ export function LinksProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('links').select('*').order('position', { ascending: true });
+    const { data, error } = await supabase.from('links').select(LINK_COLUMNS).order('position', { ascending: true });
     if (error) toast('Erro ao carregar links', 'error');
     else if (data) setLinks(data.map(toLocal));
     setLoading(false);
@@ -51,7 +52,7 @@ export function LinksProvider({ children }) {
       position: pos
     };
 
-    const { data, error } = await supabase.from('links').insert(newLink).select().single();
+    const { data, error } = await supabase.from('links').insert(newLink).select(LINK_COLUMNS).single();
     if (error) {
       toast('Erro ao criar link', 'error');
       return;
@@ -73,7 +74,7 @@ export function LinksProvider({ children }) {
         position: updates.position
       })
       .eq('id', id)
-      .select().single();
+      .select(LINK_COLUMNS).single();
 
     if (error) {
       toast('Erro ao atualizar link', 'error');

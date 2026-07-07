@@ -122,7 +122,7 @@ export function useOpenAlerts() {
       const startISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: evData, error: evErr } = await supabase
         .from('driver_events')
-        .select('*')
+        .select('id, platform_id, placa, nome, transportadora, frota, turno, nome_evento, categoria_bucket, severidade, ocorrido_em, importado_em, analise_ia_plataforma, velocidade_kmh')
         .gte('ocorrido_em', startISO);
 
       if (evErr) throw evErr;
@@ -131,7 +131,7 @@ export function useOpenAlerts() {
       const histStartISO = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
       const { data: histData, error: histErr } = await supabase
         .from('atendimentos')
-        .select('*')
+        .select('id, placa, created_at, tipo, bucket')
         .gte('created_at', histStartISO)
         .order('created_at', { ascending: false });
 
@@ -140,7 +140,7 @@ export function useOpenAlerts() {
       // 4. Carregar regras customizadas de descarte
       const { data: rulesData } = await supabase
         .from('custom_rules')
-        .select('*')
+        .select('id, platform_id, transportadora, nome_evento, acao, ativa')
         .eq('ativa', true);
 
       setEvents(evData || []);

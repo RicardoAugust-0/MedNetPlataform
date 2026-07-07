@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from './useToast.jsx';
 
 const NotesContext = createContext(null);
+const NOTE_COLUMNS = 'id, title, body, is_personal, author_id, updated_at';
 
 export function NotesProvider({ children }) {
   const { profile } = useAuth();
@@ -13,7 +14,7 @@ export function NotesProvider({ children }) {
   const timers = useRef({});
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('notes').select('*').order('updated_at', { ascending: false });
+    const { data, error } = await supabase.from('notes').select(NOTE_COLUMNS).order('updated_at', { ascending: false });
     if (error) { toast('Erro ao carregar notas', 'error'); }
     else if (data) setNotes(data.map(toLocal));
     setLoading(false);
@@ -44,7 +45,7 @@ export function NotesProvider({ children }) {
     const { data, error } = await supabase
       .from('notes')
       .insert({ title: title || 'Nova nota', body: body || '', is_personal: isPersonal, author_id: profile?.id })
-      .select().single();
+      .select(NOTE_COLUMNS).single();
     if (error) {
       setNotes(prev => prev.filter(n => n.id !== opt.id));
       toast('Erro ao criar nota', 'error');

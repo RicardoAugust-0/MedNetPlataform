@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import { supabase } from "../supabase.js";
 
 const ProfilesContext = createContext(null);
+const PROFILE_COLUMNS = 'id, nome, cargo, role, avatar_url, created_at';
 
 export function ProfilesProvider({ children }) {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('profiles').select('*').order('created_at').then(({ data }) => {
+    supabase.from('profiles').select(PROFILE_COLUMNS).order('created_at').then(({ data }) => {
       if (data) setProfiles(data);
       setLoading(false);
     });

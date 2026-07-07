@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
 const WsPagesContext = createContext(null);
+const WS_PAGE_COLUMNS = 'id, title, icon_index, category, favorite, content, position, created_at';
 
 export function WsPagesProvider({ children }) {
   const toast = useToast();
@@ -11,7 +12,7 @@ export function WsPagesProvider({ children }) {
   const timers = useRef({});
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('ws_pages').select('*').order('position', { ascending: true }).order('created_at', { ascending: true });
+    const { data, error } = await supabase.from('ws_pages').select(WS_PAGE_COLUMNS).order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar workspace', 'error');
     else if (data) setWsPages(data.map(toLocal));
     setLoading(false);
@@ -43,7 +44,7 @@ export function WsPagesProvider({ children }) {
     const { data, error } = await supabase
       .from('ws_pages')
       .insert({ title, icon_index: icon ?? 0, category: category || 'protocolos', favorite: false, content: content || '', position: pos })
-      .select().single();
+      .select(WS_PAGE_COLUMNS).single();
     if (error) {
       setWsPages(prev => prev.filter(p => p.id !== opt.id));
       toast('Erro ao criar página', 'error');

@@ -293,7 +293,7 @@ export function useAnalyticsState() {
         const promises = PLATFORMS.map(async (p) => {
           const { count, error } = await supabase
             .from('driver_events')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('platform_id', p.id)
             .or('severidade.is.null,severidade.neq.Leve');
           if (!error && count !== null) {

@@ -80,6 +80,10 @@ function isValidDriverName(nome, placa) {
 }
 
 let cachedDriversList = null;
+const DRIVER_HEALTH_COLUMNS = 'motorista_nome, escala_epworth, polissonografia, historico_clinico, ultimo_exame_em, placa, transportadora, frota, turno, cpf, rg, data_nascimento, cnh_numero, cnh_categoria, cnh_validade';
+const DRIVER_EVENT_DOSSIER_COLUMNS = 'id, platform_id, severidade, nome_evento, ocorrido_em, velocidade_kmh';
+const ATENDIMENTO_DOSSIER_COLUMNS = 'id, created_at, tipo, obs, operador_nome';
+const DRIVER_DOCUMENT_COLUMNS = 'id, motorista_nome, placa, tipo_documento, file_name, storage_path, status, extracted_data, error_message, created_at, reviewed_by, reviewed_at';
 
 export default function DossiesPage() {
   const toast = useToast();
@@ -344,7 +348,7 @@ export default function DossiesPage() {
         // 1. Busca prontuário clínico
         const { data: healthRecord } = await supabase
           .from('driver_health')
-          .select('*')
+          .select(DRIVER_HEALTH_COLUMNS)
           .eq('motorista_nome', name)
           .maybeSingle();
 
@@ -373,8 +377,8 @@ export default function DossiesPage() {
           : q.eq('nome', name);
 
         const [{ count: teleCount }, { data: teleData }] = await Promise.all([
-          buildTeleFilter(supabase.from('driver_events').select('*', { count: 'exact', head: true })),
-          buildTeleFilter(supabase.from('driver_events').select('*'))
+          buildTeleFilter(supabase.from('driver_events').select('id', { count: 'exact', head: true })),
+          buildTeleFilter(supabase.from('driver_events').select(DRIVER_EVENT_DOSSIER_COLUMNS))
             .order('ocorrido_em', { ascending: false })
             .limit(200),
         ]);
@@ -383,7 +387,7 @@ export default function DossiesPage() {
         setTelemetryTotal(teleCount ?? teleData?.length ?? 0);
 
         // 3. Busca atendimentos anteriores
-        let atendQuery = supabase.from('atendimentos').select('*');
+        let atendQuery = supabase.from('atendimentos').select(ATENDIMENTO_DOSSIER_COLUMNS);
         if (placa) {
           atendQuery = atendQuery.or(`placa.eq.${placa},motorista.eq.${name}`);
         } else {
@@ -399,7 +403,7 @@ export default function DossiesPage() {
         // 4. Busca documentos já enviados (CNH/ASO/Polissonografia)
         const { data: docsData } = await supabase
           .from('driver_documents')
-          .select('*')
+          .select(DRIVER_DOCUMENT_COLUMNS)
           .eq('motorista_nome', name)
           .order('created_at', { ascending: false });
 
@@ -569,7 +573,7 @@ export default function DossiesPage() {
       toast('Documento processado! Revise os dados antes de aplicar.', 'success');
     } catch (err) {
       toast('Erro ao processar documento: ' + err.message, 'error');
-      const { data: freshDoc } = await supabase.from('driver_documents').select('*').eq('id', doc.id).maybeSingle();
+      const { data: freshDoc } = await supabase.from('driver_documents').select(DRIVER_DOCUMENT_COLUMNS).eq('id', doc.id).maybeSingle();
       if (freshDoc) setDocuments(prev => prev.map(d => d.id === doc.id ? freshDoc : d));
     } finally {
       setProcessingDocId(null);

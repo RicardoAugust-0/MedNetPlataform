@@ -18,8 +18,9 @@ export default function DisparosTab() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_dispatches')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, recipient_name, recipient_phone, template_name, category, estimated_cost, status, variables, error_message, meta_message_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500);
         
       if (error) throw error;
       setDispatches(data || []);

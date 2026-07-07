@@ -112,7 +112,7 @@ async function getRawEvents(supabase, platformId) {
   
   const { count, error: countErr } = await supabase
     .from('driver_events')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'exact', head: true })
     .eq('platform_id', platformId);
 
   if (countErr) throw countErr;
@@ -277,7 +277,7 @@ export function registerAnalyticsRoutes(app, supabase) {
         // descartaria os NULLs e subnotificaria a contagem.
         const { count, error } = await supabase
           .from('driver_events')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('platform_id', p.id)
           .or('severidade.is.null,severidade.neq.Leve');
         if (!error && count !== null) {
@@ -603,65 +603,45 @@ export function registerAnalyticsRoutes(app, supabase) {
   app.get('/api/analytics/operator-ranking', requireAdmin, async (req, res) => {
     const { platformId, month, startDate, endDate, severity } = req.query;
     if (!platformId) {
-      return res.status(400).json({ error: 'Parâmetro platformId é obrigatório.' });
+      return res.status(400).json({ error: 'Parametro platformId e obrigatorio.' });
     }
     try {
       const { from, to } = deriveDateParams(month, startDate, endDate);
 
-      let query = supabase
-        .from('driver_events')
-        .select('operador, fim_tratativa, ocorrido_em, sev_norm, categoria_bucket')
-        .eq('platform_id', platformId)
-        .not('operador', 'is', null)
-        .neq('sev_norm', 'Leve')
-        .limit(5000);
-
-      if (from) query = query.gte('ocorrido_em', from);
-      if (to) query = query.lte('ocorrido_em', to);
-
-      if (severity && severity !== 'all') {
-        if (severity === 'high') {
-          query = query.in('sev_norm', ['Grave', 'Gravíssimo']);
-        } else if (severity === 'medium') {
-          query = query.eq('sev_norm', 'Médio');
-        } else {
-          query = query.eq('sev_norm', severity);
-        }
-      }
-
-      const { data: events, error } = await query;
+      const { data: eventRows, error } = await supabase.rpc('get_operator_event_activity', {
+        p_platform_id: platformId,
+        p_date_from: from,
+        p_date_to: to,
+        p_severity: severity || null,
+      });
       if (error) throw error;
 
-      // Query interventions from sheet Integration
-      let sheetQuery = supabase
-        .from('intervencoes_sheet')
-        .select('realizado_por, created_at, sistema')
-        .ilike('sistema', platformId)
-        .not('realizado_por', 'is', null)
-        .neq('realizado_por', '')
-        .limit(5000);
-
-      if (from) sheetQuery = sheetQuery.gte('created_at', from);
-      if (to) sheetQuery = sheetQuery.lte('created_at', to);
-
-      const { data: sheetRows, error: sheetError } = await sheetQuery;
+      const { data: sheetRows, error: sheetError } = await supabase.rpc('get_operator_sheet_activity', {
+        p_platform_id: platformId,
+        p_date_from: from,
+        p_date_to: to,
+      });
       if (sheetError) throw sheetError;
 
-      // Query profiles for name resolution
       const { data: dbProfiles } = await supabase
         .from('profiles')
         .select('nome')
         .in('role', ['operador', 'admin']);
+
       const profileNames = (dbProfiles || []).map(p => p.nome).filter(Boolean);
-      const allFullNames = [...new Set([...profileNames, ...(events || []).map(e => e.operador).filter(Boolean)])];
+      const allFullNames = [...new Set([
+        ...profileNames,
+        ...(eventRows || []).map(e => e.operador).filter(Boolean),
+        ...(sheetRows || []).map(e => e.realizado_por).filter(Boolean)
+      ])];
 
       const getFullOperatorName = (shortName) => {
         if (!shortName) return null;
         const norm = shortName.trim().toLowerCase();
-        const skipSet = new Set(['—', '-', 'auto-descarte', 'limpeza', 'descarte', 'não realizado', 'nao realizado', 'sem contato', 'sistema']);
-        if (skipSet.has(norm)) return null;
+        const normPlain = norm.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const skipSet = new Set(['-', 'auto-descarte', 'limpeza', 'descarte', 'nao realizado', 'sem contato', 'sistema']);
+        if (skipSet.has(normPlain) || norm === '\u2014') return null;
 
-        // Normaliza Kaiky Salviano / Kaiky Souza / Kaiky para Kaiky Salviano
         if (norm === 'kaiky' || norm === 'kaiky souza' || norm === 'kaiky salviano') {
           return 'Kaiky Salviano';
         }
@@ -678,30 +658,34 @@ export function registerAnalyticsRoutes(app, supabase) {
         return shortName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       };
 
+      const toArray24 = (value) => {
+        if (Array.isArray(value)) {
+          return Array.from({ length: 24 }, (_, i) => Number(value[i] || 0));
+        }
+        if (typeof value === 'string') {
+          const parsed = JSON.parse(value || '[]');
+          return Array.from({ length: 24 }, (_, i) => Number(parsed[i] || 0));
+        }
+        return Array(24).fill(0);
+      };
+
+      const toStringArray = (value) => {
+        if (Array.isArray(value)) return value.filter(Boolean);
+        if (typeof value === 'string') return JSON.parse(value || '[]').filter(Boolean);
+        return [];
+      };
+
       const rankingMap = {};
       const hourlyMap = {};
 
-      for (const e of (events || [])) {
-        const op = getFullOperatorName(e.operador) || e.operador;
-
-        // 1. Ranking Geral
+      const ensureRanking = (op) => {
         if (!rankingMap[op]) {
-          rankingMap[op] = {
-            operador: op,
-            total_eventos: 0,
-            gravissimo: 0,
-            grave: 0,
-            medio: 0,
-            intervencoes: 0
-          };
+          rankingMap[op] = { operador: op, total_eventos: 0, gravissimo: 0, grave: 0, medio: 0, intervencoes: 0 };
         }
+        return rankingMap[op];
+      };
 
-        rankingMap[op].total_eventos++;
-        if (e.sev_norm === 'Gravíssimo') rankingMap[op].gravissimo++;
-        else if (e.sev_norm === 'Grave') rankingMap[op].grave++;
-        else if (e.sev_norm === 'Médio') rankingMap[op].medio++;
-
-        // 2. Produtividade Horária
+      const ensureHourly = (op) => {
         if (!hourlyMap[op]) {
           hourlyMap[op] = {
             operador: op,
@@ -709,74 +693,48 @@ export function registerAnalyticsRoutes(app, supabase) {
             intervencoes: 0,
             hourly: Array(24).fill(0),
             hourlyInterventions: Array(24).fill(0),
-            slots: new Set(),
+            activeHours: 0,
+            activeSlots: new Set(),
           };
         }
+        return hourlyMap[op];
+      };
 
-        const dateVal = e.fim_tratativa || e.ocorrido_em;
-        if (dateVal) {
-          const dateObj = new Date(dateVal);
-          const hourStr = dateObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false });
-          const dateStr = dateObj.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      for (const e of (eventRows || [])) {
+        const op = getFullOperatorName(e.operador) || e.operador;
+        const ranking = ensureRanking(op);
+        const hourly = ensureHourly(op);
+        const hourlyCounts = toArray24(e.hourly);
 
-          const hour = parseInt(hourStr, 10);
-          const slotKey = `${dateStr} ${hourStr}`;
+        ranking.total_eventos += Number(e.total_eventos || 0);
+        ranking.gravissimo += Number(e.gravissimo || 0);
+        ranking.grave += Number(e.grave || 0);
+        ranking.medio += Number(e.medio || 0);
 
-          hourlyMap[op].total++;
-          hourlyMap[op].hourly[hour]++;
-          hourlyMap[op].slots.add(slotKey);
-        }
+        hourly.total += Number(e.total_eventos || 0);
+        hourly.hourly = hourly.hourly.map((v, i) => v + hourlyCounts[i]);
+        for (const slot of toStringArray(e.active_slots)) hourly.activeSlots.add(slot);
+        hourly.activeHours = Math.max(hourly.activeHours, Number(e.active_hours || 0));
       }
 
-      // Aggregate sheet interventions
       for (const r of (sheetRows || [])) {
-        const resolved = getFullOperatorName(r.realizado_por);
-        if (!resolved) continue;
+        const op = getFullOperatorName(r.realizado_por);
+        if (!op) continue;
+        const ranking = ensureRanking(op);
+        const hourly = ensureHourly(op);
+        const hourlyInterventions = toArray24(r.hourly_interventions);
 
-        if (!rankingMap[resolved]) {
-          rankingMap[resolved] = {
-            operador: resolved,
-            total_eventos: 0,
-            gravissimo: 0,
-            grave: 0,
-            medio: 0,
-            intervencoes: 0
-          };
-        }
-
-        if (!hourlyMap[resolved]) {
-          hourlyMap[resolved] = {
-            operador: resolved,
-            total: 0,
-            intervencoes: 0,
-            hourly: Array(24).fill(0),
-            hourlyInterventions: Array(24).fill(0),
-            slots: new Set(),
-          };
-        }
-
-        rankingMap[resolved].intervencoes++;
-        hourlyMap[resolved].intervencoes++;
-
-        const dateVal = r.created_at;
-        if (dateVal) {
-          const dateObj = new Date(dateVal);
-          const hourStr = dateObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false });
-          const dateStr = dateObj.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-          const hour = parseInt(hourStr, 10);
-          const slotKey = `${dateStr} ${hourStr}`;
-
-          hourlyMap[resolved].hourlyInterventions[hour]++;
-          hourlyMap[resolved].slots.add(slotKey);
-        }
+        ranking.intervencoes += Number(r.intervencoes || 0);
+        hourly.intervencoes += Number(r.intervencoes || 0);
+        hourly.hourlyInterventions = hourly.hourlyInterventions.map((v, i) => v + hourlyInterventions[i]);
+        for (const slot of toStringArray(r.active_slots)) hourly.activeSlots.add(slot);
+        hourly.activeHours = Math.max(hourly.activeHours, Number(r.active_hours || 0));
       }
 
       const ranking = Object.values(rankingMap).sort((a, b) => b.total_eventos - a.total_eventos);
-
       const hourlyProductivity = Object.keys(hourlyMap).map(op => {
         const hStats = hourlyMap[op];
-        const activeHours = hStats.slots.size;
+        const activeHours = hStats.activeSlots.size || hStats.activeHours;
         const average = activeHours > 0 ? (hStats.total / activeHours) : 0;
         return {
           operador: op,
@@ -789,8 +747,7 @@ export function registerAnalyticsRoutes(app, supabase) {
         };
       });
 
-      const payload = { ranking, hourlyProductivity };
-      res.json(payload);
+      res.json({ ranking, hourlyProductivity });
     } catch (err) {
       console.error('[MedNet Backend] Erro no /api/analytics/operator-ranking:', err);
       res.status(500).json({ error: err.message || String(err) });

@@ -1,5 +1,8 @@
 import { requireRole } from './ai-chat/middleware.js';
 
+const WHATSAPP_CREDENTIAL_COLUMNS = 'id, token, phone_number_id, whatsapp_business_account_id, updated_at';
+const WHATSAPP_TEMPLATE_COLUMNS = 'id, name, category, language, status, components, updated_at';
+
 export function registerWhatsappRoutes(app, supabase) {
   const requireOperador = requireRole(supabase, 'operador');
   const requireAdmin    = requireRole(supabase, 'admin');
@@ -74,7 +77,7 @@ export function registerWhatsappRoutes(app, supabase) {
     try {
       const { data: creds, error: credsErr } = await supabase
         .from('whatsapp_credentials')
-        .select('*')
+        .select(WHATSAPP_CREDENTIAL_COLUMNS)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -84,7 +87,7 @@ export function registerWhatsappRoutes(app, supabase) {
       if (!creds || !creds.token || !creds.whatsapp_business_account_id) {
         const { data: cached } = await supabase
           .from('whatsapp_templates')
-          .select('*')
+          .select(WHATSAPP_TEMPLATE_COLUMNS)
           .order('name');
         return res.json({ templates: cached || [], error: 'Credenciais não configuradas. Exibindo cache local.' });
       }
@@ -93,7 +96,7 @@ export function registerWhatsappRoutes(app, supabase) {
       if (!shouldSync) {
         const { count } = await supabase
           .from('whatsapp_templates')
-          .select('*', { count: 'exact', head: true });
+          .select('id', { count: 'exact', head: true });
         if (count === 0) {
           shouldSync = true;
         }
@@ -136,7 +139,7 @@ export function registerWhatsappRoutes(app, supabase) {
 
       const { data: cached } = await supabase
         .from('whatsapp_templates')
-        .select('*')
+        .select(WHATSAPP_TEMPLATE_COLUMNS)
         .order('name');
 
       res.json({ templates: cached || [] });
@@ -145,7 +148,7 @@ export function registerWhatsappRoutes(app, supabase) {
       try {
         const { data: cached } = await supabase
           .from('whatsapp_templates')
-          .select('*')
+          .select(WHATSAPP_TEMPLATE_COLUMNS)
           .order('name');
         res.json({ templates: cached || [], error: err.message || String(err) });
       } catch (dbErr) {
@@ -167,7 +170,7 @@ export function registerWhatsappRoutes(app, supabase) {
     try {
       const { data: creds, error: credsErr } = await supabase
         .from('whatsapp_credentials')
-        .select('*')
+        .select(WHATSAPP_CREDENTIAL_COLUMNS)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -179,7 +182,7 @@ export function registerWhatsappRoutes(app, supabase) {
 
       const { data: template } = await supabase
         .from('whatsapp_templates')
-        .select('*')
+        .select('id, name, category')
         .eq('name', template_name)
         .maybeSingle();
 
@@ -303,8 +306,9 @@ export function registerWhatsappRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('whatsapp_chats')
-        .select('*')
-        .order('last_message_at', { ascending: false });
+        .select('id, phone, name, last_message_at, unread_count, created_at')
+        .order('last_message_at', { ascending: false })
+        .limit(200);
 
       if (error) throw error;
       res.json(data || []);
@@ -320,12 +324,13 @@ export function registerWhatsappRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
-        .select('*')
+        .select('id, chat_id, direction, body, status, meta_message_id, error_message, sender_id, created_at')
         .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(200);
 
       if (error) throw error;
-      res.json(data || []);
+      res.json((data || []).reverse());
     } catch (err) {
       console.error('[MedNet Backend] Erro ao buscar mensagens do chat:', err);
       res.status(500).json({ error: err.message || String(err) });
@@ -362,7 +367,7 @@ export function registerWhatsappRoutes(app, supabase) {
       // 1. Fetch credentials
       const { data: creds, error: credsErr } = await supabase
         .from('whatsapp_credentials')
-        .select('*')
+        .select(WHATSAPP_CREDENTIAL_COLUMNS)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -375,7 +380,7 @@ export function registerWhatsappRoutes(app, supabase) {
       // 2. Fetch target chat phone
       const { data: chat, error: chatErr } = await supabase
         .from('whatsapp_chats')
-        .select('*')
+        .select('id, phone, name, unread_count')
         .eq('id', chatId)
         .single();
 
@@ -446,7 +451,7 @@ export function registerWhatsappRoutes(app, supabase) {
           meta_message_id: messageId,
           sender_id: userId || null
         })
-        .select()
+        .select('id, chat_id, direction, body, status, meta_message_id, error_message, sender_id, created_at')
         .single();
 
       if (saveErr) throw saveErr;
@@ -480,7 +485,7 @@ export function registerWhatsappRoutes(app, supabase) {
       // Check if chat already exists
       let { data: chat } = await supabase
         .from('whatsapp_chats')
-        .select('*')
+        .select('id, phone, name, last_message_at, unread_count, created_at')
         .eq('phone', cleanPhone)
         .maybeSingle();
 
@@ -493,7 +498,7 @@ export function registerWhatsappRoutes(app, supabase) {
             name: displayName,
             unread_count: 0
           })
-          .select()
+          .select('id, phone, name, last_message_at, unread_count, created_at')
           .single();
 
         if (createErr) throw createErr;

@@ -22,6 +22,29 @@ const COLUMNS = [
   { key: 'hora_realizacao', label: 'Hora Realiz.', type: 'text', editable: true },
   { key: 'justificativa', label: 'Justificativa', type: 'text', editable: true },
 ];
+const INTERVENCOES_COLUMNS = [
+  'id',
+  'created_at',
+  'data',
+  'empresa',
+  'sistema',
+  'colaborador',
+  'placa',
+  'frota',
+  'criticidade',
+  'classificacao',
+  'realizado',
+  'motivo',
+  'solicitado_por',
+  'hora_solicitacao',
+  'realizado_por',
+  'hora_realizacao',
+  'justificativa',
+  'status_sync',
+  'tentativas_sync',
+  'ultimo_erro_sync',
+  'linha_sheet',
+].join(', ');
 
 // Variable cache for silent import throttling to prevent redundant edge function calls on tab switching
 let lastImportTime = 0;
@@ -71,7 +94,7 @@ export default function EmbeddedSheet() {
     try {
       const { data, error } = await supabase
         .from('intervencoes_sheet')
-        .select('*')
+        .select(INTERVENCOES_COLUMNS)
         .in('data', getTodayVariants())
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -215,7 +238,7 @@ export default function EmbeddedSheet() {
         const { data: inserted, error: insertErr } = await supabase
           .from('intervencoes_sheet')
           .insert(dedupedMappedRows)
-          .select();
+          .select(INTERVENCOES_COLUMNS);
 
         if (insertErr) throw insertErr;
         insertedCount = inserted.length;
@@ -342,7 +365,7 @@ export default function EmbeddedSheet() {
       const { data, error } = await supabase
         .from('intervencoes_sheet')
         .insert(newRecord)
-        .select()
+        .select(INTERVENCOES_COLUMNS)
         .single();
 
       if (error) throw error;

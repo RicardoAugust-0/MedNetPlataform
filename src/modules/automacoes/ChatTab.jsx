@@ -261,7 +261,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
     try {
       const res = await fetch(`${API_URL}/api/whatsapp/chats/open`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           phone: newPhone.trim(),
           name: newName.trim() || newPhone.trim()

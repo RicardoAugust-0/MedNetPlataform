@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 
 const TemplatesContext = createContext(null);
+const TEMPLATE_COLUMNS = 'id, tag, tag_label, title, body, position, created_at';
 
 export function TemplatesProvider({ children }) {
   const toast = useToast();
@@ -11,7 +12,7 @@ export function TemplatesProvider({ children }) {
   const timers = useRef({});
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('templates').select('*').order('position', { ascending: true }).order('created_at', { ascending: true });
+    const { data, error } = await supabase.from('templates').select(TEMPLATE_COLUMNS).order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar templates', 'error');
     else if (data) setTemplates(data.map(toLocal));
     setLoading(false);
@@ -43,7 +44,7 @@ export function TemplatesProvider({ children }) {
     const { data, error } = await supabase
       .from('templates')
       .insert({ tag, tag_label: tagLabel, title, body: text, position: pos })
-      .select().single();
+      .select(TEMPLATE_COLUMNS).single();
     if (error) {
       setTemplates(prev => prev.filter(t => t.id !== opt.id));
       toast('Erro ao criar template', 'error');
