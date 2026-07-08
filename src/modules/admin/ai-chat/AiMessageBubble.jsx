@@ -15,7 +15,7 @@ function InlineChart({ chart }) {
       <h4 className="chart-title">{chart.title}</h4>
       {chart.subtitle && <p className="chart-sub">{chart.subtitle}</p>}
       <div style={{ width: '100%', height: 180, marginTop: 10 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           {chart.chartType === 'bar' && (
             <BarChart data={chart.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
               <XAxis dataKey={chart.xAxisKey || 'name'} stroke="var(--text-muted)" fontSize={9.5} />

@@ -228,7 +228,7 @@ export default function GlobalAiChat() {
                     <h4 className="chart-title">{m.chart.title}</h4>
                     {m.chart.subtitle && <p className="chart-sub">{m.chart.subtitle}</p>}
                     <div style={{ width: '100%', height: 200, marginTop: 8 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         {m.chart.chartType === 'bar' && (
                           <BarChart data={m.chart.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                             <XAxis dataKey={m.chart.xAxisKey || 'name'} stroke="var(--text-muted)" fontSize={10} />

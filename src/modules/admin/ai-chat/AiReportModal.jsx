@@ -14,7 +14,7 @@ function ReportChart({ chart }) {
       <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>{chart.title}</h4>
       {chart.subtitle && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>{chart.subtitle}</p>}
       <div style={{ width: '100%', height: 220, marginTop: 12 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           {chart.chartType === 'bar' && (
             <BarChart data={chart.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
               <XAxis dataKey={chart.xAxisKey || 'name'} stroke="var(--text-muted)" fontSize={10} />

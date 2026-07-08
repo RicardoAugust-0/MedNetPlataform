@@ -13,6 +13,7 @@ create table if not exists public.atendimentos (
   operador_id     uuid references auth.users(id) on delete set null,
   operador_nome   text not null,
   tipo            text not null check (tipo in ('intervencao', 'reportar', 'descarte', 'limpeza')),
+  bucket          text check (bucket in ('intervencao', 'reportar', 'tecnico')),
   obs             text,
   hora            text
 );
@@ -22,6 +23,7 @@ alter table public.atendimentos enable row level security;
 create index if not exists atendimentos_created_at_idx  on public.atendimentos (created_at desc);
 create index if not exists atendimentos_operador_id_idx on public.atendimentos (operador_id);
 create index if not exists atendimentos_tipo_idx        on public.atendimentos (tipo);
+create index if not exists atendimentos_bucket_idx      on public.atendimentos (bucket);
 create index if not exists atendimentos_placa_idx       on public.atendimentos (placa);
 
 do $$
