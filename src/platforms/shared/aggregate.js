@@ -212,6 +212,7 @@ export function aggregate(events, history, platform, options = {}) {
 
   // 6. Calcular SLA (slaAgeMin e slaBreached) sobre motoristas com alertas de intervenção pendentes
   const now = options.now ?? Date.now();
+  const appliesBurstGate = platformId === 'maxtrack';
   const criticalAlertsCount = rules.criticalAlertsCount ?? 5;
   const slaLimitMin = rules.slaLimitMin ?? 30;
   let filtradosPorBurst = 0;
@@ -235,7 +236,7 @@ export function aggregate(events, history, platform, options = {}) {
       // disso, sem novo evento, o burst se encerra e ele sai da fila — os
       // eventos brutos continuam intactos em driver_events/Analytics.
       const ageSinceLastMin = ultimoEvento ? (now - ultimoEvento.getTime()) / 60000 : Infinity;
-      if (alertas < criticalAlertsCount || ageSinceLastMin > slaLimitMin) {
+      if (appliesBurstGate && (alertas < criticalAlertsCount || ageSinceLastMin > slaLimitMin)) {
         filtradosPorBurst += alertas;
         alertas = 0;
         tipos = [];

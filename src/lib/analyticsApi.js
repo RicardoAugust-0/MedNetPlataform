@@ -17,6 +17,33 @@ export async function getAuthHeaders() {
   }
 }
 
+async function waitForAuthHeaders(timeoutMs = 1200) {
+  const initial = await getAuthHeaders();
+  if (initial.Authorization) return initial;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let subscription = null;
+
+    const finish = (headers) => {
+      if (settled) return;
+      settled = true;
+      subscription?.unsubscribe?.();
+      resolve(headers);
+    };
+
+    const timer = setTimeout(() => finish({}), timeoutMs);
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const token = session?.access_token;
+      if (!token) return;
+      clearTimeout(timer);
+      finish({ Authorization: `Bearer ${token}` });
+    });
+    subscription = data?.subscription || null;
+  });
+}
+
 /**
  * fetch autenticado para a API de analytics. `path` deve começar com '/'.
  * Injeta o header de auth preservando quaisquer headers passados em options.
@@ -27,7 +54,7 @@ export async function getAuthHeaders() {
  * É seguro reenviar: um 401 significa que a request não foi processada.
  */
 export async function apiFetch(path, options = {}) {
-  const auth = await getAuthHeaders();
+  const auth = await waitForAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: { ...(options.headers || {}), ...auth },
