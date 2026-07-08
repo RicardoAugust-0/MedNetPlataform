@@ -269,6 +269,36 @@ describe('aggregate.js · aggregate', () => {
   });
 });
 
+describe('aggregate.js - burst gate multi-plataforma', () => {
+  it('mantem alerta de outras plataformas mesmo abaixo do limite critico e fora da janela de SLA', () => {
+    const now = new Date('2026-06-26T12:00:00Z').getTime();
+    const sascarDefaultRules = {
+      ...mockPlatformSascar,
+      rules: {
+        ...mockPlatformSascar.rules,
+        criticalAlertsCount: 5,
+        slaLimitMin: 30,
+      },
+    };
+    const events = [
+      {
+        platform_id: 'sascar',
+        placa: 'AAA1A11',
+        nome_evento: 'Bocejo',
+        categoria_bucket: 'intervencao',
+        ocorrido_em: '2026-06-26T10:00:00Z',
+      },
+    ];
+
+    const { drivers, stats } = aggregate(events, [], sascarDefaultRules, { now });
+
+    expect(drivers.length).toBe(1);
+    expect(drivers[0].alertas).toBe(1);
+    expect(drivers[0].slaBreached).toBe(true);
+    expect(stats.filtradosPorBurst).toBe(0);
+  });
+});
+
 describe('aggregate.js · regra de burst (criticalAlertsCount + slaLimitMin)', () => {
   // mockPlatformMaxtrack: criticalAlertsCount 8, slaLimitMin 30 (definidos no topo do arquivo)
   const makeEvent = (placa, minutesAgo, nowMs) => ({
