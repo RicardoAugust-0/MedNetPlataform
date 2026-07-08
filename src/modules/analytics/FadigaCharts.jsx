@@ -10,6 +10,7 @@ export default function FadigaCharts({
   d,
   noData,
   selectedMonth,
+  setSelectedMonth,
   formatMonthKey,
   startDate,
   endDate,
@@ -61,6 +62,7 @@ export default function FadigaCharts({
           d={d}
           noData={noData}
           selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
           formatMonthKey={formatMonthKey}
           startDate={startDate}
           endDate={endDate}
@@ -111,6 +113,9 @@ export default function FadigaCharts({
       <AlertasCategoriaCard
         d={d}
         noData={noData}
+        selectedType={selectedType}
+        setSelectedType={setSelectedType}
+        availableTypes={availableTypes}
       />
 
       {/* Quando os alertas acontecem */}

@@ -203,6 +203,7 @@ export default function Analytics() {
             d={state.d}
             noData={state.noData}
             selectedMonth={state.selectedMonth}
+            setSelectedMonth={state.setSelectedMonth}
             formatMonthKey={state.formatMonthKey}
             startDate={state.startDate}
             endDate={state.endDate}

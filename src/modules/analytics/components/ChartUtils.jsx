@@ -71,6 +71,15 @@ export function CenterLabel({ line1, line2, color = C.ink }) {
 // Gradiente vertical pra <Area>/<Bar> — opaco no topo, esmaecendo até
 // transparente na base. Uso: <defs>{gradientDef('falsoGrad', C.warning)}</defs>
 // e no elemento: fill="url(#falsoGrad)".
+export function EmptyChart({ icon = 'ti-chart-bar', paddingTop = '0' }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center', paddingTop }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 28, color: 'var(--border-strong, #C9CDD6)' }}></i>
+      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>Sem dados</div>
+    </div>
+  );
+}
+
 export function gradientDef(id, hex, alphaTop = 0.35) {
   return (
     <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
