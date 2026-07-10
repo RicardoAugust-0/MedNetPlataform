@@ -606,27 +606,40 @@ export function registerAnalyticsRoutes(app, supabase) {
       return res.status(400).json({ error: 'Parametro platformId e obrigatorio.' });
     }
     try {
+      const cacheKey = `operator-ranking|${req.originalUrl}`;
+      const cached = resultCache.get(cacheKey);
+      if (cached && (Date.now() - cached.ts < RESULT_TTL)) {
+        return res.json(cached.data);
+      }
+
       const { from, to } = deriveDateParams(month, startDate, endDate);
 
-      const { data: eventRows, error } = await supabase.rpc('get_operator_event_activity', {
-        p_platform_id: platformId,
-        p_date_from: from,
-        p_date_to: to,
-        p_severity: severity || null,
-      });
+      // As consultas são independentes. Executá-las juntas reduz a latência da
+      // rota ao tempo da mais lenta, em vez da soma das três idas ao banco.
+      const [eventResult, sheetResult, profilesResult] = await Promise.all([
+        supabase.rpc('get_operator_event_activity', {
+          p_platform_id: platformId,
+          p_date_from: from,
+          p_date_to: to,
+          p_severity: severity || null,
+        }),
+        supabase.rpc('get_operator_sheet_activity', {
+          p_platform_id: platformId,
+          p_date_from: from,
+          p_date_to: to,
+        }),
+        supabase
+          .from('profiles')
+          .select('nome')
+          .in('role', ['operador', 'admin']),
+      ]);
+
+      const { data: eventRows, error } = eventResult;
       if (error) throw error;
-
-      const { data: sheetRows, error: sheetError } = await supabase.rpc('get_operator_sheet_activity', {
-        p_platform_id: platformId,
-        p_date_from: from,
-        p_date_to: to,
-      });
+      const { data: sheetRows, error: sheetError } = sheetResult;
       if (sheetError) throw sheetError;
-
-      const { data: dbProfiles } = await supabase
-        .from('profiles')
-        .select('nome')
-        .in('role', ['operador', 'admin']);
+      const { data: dbProfiles, error: profilesError } = profilesResult;
+      if (profilesError) throw profilesError;
 
       const normalizeOperatorName = (value) => String(value || '')
         .normalize('NFD')
@@ -768,7 +781,9 @@ export function registerAnalyticsRoutes(app, supabase) {
         };
       });
 
-      res.json({ ranking, hourlyProductivity });
+      const payload = { ranking, hourlyProductivity };
+      resultCache.set(cacheKey, { data: payload, ts: Date.now() });
+      res.json(payload);
     } catch (err) {
       console.error('[MedNet Backend] Erro no /api/analytics/operator-ranking:', err);
       res.status(500).json({ error: err.message || String(err) });
