@@ -57,14 +57,20 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
     return () => { active = false; };
   }, [platformId, selectedMonth, startDate, endDate, selectedSeverity]);
 
-  const top = ranking.slice(0, 10).map((r) => ({
-    name: r.operador,
-    total: Number(r.total_eventos),
-    gravissimo: Number(r.gravissimo),
-    grave: Number(r.grave),
-    medio: Number(r.medio),
-    intervencoes: Number(r.intervencoes || 0),
-  }));
+  const productivityByOperator = new Map(hourlyProductivity.map(op => [op.operador, op]));
+  const top = ranking.slice(0, 10).map((r) => {
+    const productivity = productivityByOperator.get(r.operador);
+    return {
+      name: r.operador,
+      total: Number(r.total_eventos),
+      gravissimo: Number(r.gravissimo),
+      grave: Number(r.grave),
+      medio: Number(r.medio),
+      intervencoes: Number(r.intervencoes || 0),
+      activeHours: productivity?.activeHours || 0,
+      average: productivity?.average || 0,
+    };
+  });
 
   const selectedOpStats = hourlyProductivity.find(o => o.operador === selectedOperator);
 
@@ -165,22 +171,49 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
         {/* Tab content area */}
         <div style={{ position: 'relative', width: '100%', minHeight: '300px' }}>
           {!loading && !errored && activeTab === 'ranking' && top.length > 0 && (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={top} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid {...gridProps} horizontal={false} />
-                <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
-                <YAxis type="category" dataKey="name" {...axisLineProps} width={140} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
-                <Tooltip
-                  content={
-                    <ChartTooltip
-                      formatter={(v) => `${fmt(v)} alertas fechados`}
-                      footer={(row) => `Intervenções: ${fmt(row.intervencoes)} · Gravíssimo: ${fmt(row.gravissimo)} · Grave: ${fmt(row.grave)} · Médio: ${fmt(row.medio)}`}
-                    />
-                  }
-                />
-                <Bar dataKey="total" fill="rgba(158,26,69,0.65)" radius={[0, 5, 5, 0]} maxBarSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={top} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid {...gridProps} horizontal={false} />
+                  <XAxis type="number" {...axisLineProps} tickFormatter={kf} />
+                  <YAxis type="category" dataKey="name" {...axisLineProps} width={140} tick={{ ...axisLineProps.tick, fontSize: 10.5 }} />
+                  <Tooltip
+                    content={
+                      <ChartTooltip
+                        formatter={(v) => `${fmt(v)} alertas fechados`}
+                        footer={(row) => `Produtividade: ${row.average.toFixed(1)} alertas/h · Horas ativas: ${fmt(row.activeHours)} · Intervenções: ${fmt(row.intervencoes)} · Gravíssimo: ${fmt(row.gravissimo)} · Grave: ${fmt(row.grave)} · Médio: ${fmt(row.medio)}`}
+                      />
+                    }
+                  />
+                  <Bar dataKey="total" fill="rgba(158,26,69,0.65)" radius={[0, 5, 5, 0]} maxBarSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              <div style={{ maxHeight: 250, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, marginTop: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--surface-0, #fff)', zIndex: 1 }}>
+                    <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
+                      <th style={{ padding: '9px 10px', fontWeight: 600 }}>Operador</th>
+                      <th style={{ padding: '9px 10px', fontWeight: 600, textAlign: 'right' }}>Fechados</th>
+                      <th style={{ padding: '9px 10px', fontWeight: 600, textAlign: 'right' }}>Horas ativas</th>
+                      <th style={{ padding: '9px 10px', fontWeight: 600, textAlign: 'right' }}>Alertas/h</th>
+                      <th style={{ padding: '9px 10px', fontWeight: 600, textAlign: 'right' }}>Intervenções</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {top.map(row => (
+                      <tr key={row.name} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-primary)', fontWeight: 600 }}>{row.name}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right' }}>{fmt(row.total)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right' }}>{fmt(row.activeHours)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', color: '#9E1A45', fontWeight: 700 }}>{row.average.toFixed(1)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right' }}>{fmt(row.intervencoes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           {!loading && !errored && activeTab === 'hourly' && selectedOpStats && (

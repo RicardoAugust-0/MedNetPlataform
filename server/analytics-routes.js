@@ -628,34 +628,55 @@ export function registerAnalyticsRoutes(app, supabase) {
         .select('nome')
         .in('role', ['operador', 'admin']);
 
-      const profileNames = (dbProfiles || []).map(p => p.nome).filter(Boolean);
-      const allFullNames = [...new Set([
-        ...profileNames,
-        ...(eventRows || []).map(e => e.operador).filter(Boolean),
-        ...(sheetRows || []).map(e => e.realizado_por).filter(Boolean)
-      ])];
+      const normalizeOperatorName = (value) => String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const titleCaseOperator = (value) => String(value || '').trim()
+        .toLocaleLowerCase('pt-BR')
+        .replace(/\b\p{L}/gu, letter => letter.toLocaleUpperCase('pt-BR'));
+      const skipSet = new Set(['', '-', 'auto descarte', 'limpeza', 'descarte', 'nao realizado', 'sem contato', 'sistema']);
 
-      const getFullOperatorName = (shortName) => {
-        if (!shortName) return null;
-        const norm = shortName.trim().toLowerCase();
-        const normPlain = norm.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const skipSet = new Set(['-', 'auto-descarte', 'limpeza', 'descarte', 'nao realizado', 'sem contato', 'sistema']);
-        if (skipSet.has(normPlain) || norm === '\u2014') return null;
-
-        if (norm === 'kaiky' || norm === 'kaiky souza' || norm === 'kaiky salviano') {
-          return 'Kaiky Salviano';
+      // Perfis são a fonte canônica. Nomes completos já presentes nas fontes
+      // históricas complementam a resolução para instalações antigas.
+      const canonicalByNormalizedName = new Map();
+      for (const name of (dbProfiles || []).map(p => p.nome).filter(Boolean)) {
+        canonicalByNormalizedName.set(normalizeOperatorName(name), name.trim());
+      }
+      for (const name of [
+        ...(eventRows || []).map(e => e.operador),
+        ...(sheetRows || []).map(e => e.realizado_por),
+      ].filter(Boolean)) {
+        const normalized = normalizeOperatorName(name);
+        if (normalized.split(' ').length > 1 && !canonicalByNormalizedName.has(normalized)) {
+          canonicalByNormalizedName.set(normalized, titleCaseOperator(name));
         }
+      }
 
-        let match = allFullNames.find(f => f.toLowerCase() === norm);
-        if (match) return match;
+      const canonicalNames = [...canonicalByNormalizedName.entries()].map(([normalized, name]) => ({ normalized, name }));
+      const explicitAliases = new Map([
+        ['kaiky', 'Kaiky Salviano'],
+        ['kaiky souza', 'Kaiky Salviano'],
+        ['kaiky salviano', 'Kaiky Salviano'],
+      ]);
 
-        match = allFullNames.find(f => {
-          const parts = f.toLowerCase().split(' ');
-          return parts[0] === norm || parts.includes(norm);
-        });
-        if (match) return match;
+      const getFullOperatorName = (rawName) => {
+        const normalized = normalizeOperatorName(rawName);
+        if (skipSet.has(normalized)) return null;
+        if (explicitAliases.has(normalized)) return explicitAliases.get(normalized);
+        if (canonicalByNormalizedName.has(normalized)) return canonicalByNormalizedName.get(normalized);
 
-        return shortName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        const words = normalized.split(' ');
+        const matches = words.length > 1
+          ? canonicalNames.filter(candidate => candidate.normalized.startsWith(`${normalized} `))
+          : canonicalNames.filter(candidate => candidate.normalized.split(' ')[0] === normalized);
+
+        // Só completa um nome abreviado quando existe uma única pessoa possível;
+        // isso impede juntar pessoas diferentes que compartilham o primeiro nome.
+        if (matches.length === 1) return matches[0].name;
+        return titleCaseOperator(rawName);
       };
 
       const toArray24 = (value) => {
