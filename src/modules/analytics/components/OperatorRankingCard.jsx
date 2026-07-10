@@ -3,15 +3,25 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { fmt, kf, axisLineProps, gridProps, ChartTooltip } from './ChartUtils.jsx';
 import { apiFetch } from '../../../lib/analyticsApi.js';
 
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Ranking de operadores que fecharam alertas na planilha MaxTrack (coluna
 // "Operador - Última Atualização"). Só ranking/contagem por enquanto — sem
 // cálculo de remuneração. Card só existe pra MaxTrack (ver caller em
 // FadigaCharts.jsx) e só aparece se a planilha atual tiver a coluna preenchida.
-export default function OperatorRankingCard({ platformId, selectedMonth, startDate, endDate, selectedSeverity }) {
+export default function OperatorRankingCard({ platformId, selectedSeverity }) {
   const [ranking, setRanking] = useState([]);
   const [hourlyProductivity, setHourlyProductivity] = useState([]);
   const [activeTab, setActiveTab] = useState('ranking'); // 'ranking' | 'hourly'
   const [selectedOperator, setSelectedOperator] = useState('');
+  const [period, setPeriod] = useState('today');
+  const [startDate, setStartDate] = useState(() => localDateInputValue());
+  const [endDate, setEndDate] = useState(() => localDateInputValue());
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
 
@@ -28,8 +38,22 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
 
     const params = new URLSearchParams();
     params.set('platformId', platformId);
-    if (selectedMonth) params.set('month', selectedMonth);
-    if (selectedMonth === 'custom' && startDate && endDate) {
+    if (period === 'today') {
+      const today = localDateInputValue();
+      params.set('month', 'custom');
+      params.set('startDate', today);
+      params.set('endDate', today);
+    } else if (period === 'last7') {
+      const today = new Date();
+      const firstDay = new Date(today);
+      firstDay.setDate(today.getDate() - 6);
+      params.set('month', 'custom');
+      params.set('startDate', localDateInputValue(firstDay));
+      params.set('endDate', localDateInputValue(today));
+    } else if (period === 'month') {
+      params.set('month', localDateInputValue().slice(0, 7));
+    } else if (period === 'custom' && startDate && endDate) {
+      params.set('month', 'custom');
       params.set('startDate', startDate);
       params.set('endDate', endDate);
     }
@@ -55,7 +79,7 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
       .finally(() => { if (active) setLoading(false); });
 
     return () => { active = false; };
-  }, [platformId, selectedMonth, startDate, endDate, selectedSeverity]);
+  }, [platformId, period, startDate, endDate, selectedSeverity]);
 
   const productivityByOperator = new Map(hourlyProductivity.map(op => [op.operador, op]));
   const top = ranking.slice(0, 10).map((r) => {
@@ -82,11 +106,6 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
       }))
     : [];
 
-  // Sem coluna preenchida nesta planilha: nada pra mostrar — nem o card nem o
-  // header da seção aparecem (evita título "Ranking de operadores" órfão,
-  // sem nada embaixo, quando a planilha atual não tem a coluna de operador).
-  if (!loading && !errored && ranking.length === 0) return null;
-
   return (
     <div>
       <div style={{ fontSize: '10px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, margin: '28px 2px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -98,10 +117,10 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
           Ranking de operadores
         </h4>
         <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-          Quem fechou os alertas da planilha MaxTrack no período — contagem, intervenções e produtividade por hora.
+          Alertas fechados, intervenções e produtividade por hora — com período próprio do ranking.
         </p>
 
-        {/* Tab switcher & Operator selector */}
+        {/* Filtros e seleção de visualização */}
         {!loading && !errored && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: 2, background: 'var(--surface-1, rgba(255,255,255,0.05))', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
@@ -139,8 +158,29 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
               </button>
             </div>
 
-            {activeTab === 'hourly' && hourlyProductivity.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: 500 }}>Período:</span>
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  style={{ padding: '4px 8px', fontSize: '11.5px', borderRadius: '6px', border: '1px solid var(--border-strong, #CBD5E1)', background: 'var(--background-card, #fff)', color: 'var(--text-primary)', fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="today">Hoje</option>
+                  <option value="last7">Últimos 7 dias</option>
+                  <option value="month">Mês atual</option>
+                  <option value="custom">Período personalizado</option>
+                  <option value="all">Todo o histórico</option>
+                </select>
+              </label>
+              {period === 'custom' && (
+                <>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>De <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} style={{ padding: '4px 6px', fontSize: '11.5px', borderRadius: '6px', border: '1px solid var(--border-strong, #CBD5E1)', background: 'var(--background-card, #fff)', color: 'var(--text-primary)' }} /></label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>Até <input type="date" value={endDate} min={startDate} max={localDateInputValue()} onChange={(e) => setEndDate(e.target.value)} style={{ padding: '4px 6px', fontSize: '11.5px', borderRadius: '6px', border: '1px solid var(--border-strong, #CBD5E1)', background: 'var(--background-card, #fff)', color: 'var(--text-primary)' }} /></label>
+                </>
+              )}
+              {activeTab === 'hourly' && hourlyProductivity.length > 0 && (
+                <>
                 <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: 500 }}>Operador:</span>
                 <select
                   value={selectedOperator}
@@ -163,8 +203,9 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -260,6 +301,14 @@ export default function OperatorRankingCard({ platformId, selectedMonth, startDa
                   Intervenções
                 </span>
               </div>
+            </div>
+          )}
+
+          {!loading && !errored && ranking.length === 0 && (
+            <div style={{ minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-muted)', textAlign: 'center' }}>
+              <i className="ti ti-chart-bar-off" style={{ fontSize: 28 }}></i>
+              <div style={{ fontSize: 12.5, fontWeight: 600 }}>Nenhum alerta fechado neste período</div>
+              <div style={{ fontSize: 11.5 }}>Altere o período para consultar outro dia ou intervalo.</div>
             </div>
           )}
 
