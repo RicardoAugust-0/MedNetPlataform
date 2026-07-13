@@ -18,3 +18,10 @@ Nunca envie senhas, tokens ou dados de CAPTCHA. Corpos aceitos:
 ```
 
 Fases aceitas: `started`, `progress`, `success` e `failure`.
+
+## Cooldown de extração
+
+Após uma importação bem-sucedida, o MedNet marca a conta com o horário da
+extração. Durante os 15 minutos seguintes, `GET /api/horizon/credentials` não
+devolve essa conta ao robô. Erros de login ou de importação não entram no
+cooldown e permanecem elegíveis para nova tentativa.

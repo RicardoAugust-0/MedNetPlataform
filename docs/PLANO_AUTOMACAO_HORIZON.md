@@ -411,7 +411,7 @@ performático"):**
    - Lado Horizon (`platformId='horizon'`): reavalia as pendências
      `no_horizon_match` (o evento Horizon que faltava pode ter acabado de
      chegar num ingest mais recente).
-   - Nova tabela `horizon_treatment_queue`
+  - Nova tabela `horizon_treatment_queue`
      (`20260702130000_horizon_treatment_queue.sql`, aplicar no Supabase) —
      cada linha guarda `driver_event_id` (MaxTrack), `horizon_
      driver_event_id` (par, se achado), `classificacao`, `motivo_raw`

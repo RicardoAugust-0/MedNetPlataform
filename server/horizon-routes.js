@@ -18,6 +18,7 @@ const HORIZON_SCRAPING_AUTOMATION_NAMES = [
 
 const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
 const ACTIVITY_PHASES = { started: 'running', progress: 'running', success: 'success', failure: 'failure' };
+const HORIZON_EXTRACTION_COOLDOWN_MS = 15 * 60 * 1000;
 
 // Autenticação máquina-a-máquina para o robô Playwright/N8N na VPS — mesmo
 // espírito do gate em server/ai-chat-routes.js (POST /api/ai/internal/generate-pdf),
@@ -120,6 +121,15 @@ export function registerHorizonRoutes(app, supabase) {
       }
 
       if (responseBody?.success) {
+        const account = accountLabelFromFile(req.files[0]);
+        const { error: extractionUpdateError } = await supabase
+          .from('horizon_credentials')
+          .update({ last_extracted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('label', account);
+        if (extractionUpdateError) {
+          console.error('[Horizon Ingest] Falha ao registrar horario da extracao:', extractionUpdateError);
+        }
+
         const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
         try {
           const automationId = await resolveHorizonScrapingAutomationId(supabase);
@@ -236,11 +246,17 @@ export function registerHorizonRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('horizon_credentials')
-        .select('email, password, password_candidates, label')
+        .select('email, password, password_candidates, label, last_extracted_at')
         .neq('status', 'credential_error');
       if (error) throw error;
 
-      return res.status(200).json(data || []);
+      const cutoff = Date.now() - HORIZON_EXTRACTION_COOLDOWN_MS;
+      const eligible = (data || []).filter((account) => {
+        if (!account.last_extracted_at) return true;
+        return new Date(account.last_extracted_at).getTime() < cutoff;
+      }).map(({ last_extracted_at, ...account }) => account);
+
+      return res.status(200).json(eligible);
     } catch (err) {
       console.error('[Horizon Credentials] Erro:', err);
       return res.status(500).json({ error: err.message || String(err) });
