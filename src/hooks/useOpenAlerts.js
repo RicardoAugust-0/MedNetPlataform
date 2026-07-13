@@ -253,11 +253,13 @@ export function useOpenAlerts() {
 
     const mergedDriversMap = {};
     for (const d of allDrivers) {
-      const key = d.placa;
+      // A mesma placa pode gerar eventos em mais de uma plataforma. Mesclá-los
+      // apagava a origem e podia executar a tratativa na fonte errada.
+      const key = `${d._platformId || 'sem-plataforma'}:${d.placa}`;
       if (!mergedDriversMap[key]) {
-        mergedDriversMap[key] = d;
+        mergedDriversMap[key] = { ...d, _driverKey: key };
       } else {
-        mergedDriversMap[key] = mergeDrivers(mergedDriversMap[key], d);
+        mergedDriversMap[key] = { ...mergeDrivers(mergedDriversMap[key], d), _driverKey: key };
       }
     }
 

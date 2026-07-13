@@ -22,14 +22,18 @@ const BASE_STYLE = {
 
 export default function PlatformBadge({ platformId, count }) {
   const cfg = CONFIG[platformId];
-  if (!cfg) return null;
+  const isUnknownOrigin = !platformId || platformId === 'auto';
+  const label = cfg?.label || (isUnknownOrigin ? 'ORIGEM N/I' : String(platformId).slice(0, 12));
+  const name = cfg?.name || (isUnknownOrigin ? 'Plataforma não informada na importação' : String(platformId));
+  const color = cfg?.color || '#64748B';
+  const bg = cfg?.bg || 'rgba(100, 116, 139, 0.16)';
   return (
     <span
       className="platform-badge"
-      style={{ ...BASE_STYLE, background: cfg.bg, color: cfg.color }}
-      title={cfg.name}
+      style={{ ...BASE_STYLE, background: bg, color }}
+      title={name}
     >
-      {cfg.label}
+      {label}
       {typeof count === 'number' && <span style={{ fontWeight: 800 }}>{count}</span>}
     </span>
   );

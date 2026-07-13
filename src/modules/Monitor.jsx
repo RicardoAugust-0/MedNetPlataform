@@ -114,7 +114,7 @@ export default function Monitor() {
   };
 
   const handleExpandAll = (list) => {
-    setExpandedPlacas(new Set(list.map(d => d.placa)));
+    setExpandedPlacas(new Set(list.map(d => d._driverKey || d.placa)));
   };
 
   const handleCollapseAll = () => {
@@ -761,7 +761,7 @@ export default function Monitor() {
                     </div>
                   );
                 }
-                acc.push(<DriverCard key={d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />);
+                acc.push(<DriverCard key={d._driverKey || d.placa} d={d} type="intervencao" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d._driverKey || d.placa)} onToggleExpand={() => handleToggleExpand(d._driverKey || d.placa)} />);
                 return acc;
               }, [])}
             </div>
@@ -775,7 +775,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum motorista para reportar" sub="Distração, uso de celular" />
           : <div className="driver-list">
               {paginate(reportarList).map(d => (
-                <DriverCard key={d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />
+                <DriverCard key={d._driverKey || d.placa} d={d} type="reportar" handlers={handlers} daysSince={reincidenteMap.get(d.nome)?.daysSince} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d._driverKey || d.placa)} onToggleExpand={() => handleToggleExpand(d._driverKey || d.placa)} />
               ))}
             </div>
       )}
@@ -788,7 +788,7 @@ export default function Monitor() {
           ? <EmptyState icon="ti-mood-smile" msg="Nenhum evento técnico isolado" />
           : <div className="driver-list">
               {paginate(tecList).map(d => (
-                <DriverCard key={d.placa} d={d} type="tecnicos" handlers={handlers} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d.placa)} onToggleExpand={() => handleToggleExpand(d.placa)} />
+                <DriverCard key={d._driverKey || d.placa} d={d} type="tecnicos" handlers={handlers} sheetsEntry={sheetsAttendedMap.get(normStr(d.nome))} expanded={expandedPlacas.has(d._driverKey || d.placa)} onToggleExpand={() => handleToggleExpand(d._driverKey || d.placa)} />
               ))}
             </div>
       )}

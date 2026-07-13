@@ -44,6 +44,12 @@ export default function DriverCard({ d, type, handlers, daysSince, sheetsEntry, 
           <span><i className="ti ti-license"></i> {d.placa}</span>
           <span className="sep">·</span>
           <span><i className="ti ti-building"></i> {d.transportadora}</span>
+          {d.frota && (
+            <>
+              <span className="sep">{' \u00b7 '}</span>
+              <span><i className="ti ti-truck"></i> Frota {d.frota}</span>
+            </>
+          )}
           <span className="sep">·</span>
           <span>
             <i className="ti ti-sun" style={{ color: d.turno === 'diurno' ? 'var(--warning-500)' : 'var(--accent-400)' }}></i>
