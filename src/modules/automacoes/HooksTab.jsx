@@ -77,6 +77,18 @@ function triggerLabelFor(a) {
   return 'Manual';
 }
 
+function formatLastRun(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === today.toDateString()) return `Hoje ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return `Ontem ${time}`;
+  return `${date.toLocaleDateString('pt-BR')} ${time}`;
+}
+
 function VpsStrip({ vpsHealth, onStopBot }) {
   if (vpsHealth.checking && !vpsHealth.data) {
     return (
@@ -149,7 +161,7 @@ function VpsStrip({ vpsHealth, onStopBot }) {
   );
 }
 
-function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
+function HookCard({ hook, logs = [], horizonQueueStatus, onToggle, onRun, onConfig, onOpenLog }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [running, setRunning] = useState(false);
@@ -161,12 +173,14 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
     return logDate.toDateString() === today.toDateString();
   }).length;
 
-  const totalRuns = logs.length;
-  const successRate = totalRuns > 0 
-    ? Math.round((logs.filter(l => l.status === 'success').length / totalRuns) * 100)
+  const terminalRuns = logs.filter(l => l.status === 'success' || l.status === 'failure');
+  const totalRuns = terminalRuns.length;
+  const successRate = totalRuns > 0
+    ? Math.round((terminalRuns.filter(l => l.status === 'success').length / totalRuns) * 100)
     : null;
 
   const lastRun = logs[0] || null;
+  const showsHorizonQueue = /(HorizonTratamento|HorizonTreatment|MaxtrackScraping|MaxtrackRelatorios)/i.test(hook.name || '');
 
   const runNow = async () => {
     if (!active || running) return;
@@ -221,7 +235,7 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
             <div className="lr-title">{lastRun.status === 'success' ? 'Última execução concluída' : (lastRun.status === 'running' ? 'Automação em andamento...' : 'Falha na última execução')}</div>
             <div className="lr-sub">{lastRun.detail} {lastRun.dur ? `· ${lastRun.dur}` : ''}</div>
           </div>
-          <div className="lr-time">{lastRun.when.split(' ')[1] || lastRun.when}</div>
+          <div className="lr-time">{formatLastRun(lastRun.date)}</div>
         </div>
       ) : (
         <div className="hook-lastrun idle">
@@ -231,6 +245,33 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
             <div className="lr-sub">Aguardando primeiro disparo</div>
           </div>
           <div className="lr-time">—</div>
+        </div>
+      )}
+
+      {showsHorizonQueue && horizonQueueStatus && (
+        <div className="hook-operation" aria-label="Situação atual da fila de tratamento Horizon">
+          <div className="operation-head">
+            <span><i className="ti ti-list-check"></i> Fila de tratamento Horizon</span>
+            <span className="operation-live"><i></i> tempo real</span>
+          </div>
+          {horizonQueueStatus.loading ? (
+            <div className="operation-loading"><i className="ti ti-loader-2"></i> Atualizando situação…</div>
+          ) : (
+            <div className="operation-metrics">
+              <div className={`operation-metric ${horizonQueueStatus.pending > 0 ? 'pending' : ''}`}>
+                <b>{horizonQueueStatus.pending}</b><span>pendentes</span>
+              </div>
+              <div className="operation-metric done">
+                <b>{horizonQueueStatus.doneToday}</b><span>tratados hoje</span>
+              </div>
+              <div className={`operation-metric ${horizonQueueStatus.noMatch > 0 ? 'warning' : ''}`}>
+                <b>{horizonQueueStatus.noMatch}</b><span>sem vínculo</span>
+              </div>
+              <div className={`operation-metric ${horizonQueueStatus.error > 0 ? 'error' : ''}`}>
+                <b>{horizonQueueStatus.error}</b><span>com erro</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -542,7 +583,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   );
 }
 
-export function HooksTab({ automations, logs, vpsHealth, onStopBot, onRun, onToggle, onSave, onDelete }) {
+export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onStopBot, onRun, onToggle, onSave, onDelete }) {
   const [activeSubTab, setActiveSubTab] = useState('vps'); // 'vps', 'whatsapp'
   const [drawer, setDrawer] = useState(null);
   const [modal, setModal] = useState(null);
@@ -694,6 +735,7 @@ export function HooksTab({ automations, logs, vpsHealth, onStopBot, onRun, onTog
                 key={h.id}
                 hook={h}
                 logs={logs[h.id] || []}
+                horizonQueueStatus={horizonQueueStatus}
                 onToggle={onToggle}
                 onRun={onRun}
                 onConfig={setModal}

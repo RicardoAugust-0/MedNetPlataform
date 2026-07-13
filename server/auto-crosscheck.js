@@ -149,3 +149,22 @@ export async function runAutoCrossCheck(supabase, platformId) {
     await retryUnmatchedAfterHorizonIngest(supabase);
   }
 }
+
+// Resumo operacional usado pelos logs da MaxTrack. As contagens são feitas
+// pelo banco (HEAD + count exact), sem trazer a fila inteira para o Node.
+export async function getHorizonTreatmentQueueSummary(supabase) {
+  const statuses = ['pending', 'done', 'error', 'no_horizon_match'];
+  const results = await Promise.all(statuses.map((status) => (
+    supabase
+      .from('horizon_treatment_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status)
+  )));
+
+  const summary = {};
+  results.forEach((result, index) => {
+    if (result.error) throw result.error;
+    summary[statuses[index]] = result.count || 0;
+  });
+  return summary;
+}

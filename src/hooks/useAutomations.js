@@ -12,6 +12,13 @@ export function AutomationsProvider({ children }) {
   const { notify } = useNotifications();
   const [automations, setAutomations] = useState([]);
   const [logs, setLogs] = useState({}); // key: automation_id, value: array of log objects
+  const [horizonQueueStatus, setHorizonQueueStatus] = useState({
+    pending: 0,
+    doneToday: 0,
+    error: 0,
+    noMatch: 0,
+    loading: true,
+  });
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
   const [healthUrl, setHealthUrl] = useState('https://botsplaywright.duckdns.org/health');
@@ -61,7 +68,8 @@ export function AutomationsProvider({ children }) {
       }
     }
 
-    // Trata "tarefas zumbis" que ficaram presas como 'running' por mais de 20 minutos no banco
+    // Trata tarefas zumbis. Os robôs reais podem levar mais de 20 minutos em
+    // contas com captcha, então a margem precisa ser maior que o timeout normal.
     let status = row.status;
     let detail = row.detail;
     let dur = row.duration;
@@ -69,7 +77,7 @@ export function AutomationsProvider({ children }) {
       const createdAt = new Date(row.created_at).getTime();
       const now = Date.now();
       const diffMinutes = (now - createdAt) / (1000 * 60);
-      if (diffMinutes > 20) {
+      if (diffMinutes > 35) {
         status = 'failure';
         detail = 'Execução interrompida por inatividade (Timeout)';
         dur = 'Excedido';
@@ -97,7 +105,16 @@ export function AutomationsProvider({ children }) {
     }
 
     try {
-      const [autosRes, logsRes, settingsRes] = await Promise.all([
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const queuePromise = Promise.all([
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'done').gte('updated_at', todayStart.toISOString()),
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'error'),
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'no_horizon_match'),
+      ]);
+
+      const [autosRes, logsRes, settingsRes, queueResults] = await Promise.all([
         supabase
           .from('automations')
           .select(AUTOMATION_COLUMNS)
@@ -107,7 +124,8 @@ export function AutomationsProvider({ children }) {
           .select('id, automation_id, status, duration, detail, logs, created_at')
           .order('created_at', { ascending: false })
           .limit(500),
-        supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle()
+        supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle(),
+        queuePromise,
       ]);
 
       if (autosRes.error) throw autosRes.error;
@@ -126,6 +144,19 @@ export function AutomationsProvider({ children }) {
 
       setAutomations(autosList);
       setLogs(logsMap);
+
+      if (queueResults.every(result => !result.error)) {
+        setHorizonQueueStatus({
+          pending: queueResults[0].count || 0,
+          doneToday: queueResults[1].count || 0,
+          error: queueResults[2].count || 0,
+          noMatch: queueResults[3].count || 0,
+          loading: false,
+        });
+      } else {
+        console.error('[useAutomations] Error loading Horizon queue:', queueResults.find(result => result.error)?.error);
+        setHorizonQueueStatus(current => ({ ...current, loading: false }));
+      }
 
       // Set healthcheck URL from Supabase config or dynamic fallback
       if (settingsRes.data?.value?.health_url) {
@@ -227,24 +258,30 @@ export function AutomationsProvider({ children }) {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_logs' }, (payload) => {
         loadData();
-        if (payload.eventType !== 'INSERT') return;
+        if (payload.eventType === 'UPDATE' && payload.new?.status === 'running') return;
         const automation = automationsRef.current.find((item) => item.id === payload.new.automation_id);
-        if (!automation || !/horizon/i.test(automation.name || '')) return;
+        if (!automation || !/(horizon|maxtrack)/i.test(automation.name || '')) return;
 
         const failed = payload.new.status === 'failure';
         const succeeded = payload.new.status === 'success';
-        const body = payload.new.detail || 'Novo evento do robô Horizon.';
+        const platform = /maxtrack/i.test(automation.name || '') ? 'MaxTrack' : 'Horizon';
+        const body = payload.new.detail || `Novo evento do robô ${platform}.`;
         notify({
-          title: failed ? 'Horizon precisa de atenção' : 'Atualização do robô Horizon',
+          title: failed ? `${platform} precisa de atenção` : `Atualização do robô ${platform}`,
           body,
           kind: failed ? 'error' : (succeeded ? 'success' : 'info'),
           link: '/automacoes',
         });
         if (failed) toast(body, 'error');
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horizon_treatment_queue' }, () => {
+        clearTimeout(timers.current.queueRefresh);
+        timers.current.queueRefresh = setTimeout(loadData, 500);
+      })
       .subscribe();
 
     return () => {
+      clearTimeout(timers.current.queueRefresh);
       supabase.removeChannel(channel);
     };
   }, [loadData, notify, toast]);
@@ -390,16 +427,33 @@ export function AutomationsProvider({ children }) {
 
       stepLogs.push({ t: new Date().toLocaleTimeString('pt-BR'), lvl: 'ok', m: data.message || 'Webhook executado com sucesso' });
 
-      // Save success run log to Supabase
-      await supabase.from('automation_logs').insert({
-        automation_id: id,
-        status: 'success',
-        duration: durationStr,
-        detail: data.detail || 'Execução concluída via webhook',
-        logs: stepLogs
-      });
+      const reportsOwnActivity = (() => {
+        try {
+          const url = new URL(auto.endpoint);
+          return url.hostname === 'botsplaywright.duckdns.org' && url.pathname.startsWith('/automacoes/');
+        } catch {
+          return false;
+        }
+      })();
 
-      toast(`${auto.name} — execução concluída`, 'success');
+      // Para Playwright, o HTTP 200 só aceita a tarefa. O log verdadeiro será
+      // enviado pelo robô quando começar e quando terminar no portal.
+      if (!reportsOwnActivity) {
+        await supabase.from('automation_logs').insert({
+          automation_id: id,
+          status: 'success',
+          duration: durationStr,
+          detail: data.detail || 'Execução concluída via webhook',
+          logs: stepLogs
+        });
+      }
+
+      toast(
+        reportsOwnActivity
+          ? `${auto.name} — tarefa enviada; aguardando confirmação do robô`
+          : `${auto.name} — execução concluída`,
+        reportsOwnActivity ? 'info' : 'success',
+      );
       return true;
     } catch (err) {
       console.error(`[useAutomations] Error running hook ${id}:`, err);
@@ -507,7 +561,7 @@ export function AutomationsProvider({ children }) {
 
   return createElement(
     AutomationsContext.Provider,
-    { value: { automations, logs, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
+    { value: { automations, logs, horizonQueueStatus, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
     children
   );
 }

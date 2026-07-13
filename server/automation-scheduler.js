@@ -1,4 +1,4 @@
-import { buildAutomationWebhookBody } from './automation-webhook.js';
+import { buildAutomationWebhookBody, isPlaywrightAutomationEndpoint } from './automation-webhook.js';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const CLAIM_LIMIT = 10;
@@ -98,10 +98,15 @@ export async function executeScheduledAutomation(
   }
 
   const duration = `${((Date.now() - startedAt) / 1000).toFixed(1)} s`;
-  try {
-    await writeExecutionLog(supabase, claim, { success, duration, detail, lines });
-  } catch (error) {
-    logger.error('[Automation Scheduler] Falha ao gravar log:', error);
+  // Nos bots Playwright, HTTP 200 significa apenas "tarefa aceita". O próprio
+  // robô grava o ciclo real via /api/automations/activity; registrar sucesso
+  // aqui criaria uma confirmação falsa antes de acessar Horizon/MaxTrack.
+  if (!success || !isPlaywrightAutomationEndpoint(claim.automation_endpoint)) {
+    try {
+      await writeExecutionLog(supabase, claim, { success, duration, detail, lines });
+    } catch (error) {
+      logger.error('[Automation Scheduler] Falha ao gravar log:', error);
+    }
   }
 
   try {

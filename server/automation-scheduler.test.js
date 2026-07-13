@@ -45,11 +45,7 @@ describe('automation scheduler', () => {
       }),
     );
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({});
-    expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
-      automation_id: claim.automation_id,
-      status: 'success',
-      detail: 'Job aceito',
-    }));
+    expect(supabase.insert).not.toHaveBeenCalled();
     expect(supabase.rpc).toHaveBeenCalledWith('finish_automation_schedule', expect.objectContaining({
       p_automation_id: claim.automation_id,
       p_claim_id: claim.claim_id,

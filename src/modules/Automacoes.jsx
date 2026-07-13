@@ -9,7 +9,7 @@ import ChatTab from './automacoes/ChatTab.jsx';
 
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, loading, vpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
+  const { automations, logs, horizonQueueStatus, loading, vpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
   const confirm = useConfirm();
   const [initialChatParams, setInitialChatParams] = useState(null);
 
@@ -130,6 +130,7 @@ export default function Automacoes() {
         <HooksTab
           automations={automations}
           logs={logs}
+          horizonQueueStatus={horizonQueueStatus}
           vpsHealth={vpsHealth}
           onStopBot={handleStopBot}
           onRun={run}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutomationWebhookBody } from './automation-webhook.js';
+import { buildAutomationWebhookBody, isPlaywrightAutomationEndpoint } from './automation-webhook.js';
 
 describe('buildAutomationWebhookBody', () => {
   const metadata = { trigger: 'agendado', automation_id: '123' };
@@ -13,5 +13,10 @@ describe('buildAutomationWebhookBody', () => {
 
   it('preserva metadados para webhooks genéricos', () => {
     expect(buildAutomationWebhookBody('https://example.com/webhook', metadata)).toEqual(metadata);
+  });
+
+  it('identifica apenas endpoints do orquestrador Playwright', () => {
+    expect(isPlaywrightAutomationEndpoint('https://botsplaywright.duckdns.org/automacoes/BOT_MaxtrackRelatorios?background=true')).toBe(true);
+    expect(isPlaywrightAutomationEndpoint('https://example.com/automacoes/bot')).toBe(false);
   });
 });

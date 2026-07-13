@@ -1,17 +1,18 @@
 const PLAYWRIGHT_BOT_HOST = 'botsplaywright.duckdns.org';
 
-export function buildAutomationWebhookBody(endpoint, metadata) {
+export function isPlaywrightAutomationEndpoint(endpoint) {
   try {
     const url = new URL(endpoint);
-    // O orquestrador FastAPI repassa cada chave do JSON como argumento de
-    // run_automation(). Os robôs atuais têm assinaturas estritas e são
-    // disparados sem parâmetros; metadados causariam "unexpected keyword".
-    if (url.hostname === PLAYWRIGHT_BOT_HOST && url.pathname.startsWith('/automacoes/')) {
-      return {};
-    }
+    return url.hostname === PLAYWRIGHT_BOT_HOST && url.pathname.startsWith('/automacoes/');
   } catch {
-    // A validação do endpoint acontece antes; mantém payload padrão caso uma
-    // integração use uma URL não convencional aceita pelo runtime.
+    return false;
   }
+}
+
+export function buildAutomationWebhookBody(endpoint, metadata) {
+  // O orquestrador FastAPI repassa cada chave do JSON como argumento de
+  // run_automation(). Os robôs atuais têm assinaturas estritas e são
+  // disparados sem parâmetros; metadados causariam "unexpected keyword".
+  if (isPlaywrightAutomationEndpoint(endpoint)) return {};
   return metadata;
 }
