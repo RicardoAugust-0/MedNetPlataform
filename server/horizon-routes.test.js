@@ -1,8 +1,78 @@
 import { describe, expect, it } from 'vitest';
+import * as XLSX from 'xlsx';
 import {
   buildTreatmentResolutionUpdate,
+  inspectHorizonExport,
   toTreatmentQueuePayload,
 } from './horizon-routes.js';
+
+const HORIZON_HEADERS = [
+  'Data/Hora Evento',
+  'Motorista / Comandante',
+  'Placa / Empurrador',
+  'Gravidade',
+  'Evento',
+];
+
+describe('inspectHorizonExport', () => {
+  it('reconhece CSV Horizon valido sem nenhuma linha de eventos', () => {
+    const file = {
+      originalname: 'dados_ALP_2026-07-13.csv',
+      mimetype: 'text/csv',
+      buffer: Buffer.from(HORIZON_HEADERS.join(';') + '\n'),
+    };
+
+    expect(inspectHorizonExport(file)).toMatchObject({
+      hasHorizonLayout: true,
+      isValidEmpty: true,
+      dataRows: [],
+    });
+  });
+
+  it('reconhece XLSX Horizon valido sem nenhuma linha de eventos', () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([HORIZON_HEADERS]), 'Eventos');
+    const file = {
+      originalname: 'dados_ALP_2026-07-13.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }),
+    };
+
+    expect(inspectHorizonExport(file)).toMatchObject({
+      hasHorizonLayout: true,
+      isValidEmpty: true,
+      dataRows: [],
+    });
+  });
+
+  it('mantem export Horizon com eventos no fluxo normal de importacao', () => {
+    const eventRow = ['13/07/2026 10:30:00', 'Motorista', 'ABC1D23', 'Grave', 'Fadiga'];
+    const file = {
+      originalname: 'dados_ALP_2026-07-13.csv',
+      mimetype: 'text/csv',
+      buffer: Buffer.from([HORIZON_HEADERS.join(';'), eventRow.join(';')].join('\n')),
+    };
+
+    expect(inspectHorizonExport(file)).toMatchObject({
+      hasHorizonLayout: true,
+      isValidEmpty: false,
+      dataRows: [eventRow],
+    });
+  });
+
+  it('nao aceita arquivo vazio desconhecido como export Horizon sem eventos', () => {
+    const file = {
+      originalname: 'dados_ALP_2026-07-13.csv',
+      mimetype: 'text/csv',
+      buffer: Buffer.from('download indisponivel\n'),
+    };
+
+    expect(inspectHorizonExport(file)).toMatchObject({
+      hasHorizonLayout: false,
+      isValidEmpty: false,
+    });
+  });
+});
 
 describe('toTreatmentQueuePayload', () => {
   it('entrega ao robo a placa e o horario exatos do evento Horizon', () => {
@@ -46,6 +116,8 @@ describe('buildTreatmentResolutionUpdate', () => {
       status: 'already_synced',
       tentativas: 0,
       erro: null,
+      claimed_at: null,
+      lease_expires_at: null,
       updated_at: '2026-07-13T16:45:00.000Z',
     });
   });
@@ -55,6 +127,8 @@ describe('buildTreatmentResolutionUpdate', () => {
       status: 'pending',
       tentativas: 2,
       erro: 'timeout',
+      claimed_at: null,
+      lease_expires_at: null,
       updated_at: '2026-07-13T16:45:00.000Z',
     });
   });

@@ -114,7 +114,7 @@
   font-size: 9px; text-transform: uppercase; letter-spacing: .45px;
 }
 .operation-live i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s infinite; }
-.operation-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.operation-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .operation-metric {
   min-width: 0; padding: 7px 6px; border-radius: var(--radius-sm); text-align: center;
   background: var(--surface-0); border: 1px solid var(--border);
@@ -122,6 +122,7 @@
 .operation-metric b { display: block; color: var(--text-primary); font: 600 15px/1 var(--font-mono); }
 .operation-metric span { display: block; color: var(--text-muted); font-size: 9px; margin-top: 4px; white-space: nowrap; }
 .operation-metric.pending { background: var(--info-bg); border-color: var(--info-500); }
+.operation-metric.processing { background: var(--info-bg); border-color: var(--accent-500); }
 .operation-metric.done { background: var(--success-bg); }
 .operation-metric.warning { background: var(--warning-bg); border-color: var(--warning-500); }
 .operation-metric.error { background: var(--danger-bg); border-color: var(--danger-500); }

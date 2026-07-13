@@ -30,6 +30,10 @@ export function isHorizonEventTreated(event) {
   return Boolean(classification && classification !== 'Não classificado');
 }
 
+export function shouldPreserveHorizonQueueItem(status) {
+  return ['processing', 'done', 'already_synced', 'error'].includes(status);
+}
+
 /**
  * Atribui cada evento Horizon a somente um evento MaxTrack: o de mesma placa
  * com horario mais proximo dentro da janela. Um MaxTrack ainda pode ser fonte
@@ -106,8 +110,10 @@ async function upsertQueueItem(supabase, sourceEvent, horizonEvent) {
     .maybeSingle();
   if (existingError) throw existingError;
 
-  // Uma tratativa terminal nunca e reatribuida a outro alerta MaxTrack.
-  if (existing && ['done', 'error'].includes(existing.status)) return;
+  // Claims ativos e tratativas terminais nunca sao reatribuidos. Isso mantem
+  // estavel o ID entregue ao Playwright mesmo se uma importacao ocorrer no
+  // meio da execucao.
+  if (existing && shouldPreserveHorizonQueueItem(existing.status)) return;
 
   const { error } = await supabase.from('horizon_treatment_queue').upsert({
     driver_event_id: sourceEvent.id,
@@ -135,11 +141,11 @@ async function removeStaleNonterminalMatches(supabase, sourceEvent, assignedTarg
     .from('horizon_treatment_queue')
     .select('id, horizon_driver_event_id, status')
     .eq('driver_event_id', sourceEvent.id)
+    .eq('status', 'pending')
     .not('horizon_driver_event_id', 'is', null);
   if (error) throw error;
 
   const staleIds = (data || [])
-    .filter((row) => ['pending', 'already_synced'].includes(row.status))
     .filter((row) => !assignedTargetIds.has(row.horizon_driver_event_id))
     .map((row) => row.id);
   if (!staleIds.length) return;
@@ -270,7 +276,7 @@ export async function runAutoCrossCheck(supabase, platformId) {
 // Resumo operacional usado pelos logs da MaxTrack. As contagens sao feitas
 // pelo banco (HEAD + count exact), sem trazer a fila inteira para o Node.
 export async function getHorizonTreatmentQueueSummary(supabase) {
-  const statuses = ['pending', 'done', 'error', 'no_horizon_match'];
+  const statuses = ['pending', 'processing', 'done', 'error', 'no_horizon_match'];
   const results = await Promise.all(statuses.map((status) => (
     supabase
       .from('horizon_treatment_queue')

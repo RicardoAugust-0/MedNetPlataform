@@ -90,7 +90,7 @@ export function registerMaxtrackRoutes(app, supabase) {
 
         const imported = responseBody.uniqueSavedCount ?? 0;
         const queueDetail = queueSummary
-          ? ` · fila Horizon: ${queueSummary.pending} pendente(s), ${queueSummary.error} erro(s)`
+          ? ` · fila Horizon: ${queueSummary.pending} pendente(s), ${queueSummary.processing} em tratamento, ${queueSummary.error} erro(s)`
           : '';
         const lines = [{
           t: timeLabel(),
@@ -101,7 +101,7 @@ export function registerMaxtrackRoutes(app, supabase) {
           lines.push({
             t: timeLabel(),
             lvl: queueSummary.error > 0 ? 'warn' : 'info',
-            m: `Fila Horizon: ${queueSummary.pending} pendente(s), ${queueSummary.done} tratado(s), ${queueSummary.no_horizon_match} sem correspondência, ${queueSummary.error} erro(s)`,
+            m: `Fila Horizon: ${queueSummary.pending} pendente(s), ${queueSummary.processing} em tratamento, ${queueSummary.done} tratado(s), ${queueSummary.no_horizon_match} sem correspondência, ${queueSummary.error} erro(s)`,
           });
         } else if (crossCheckError) {
           lines.push({ t: timeLabel(), lvl: 'warn', m: `Cross-check não confirmado: ${crossCheckError.message || crossCheckError}` });

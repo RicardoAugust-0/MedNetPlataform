@@ -22,6 +22,10 @@ Fases aceitas: `started`, `progress`, `success` e `failure`.
 ## Cooldown de extração
 
 Após uma importação bem-sucedida, o MedNet marca a conta com o horário da
-extração. Durante os 15 minutos seguintes, `GET /api/horizon/credentials` não
-devolve essa conta ao robô. Erros de login ou de importação não entram no
-cooldown e permanecem elegíveis para nova tentativa.
+extração. Um export Horizon com cabeçalho válido e zero eventos também é
+considerado uma extração bem-sucedida, retorna `200` com `emptyExport: true` e
+entra no cooldown sem gerar alerta de importação recusada. Arquivos em branco,
+corrompidos ou com layout desconhecido continuam sendo recusados. Durante os 15
+minutos seguintes, `GET /api/horizon/credentials` não devolve a conta cuja
+extração foi confirmada. Erros de login ou de importação não entram no cooldown
+e permanecem elegíveis para nova tentativa.

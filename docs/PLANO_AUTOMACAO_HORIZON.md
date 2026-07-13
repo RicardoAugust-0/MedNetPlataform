@@ -152,7 +152,7 @@ Implementada em 2026-07-01. O que foi construído:
 
 | Endpoint | Auth | Body | Resposta |
 |---|---|---|---|
-| `POST <MEDNET_API_BASE>/api/horizon/ingest` | header `Authorization: Bearer <HORIZON_BOT_TOKEN>` | multipart `files[]` (1+ arquivos .xlsx/.csv exportados da Horizon, campo `files`) | `200 { success: true, stats, dupsFiltered, uniqueSavedCount }` ou `4xx/5xx { error }` |
+| `POST <MEDNET_API_BASE>/api/horizon/ingest` | header `Authorization: Bearer <HORIZON_BOT_TOKEN>` | multipart `files[]` (1+ arquivos .xlsx/.csv exportados da Horizon, campo `files`) | `200 { success: true, stats, dupsFiltered, uniqueSavedCount }`; quando o layout Horizon é válido mas não há eventos, inclui `emptyExport: true`, `emptyExportCount` e contadores zerados. Arquivos vazios sem layout reconhecido continuam retornando `4xx/5xx { error }`. |
 | `POST <MEDNET_API_BASE>/api/horizon/credential-status` | mesma auth | `{ email, status: 'ok'\|'credential_error'\|'session_expired', error?, workingPassword? }` | `200 { success: true }` |
 | `GET <MEDNET_API_BASE>/api/horizon/credentials` | mesma auth | — | `200 [{ email, password, password_candidates: string[], label }]` — já exclui contas com `status = 'credential_error'` |
 

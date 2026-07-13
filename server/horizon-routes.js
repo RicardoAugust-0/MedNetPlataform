@@ -20,9 +20,16 @@ const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
 const ACTIVITY_PHASES = { started: 'running', progress: 'running', success: 'success', failure: 'failure' };
 const HORIZON_EXTRACTION_COOLDOWN_MS = 15 * 60 * 1000;
 const TREATMENT_RESOLVE_STATUSES = ['done', 'already_synced', 'error', 'no_horizon_match'];
+const TREATMENT_CLAIM_LIMIT = 500;
+const TREATMENT_LEASE_SECONDS = 30 * 60;
 
 export function buildTreatmentResolutionUpdate(status, erro, tentativasAtuais = 0, now = new Date()) {
-  const update = { status, updated_at: now.toISOString() };
+  const update = {
+    status,
+    claimed_at: null,
+    lease_expires_at: null,
+    updated_at: now.toISOString(),
+  };
   if (status === 'done' || status === 'already_synced') {
     return { ...update, tentativas: 0, erro: null };
   }
@@ -50,7 +57,7 @@ export function requireHorizonBotToken(req, res, next) {
   next();
 }
 
-function readFirstFileHeaders(file) {
+export function inspectHorizonExport(file) {
   const isCsv = /\.csv$/i.test(file.originalname) || file.mimetype === 'text/csv';
   let aoa;
   if (isCsv) {
@@ -60,8 +67,20 @@ function readFirstFileHeaders(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   }
-  const { headers } = readHeaders(aoa);
-  return headers;
+  const { headers, dataRows } = readHeaders(aoa);
+  const mapping = applyPlatformMap(headers, 'horizon', {});
+
+  // Um export sem eventos ainda precisa ter o layout reconhecivel da Horizon.
+  // Assim, uma planilha em branco/corrompida nao e confundida com uma conta
+  // valida cuja grade simplesmente nao possui ocorrencias no periodo.
+  const hasHorizonLayout = Boolean(mapping.datetime && mapping.plate);
+  return {
+    headers,
+    dataRows,
+    mapping,
+    hasHorizonLayout,
+    isValidEmpty: hasHorizonLayout && dataRows.length === 0,
+  };
 }
 
 async function resolveHorizonScrapingAutomationId(supabase) {
@@ -115,20 +134,54 @@ export function registerHorizonRoutes(app, supabase) {
     }
 
     const startTime = Date.now();
+    const uploadedFiles = [...req.files];
+    let emptyExports = [];
     let responseBody = null;
     const originalJson = res.json.bind(res);
     res.json = (body) => {
-      responseBody = body;
-      return originalJson(body);
+      const enrichedBody = body?.success && emptyExports.length > 0
+        ? {
+            ...body,
+            emptyExport: req.files.length === 0,
+            emptyExportCount: emptyExports.length,
+          }
+        : body;
+      responseBody = enrichedBody;
+      return originalJson(enrichedBody);
     };
 
     try {
-      const headers = readFirstFileHeaders(req.files[0]);
-      req.body.platformId = 'horizon';
-      req.body.mapping = JSON.stringify(applyPlatformMap(headers, 'horizon', {}));
-      req.body.operatorEmail = '';
+      const inspectedFiles = uploadedFiles.map((file) => ({
+        file,
+        ...inspectHorizonExport(file),
+      }));
+      emptyExports = inspectedFiles.filter((item) => item.isValidEmpty);
 
-      await handleImportEvents(supabase, req, res, clearAnalyticsCache);
+      // Ignora somente exports vazios cujo layout Horizon foi confirmado. Um
+      // arquivo vazio desconhecido permanece no lote e continua sendo recusado
+      // pelo importador, como protecao contra downloads quebrados.
+      req.files = inspectedFiles
+        .filter((item) => !item.isValidEmpty)
+        .map((item) => item.file);
+
+      if (req.files.length === 0) {
+        res.status(200).json({
+          success: true,
+          message: emptyExports.length === 1
+            ? 'Export Horizon valido, mas sem eventos para importar.'
+            : `${emptyExports.length} exports Horizon validos, mas sem eventos para importar.`,
+          stats: { lidas: 0, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 },
+          dupsFiltered: 0,
+          uniqueSavedCount: 0,
+        });
+      } else {
+        const firstImportable = inspectedFiles.find((item) => item.file === req.files[0]);
+        req.body.platformId = 'horizon';
+        req.body.mapping = JSON.stringify(firstImportable.mapping);
+        req.body.operatorEmail = '';
+
+        await handleImportEvents(supabase, req, res, clearAnalyticsCache);
+      }
 
       if (responseBody && !responseBody.success) {
         try {
@@ -145,37 +198,47 @@ export function registerHorizonRoutes(app, supabase) {
       }
 
       if (responseBody?.success) {
-        const account = accountLabelFromFile(req.files[0]);
+        const accounts = [...new Set(uploadedFiles.map(accountLabelFromFile))];
         const { error: extractionUpdateError } = await supabase
           .from('horizon_credentials')
           .update({ last_extracted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq('label', account);
+          .in('label', accounts);
         if (extractionUpdateError) {
           console.error('[Horizon Ingest] Falha ao registrar horario da extracao:', extractionUpdateError);
         }
 
         const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+        const emptyOnly = responseBody.emptyExport === true;
+        const emptySuffix = emptyExports.length > 0 && !emptyOnly
+          ? `; ${emptyExports.length} export(s) sem eventos ignorado(s)`
+          : '';
         try {
           const automationId = await resolveHorizonScrapingAutomationId(supabase);
           await supabase.from('automation_logs').insert({
             automation_id: automationId,
             status: 'success',
             duration: `${durationSec}s`,
-            detail: `${responseBody.uniqueSavedCount ?? 0} eventos importados`,
+            detail: emptyOnly
+              ? `${accounts.join(', ')}: nenhum evento disponivel`
+              : `${responseBody.uniqueSavedCount ?? 0} eventos importados${emptySuffix}`,
             logs: [{
               t: new Date().toLocaleTimeString('pt-BR'),
-              lvl: 'ok',
-              m: `${responseBody.uniqueSavedCount ?? 0} eventos únicos importados de ${req.files.length} arquivo(s)`,
+              lvl: emptyOnly ? 'info' : 'ok',
+              m: emptyOnly
+                ? 'Export Horizon valido e sem linhas de eventos; nenhuma importacao foi necessaria.'
+                : `${responseBody.uniqueSavedCount ?? 0} eventos únicos importados de ${uploadedFiles.length} arquivo(s)${emptySuffix}`,
             }],
           });
         } catch (logErr) {
           console.error('[Horizon Ingest] Falha ao gravar automation_logs:', logErr);
         }
 
-        try {
-          await runAutoCrossCheck(supabase, 'horizon');
-        } catch (crossCheckErr) {
-          console.error('[Horizon Ingest] Falha no Auto Cross-Check:', crossCheckErr);
+        if (!emptyOnly) {
+          try {
+            await runAutoCrossCheck(supabase, 'horizon');
+          } catch (crossCheckErr) {
+            console.error('[Horizon Ingest] Falha no Auto Cross-Check:', crossCheckErr);
+          }
         }
       }
     } catch (err) {
@@ -298,6 +361,23 @@ export function registerHorizonRoutes(app, supabase) {
     try {
       await reconcilePendingHorizonTreatments(supabase);
 
+      // O claim acontece no Postgres com FOR UPDATE SKIP LOCKED. Enquanto o
+      // lease estiver ativo, importacoes concorrentes nao podem apagar nem
+      // reatribuir os IDs entregues ao Playwright.
+      const { data: claimedRows, error: claimError } = await supabase.rpc(
+        'claim_horizon_treatment_queue',
+        {
+          p_limit: TREATMENT_CLAIM_LIMIT,
+          p_lease_seconds: TREATMENT_LEASE_SECONDS,
+        },
+      );
+      if (claimError) throw claimError;
+
+      const claimedIds = (claimedRows || [])
+        .map((row) => row.queue_id)
+        .filter(Boolean);
+      if (!claimedIds.length) return res.status(200).json([]);
+
       const { data, error } = await supabase
         .from('horizon_treatment_queue')
         .select(`
@@ -310,15 +390,17 @@ export function registerHorizonRoutes(app, supabase) {
           motivo_raw,
           intervencao_sugerida,
           tentativas,
+          claimed_at,
+          lease_expires_at,
           horizon_driver_event_id,
           horizon_event:driver_events!horizon_treatment_queue_horizon_driver_event_id_fkey(
             placa,
             ocorrido_em
           )
         `)
-        .eq('status', 'pending')
+        .in('id', claimedIds)
         .order('ocorrido_em', { ascending: true })
-        .limit(500);
+        .limit(TREATMENT_CLAIM_LIMIT);
       if (error) throw error;
 
       return res.status(200).json((data || []).map(toTreatmentQueuePayload));
@@ -338,25 +420,45 @@ export function registerHorizonRoutes(app, supabase) {
         return res.status(400).json({ error: `status deve ser um de: ${TREATMENT_RESOLVE_STATUSES.join(', ')}` });
       }
 
-      let tentativasAtuais = 0;
-      if (status !== 'done' && status !== 'already_synced') {
-        const { data: atual, error: errAtual } = await supabase
-          .from('horizon_treatment_queue')
-          .select('tentativas')
-          .eq('id', id)
-          .single();
-        if (errAtual) throw errAtual;
-        tentativasAtuais = atual?.tentativas || 0;
-        // Falhas transitórias de seletor, captcha ou rede voltam para a fila.
-        // Após três tentativas, mantemos "error" para intervenção manual.
+      const safeError = typeof erro === 'string' ? erro.trim().slice(0, 1000) : null;
+      const { data, error } = await supabase.rpc('resolve_horizon_treatment_queue', {
+        p_queue_id: id,
+        p_requested_status: status,
+        p_erro: safeError || null,
+      });
+
+      if (error?.code === 'P0002') {
+        return res.status(404).json({
+          error: 'Pendencia Horizon nao encontrada; o ID pode pertencer a uma execucao expirada.',
+          code: 'HORIZON_QUEUE_ITEM_NOT_FOUND',
+        });
       }
-
-      const update = buildTreatmentResolutionUpdate(status, erro, tentativasAtuais);
-
-      const { error } = await supabase.from('horizon_treatment_queue').update(update).eq('id', id);
       if (error) throw error;
 
-      return res.status(200).json({ success: true, status: update.status, tentativas: update.tentativas || 0 });
+      const result = data?.[0];
+      if (!result) {
+        return res.status(404).json({
+          error: 'Pendencia Horizon nao encontrada.',
+          code: 'HORIZON_QUEUE_ITEM_NOT_FOUND',
+        });
+      }
+
+      if (status === 'error') {
+        console.warn('[Horizon Treatment Queue] Tentativa com erro:', {
+          id,
+          status: result.persisted_status,
+          tentativas: result.persisted_tentativas,
+          erro: safeError || 'Erro nao informado pelo robo',
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        status: result.persisted_status,
+        tentativas: result.persisted_tentativas || 0,
+        attempt_id: result.attempt_id || null,
+        already_resolved: Boolean(result.already_resolved),
+      });
     } catch (err) {
       console.error('[Horizon Treatment Queue] Erro ao resolver:', err);
       return res.status(500).json({ error: err.message || String(err) });

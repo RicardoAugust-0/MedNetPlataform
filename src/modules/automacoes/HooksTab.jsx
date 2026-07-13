@@ -254,6 +254,9 @@ function HookCard({ hook, logs = [], horizonQueueStatus, onToggle, onRun, onConf
               <div className={`operation-metric ${horizonQueueStatus.pending > 0 ? 'pending' : ''}`}>
                 <b>{horizonQueueStatus.pending}</b><span>pendentes</span>
               </div>
+              <div className={`operation-metric ${horizonQueueStatus.processing > 0 ? 'processing' : ''}`}>
+                <b>{horizonQueueStatus.processing}</b><span>em tratamento</span>
+              </div>
               <div className="operation-metric done">
                 <b>{horizonQueueStatus.doneToday}</b><span>tratados hoje</span>
               </div>

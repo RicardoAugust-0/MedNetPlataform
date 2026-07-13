@@ -38,6 +38,7 @@ export function AutomationsProvider({ children }) {
   const [logs, setLogs] = useState({}); // key: automation_id, value: array of log objects
   const [horizonQueueStatus, setHorizonQueueStatus] = useState({
     pending: 0,
+    processing: 0,
     doneToday: 0,
     error: 0,
     noMatch: 0,
@@ -140,6 +141,7 @@ export function AutomationsProvider({ children }) {
       todayStart.setHours(0, 0, 0, 0);
       const queuePromise = Promise.all([
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'processing'),
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).in('status', ['done', 'already_synced']).gte('updated_at', todayStart.toISOString()),
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'error'),
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'no_horizon_match'),
@@ -184,9 +186,10 @@ export function AutomationsProvider({ children }) {
       if (queueResults.every(result => !result.error)) {
         setHorizonQueueStatus({
           pending: queueResults[0].count || 0,
-          doneToday: queueResults[1].count || 0,
-          error: queueResults[2].count || 0,
-          noMatch: queueResults[3].count || 0,
+          processing: queueResults[1].count || 0,
+          doneToday: queueResults[2].count || 0,
+          error: queueResults[3].count || 0,
+          noMatch: queueResults[4].count || 0,
           loading: false,
         });
       } else {

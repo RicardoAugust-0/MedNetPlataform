@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assignHorizonEventsToClosestMaxtrack,
   isHorizonEventTreated,
+  shouldPreserveHorizonQueueItem,
 } from './auto-crosscheck.js';
 
 describe('assignHorizonEventsToClosestMaxtrack', () => {
@@ -57,5 +58,15 @@ describe('isHorizonEventTreated', () => {
     expect(isHorizonEventTreated({ analise_ia_plataforma: 'Falso positivo' })).toBe(true);
     expect(isHorizonEventTreated({ analise_ia_plataforma: 'Não classificado' })).toBe(false);
     expect(isHorizonEventTreated({ analise_ia_plataforma: null })).toBe(false);
+  });
+});
+
+describe('shouldPreserveHorizonQueueItem', () => {
+  it('protege claims ativos e estados terminais contra reatribuicao', () => {
+    expect(shouldPreserveHorizonQueueItem('processing')).toBe(true);
+    expect(shouldPreserveHorizonQueueItem('done')).toBe(true);
+    expect(shouldPreserveHorizonQueueItem('already_synced')).toBe(true);
+    expect(shouldPreserveHorizonQueueItem('error')).toBe(true);
+    expect(shouldPreserveHorizonQueueItem('pending')).toBe(false);
   });
 });
