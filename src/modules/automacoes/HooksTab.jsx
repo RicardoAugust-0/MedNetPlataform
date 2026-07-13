@@ -157,6 +157,8 @@ function HookCard({ hook, logs = [], horizonQueueStatus, onToggle, onRun, onConf
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const active = hook.active;
+  const runningFromLogs = logs.some(log => log.status === 'running');
+  const isRunning = running || runningFromLogs;
 
   const runsToday = logs.filter(l => {
     const logDate = new Date(l.date);
@@ -174,7 +176,7 @@ function HookCard({ hook, logs = [], horizonQueueStatus, onToggle, onRun, onConf
   const showsHorizonQueue = /(HorizonTratamento|HorizonTreatment|MaxtrackScraping|MaxtrackRelatorios)/i.test(hook.name || '');
 
   const runNow = async () => {
-    if (!active || running) return;
+    if (!active || isRunning) return;
     setRunning(true);
     await onRun(hook.id, profile?.nome || 'Operador');
     setRunning(false);
@@ -270,9 +272,9 @@ function HookCard({ hook, logs = [], horizonQueueStatus, onToggle, onRun, onConf
         <button className="hook-endpoint" onClick={copyEndpoint} title="Copiar endpoint do webhook">
           <i className="ti ti-link"></i><span>{hook.endpoint}</span><i className="ti ti-copy" style={{ marginLeft: 'auto' }}></i>
         </button>
-        <button className="btn btn-primary btn-sm" disabled={!active || running} onClick={runNow} style={!active || running ? { opacity: .55, cursor: 'not-allowed' } : null}>
-          <i className={`ti ${running ? 'ti-loader-2' : 'ti-player-play'}`} style={running ? { animation: 'spin 1s linear infinite' } : null}></i>
-          {running ? 'Executando…' : 'Executar agora'}
+        <button className="btn btn-primary btn-sm" disabled={!active || isRunning} onClick={runNow} style={!active || isRunning ? { opacity: .55, cursor: 'not-allowed' } : null}>
+          <i className={`ti ${isRunning ? 'ti-loader-2' : 'ti-player-play'}`} style={isRunning ? { animation: 'spin 1s linear infinite' } : null}></i>
+          {isRunning ? 'Executando…' : 'Executar agora'}
         </button>
       </div>
 

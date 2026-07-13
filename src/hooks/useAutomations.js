@@ -7,6 +7,30 @@ import { useNotifications } from './useNotifications.jsx';
 const AutomationsContext = createContext(null);
 const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, schedule_type, schedule_interval_minutes, schedule_time, schedule_days, schedule_timezone, next_run_at, last_run_at, last_schedule_status, last_schedule_error, event_type, token, position';
 
+export function mergeOptimisticAutomationLogs(logsMap, optimisticRuns) {
+  const merged = { ...logsMap };
+  const remaining = {};
+
+  Object.entries(optimisticRuns).forEach(([automationId, optimistic]) => {
+    const databaseLogs = merged[automationId] || [];
+    const optimisticAt = new Date(optimistic.date).getTime();
+    const hasDatabaseReplacement = databaseLogs.some((log) => (
+      !String(log.id).startsWith('optimistic-')
+      && new Date(log.date).getTime() >= optimisticAt - 2000
+    ));
+
+    if (!hasDatabaseReplacement) {
+      merged[automationId] = [
+        optimistic,
+        ...databaseLogs.filter((log) => log.id !== optimistic.id),
+      ];
+      remaining[automationId] = optimistic;
+    }
+  });
+
+  return { logs: merged, optimisticRuns: remaining };
+}
+
 export function AutomationsProvider({ children }) {
   const toast = useToast();
   const { notify } = useNotifications();
@@ -24,13 +48,20 @@ export function AutomationsProvider({ children }) {
   const [healthUrl, setHealthUrl] = useState('https://botsplaywright.duckdns.org/health');
   const timers = useRef({});
   const automationsRef = useRef([]);
+  const logsRef = useRef({});
+  const optimisticRunsRef = useRef({});
+  const liveRefreshUntilRef = useRef(0);
 
   useEffect(() => {
     automationsRef.current = automations;
   }, [automations]);
 
+  useEffect(() => {
+    logsRef.current = logs;
+  }, [logs]);
+
   // Helper to map DB row to frontend automation model
-  const toLocalAutomation = (row) => ({
+  const toLocalAutomation = useCallback((row) => ({
     id: row.id,
     name: row.name,
     icon: row.icon,
@@ -51,10 +82,10 @@ export function AutomationsProvider({ children }) {
     eventType: row.event_type,
     token: row.token,
     position: row.position ?? 0,
-  });
+  }), []);
 
   // Helper to map DB log row to local log model
-  const toLocalLog = (row) => {
+  const toLocalLog = useCallback((row) => {
     let parsedLogs = [];
     if (row.logs) {
       if (Array.isArray(row.logs)) {
@@ -95,7 +126,7 @@ export function AutomationsProvider({ children }) {
       date: row.created_at,
       logs: Array.isArray(parsedLogs) ? parsedLogs : [],
     };
-  };
+  }, []);
 
   // Fetch all automations and logs
   const loadData = useCallback(async () => {
@@ -109,7 +140,7 @@ export function AutomationsProvider({ children }) {
       todayStart.setHours(0, 0, 0, 0);
       const queuePromise = Promise.all([
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'done').gte('updated_at', todayStart.toISOString()),
+        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).in('status', ['done', 'already_synced']).gte('updated_at', todayStart.toISOString()),
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'error'),
         supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'no_horizon_match'),
       ]);
@@ -143,7 +174,12 @@ export function AutomationsProvider({ children }) {
       });
 
       setAutomations(autosList);
-      setLogs(logsMap);
+      const merged = mergeOptimisticAutomationLogs(
+        logsMap,
+        optimisticRunsRef.current,
+      );
+      optimisticRunsRef.current = merged.optimisticRuns;
+      setLogs(merged.logs);
 
       if (queueResults.every(result => !result.error)) {
         setHorizonQueueStatus({
@@ -182,7 +218,36 @@ export function AutomationsProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, toLocalAutomation, toLocalLog]);
+
+  const refreshLogs = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+
+    const { data, error } = await supabase
+      .from('automation_logs')
+      .select('id, automation_id, status, duration, detail, logs, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.error('[useAutomations] Error refreshing logs:', error);
+      return;
+    }
+
+    const logsMap = {};
+    (data || []).forEach((row) => {
+      const log = toLocalLog(row);
+      if (!logsMap[log.automationId]) logsMap[log.automationId] = [];
+      logsMap[log.automationId].push(log);
+    });
+
+    const merged = mergeOptimisticAutomationLogs(
+      logsMap,
+      optimisticRunsRef.current,
+    );
+    optimisticRunsRef.current = merged.optimisticRuns;
+    setLogs(merged.logs);
+  }, [toLocalLog]);
 
   // VPS health checking
   const checkVpsHealth = useCallback(async () => {
@@ -223,7 +288,7 @@ export function AutomationsProvider({ children }) {
           ram: data.ram ?? 0,
         }
       });
-    } catch (err) {
+    } catch {
       // In case of error (SSL error, server offline, CORS, connection refused),
       // we show the error state rather than falling back to mocks.
       setVpsHealth({
@@ -239,6 +304,45 @@ export function AutomationsProvider({ children }) {
     loadData();
   }, [loadData]);
 
+  // Realtime é o caminho principal. Este polling adaptativo garante a mesma
+  // experiência quando o websocket estiver reconectando ou bloqueado:
+  // 2s durante execuções e 15s quando a tela está ociosa/visível.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let inFlight = false;
+    let lastRefreshAt = 0;
+
+    const tick = async (force = false) => {
+      if (document.visibilityState !== 'visible' || inFlight) return;
+      const hasRunningLog = Object.values(logsRef.current).some((items) => (
+        items.some((item) => item.status === 'running')
+      ));
+      const liveWindow = Date.now() < liveRefreshUntilRef.current;
+      const intervalMs = hasRunningLog || liveWindow ? 2000 : 15000;
+      if (!force && Date.now() - lastRefreshAt < intervalMs) return;
+
+      inFlight = true;
+      lastRefreshAt = Date.now();
+      try {
+        await refreshLogs();
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const intervalId = setInterval(tick, 2000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') tick(true);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [refreshLogs]);
+
   // Ping health every 30s once automations load
   useEffect(() => {
     if (loading) return;
@@ -250,6 +354,7 @@ export function AutomationsProvider({ children }) {
   // Realtime handlers
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    const timerStore = timers.current;
 
     const channel = supabase
       .channel('automations-live-channel')
@@ -257,15 +362,17 @@ export function AutomationsProvider({ children }) {
         loadData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_logs' }, (payload) => {
-        loadData();
+        clearTimeout(timerStore.logsRefresh);
+        timerStore.logsRefresh = setTimeout(refreshLogs, 100);
         if (payload.eventType === 'UPDATE' && payload.new?.status === 'running') return;
-        const automation = automationsRef.current.find((item) => item.id === payload.new.automation_id);
+        const changedRow = payload.new || payload.old;
+        const automation = automationsRef.current.find((item) => item.id === changedRow?.automation_id);
         if (!automation || !/(horizon|maxtrack)/i.test(automation.name || '')) return;
 
-        const failed = payload.new.status === 'failure';
-        const succeeded = payload.new.status === 'success';
+        const failed = changedRow.status === 'failure';
+        const succeeded = changedRow.status === 'success';
         const platform = /maxtrack/i.test(automation.name || '') ? 'MaxTrack' : 'Horizon';
-        const body = payload.new.detail || `Novo evento do robô ${platform}.`;
+        const body = changedRow.detail || `Novo evento do robô ${platform}.`;
         notify({
           title: failed ? `${platform} precisa de atenção` : `Atualização do robô ${platform}`,
           body,
@@ -275,16 +382,22 @@ export function AutomationsProvider({ children }) {
         if (failed) toast(body, 'error');
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'horizon_treatment_queue' }, () => {
-        clearTimeout(timers.current.queueRefresh);
-        timers.current.queueRefresh = setTimeout(loadData, 500);
+        clearTimeout(timerStore.queueRefresh);
+        timerStore.queueRefresh = setTimeout(loadData, 500);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') refreshLogs();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[useAutomations] Realtime ' + status + '; polling de segurança ativo.');
+        }
+      });
 
     return () => {
-      clearTimeout(timers.current.queueRefresh);
+      clearTimeout(timerStore.logsRefresh);
+      clearTimeout(timerStore.queueRefresh);
       supabase.removeChannel(channel);
     };
-  }, [loadData, notify, toast]);
+  }, [loadData, notify, refreshLogs, toast]);
 
   // CRUD actions
   const add = useCallback(async (data) => {
@@ -325,7 +438,7 @@ export function AutomationsProvider({ children }) {
     // salvar não deve depender dele para refletir a alteração.
     setAutomations(current => [...current, automation]);
     return automation;
-  }, [automations, toast]);
+  }, [automations, toast, toLocalAutomation]);
 
   const update = useCallback(async (id, data, options = {}) => {
     const dbRow = {};
@@ -369,7 +482,7 @@ export function AutomationsProvider({ children }) {
       toast('Automação atualizada', 'success');
     }
     return true;
-  }, [toast]);
+  }, [toast, toLocalAutomation]);
 
   const remove = useCallback(async (id) => {
     const { error } = await supabase
@@ -400,6 +513,32 @@ export function AutomationsProvider({ children }) {
       { t: new Date().toLocaleTimeString('pt-BR'), lvl: 'info', m: `Execução disparada manualmente por ${operatorName}` },
       { t: new Date().toLocaleTimeString('pt-BR'), lvl: 'info', m: `Chamando webhook VPS: ${auto.endpoint}` }
     ];
+    const optimisticDate = new Date(startTime).toISOString();
+    const optimisticLog = {
+      id: `optimistic-${id}-${startTime}`,
+      automationId: id,
+      status: 'running',
+      dur: null,
+      detail: 'Solicitando execução ao robô...',
+      when: new Date(startTime).toLocaleDateString('pt-BR') + ' '
+        + new Date(startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date(startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      date: optimisticDate,
+      logs: stepLogs,
+    };
+
+    optimisticRunsRef.current[id] = optimisticLog;
+    liveRefreshUntilRef.current = Math.max(
+      liveRefreshUntilRef.current,
+      Date.now() + 90_000,
+    );
+    setLogs((current) => ({
+      ...current,
+      [id]: [
+        optimisticLog,
+        ...(current[id] || []).filter((log) => log.id !== optimisticLog.id),
+      ],
+    }));
 
     try {
       // O backend encaminha a chamada para a VPS/n8n. Isso mantém tokens fora
@@ -448,6 +587,7 @@ export function AutomationsProvider({ children }) {
         });
       }
 
+      await refreshLogs();
       toast(
         reportsOwnActivity
           ? `${auto.name} — tarefa enviada; aguardando confirmação do robô`
@@ -463,7 +603,7 @@ export function AutomationsProvider({ children }) {
       stepLogs.push({ t: new Date().toLocaleTimeString('pt-BR'), lvl: 'err', m: `Falha: ${err.message}` });
 
       // Save failure run log to Supabase
-      await supabase.from('automation_logs').insert({
+      const { error: logError } = await supabase.from('automation_logs').insert({
         automation_id: id,
         status: 'failure',
         duration: durationStr,
@@ -471,10 +611,31 @@ export function AutomationsProvider({ children }) {
         logs: stepLogs
       });
 
+      if (logError) {
+        const failedOptimistic = {
+          ...optimisticLog,
+          status: 'failure',
+          dur: durationStr,
+          detail: err.message || 'Erro de conexão com a VPS',
+          logs: stepLogs,
+        };
+        optimisticRunsRef.current[id] = failedOptimistic;
+        setLogs((current) => ({
+          ...current,
+          [id]: [
+            failedOptimistic,
+            ...(current[id] || []).filter((log) => log.id !== optimisticLog.id),
+          ],
+        }));
+      } else {
+        delete optimisticRunsRef.current[id];
+        await refreshLogs();
+      }
+
       toast(`Falha ao executar ${auto.name}`, 'error');
       return false;
     }
-  }, [automations, toast]);
+  }, [automations, refreshLogs, toast]);
 
   const stopAutomationTasks = useCallback(async (id) => {
     try {
@@ -534,6 +695,8 @@ export function AutomationsProvider({ children }) {
 
   return createElement(
     AutomationsContext.Provider,
+    // Os callbacks acessam refs apenas depois de ações/eventos, nunca durante render.
+    // eslint-disable-next-line react-hooks/refs
     { value: { automations, logs, horizonQueueStatus, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopAutomationTasks } },
     children
   );
