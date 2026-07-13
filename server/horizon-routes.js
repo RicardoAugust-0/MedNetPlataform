@@ -12,10 +12,12 @@ const LEGACY_HORIZON_SCRAPING_AUTOMATION_ID = 'c1b94e82-e3e7-4c74-bfd4-3a56df93d
 const HORIZON_SCRAPING_AUTOMATION_NAMES = [
   'Bot_HorizonScraping',
   'BOT_HorizonExport2Captcha',
+  'BOT_HorizonRelat\u00f3rios',
   'BOT_HorizonRelatórios',
 ];
 
 const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
+const ACTIVITY_PHASES = { started: 'running', progress: 'running', success: 'success', failure: 'failure' };
 
 // Autenticação máquina-a-máquina para o robô Playwright/N8N na VPS — mesmo
 // espírito do gate em server/ai-chat-routes.js (POST /api/ai/internal/generate-pdf),
@@ -61,6 +63,23 @@ async function resolveHorizonScrapingAutomationId(supabase) {
   return data?.id || LEGACY_HORIZON_SCRAPING_AUTOMATION_ID;
 }
 
+function accountLabelFromFile(file) {
+  const match = file?.originalname?.match(/^dados_(.+?)_\d{4}-\d{2}-\d{2}\.(xlsx|csv)$/i);
+  return match?.[1] || 'Horizon';
+}
+
+async function writeHorizonLog(supabase, { status, detail, message, level, duration = null }) {
+  const automationId = await resolveHorizonScrapingAutomationId(supabase);
+  const { error } = await supabase.from('automation_logs').insert({
+    automation_id: automationId,
+    status,
+    duration,
+    detail,
+    logs: [{ t: new Date().toLocaleTimeString('pt-BR'), lvl: level, m: message }],
+  });
+  if (error) throw error;
+}
+
 export function registerHorizonRoutes(app, supabase) {
   // POST /api/horizon/ingest — chamado pelo Bot_HorizonScraping (VPS) de hora
   // em hora com os relatórios exportados das contas Horizon. Reaproveita o
@@ -85,6 +104,20 @@ export function registerHorizonRoutes(app, supabase) {
       req.body.operatorEmail = '';
 
       await handleImportEvents(supabase, req, res, clearAnalyticsCache);
+
+      if (responseBody && !responseBody.success) {
+        try {
+          const account = accountLabelFromFile(req.files[0]);
+          await writeHorizonLog(supabase, {
+            status: 'failure',
+            detail: `${account}: importacao recusada`,
+            level: 'err',
+            message: responseBody.error || 'O arquivo foi recusado pela importacao.',
+          });
+        } catch (logErr) {
+          console.error('[Horizon Ingest] Falha ao registrar erro de importacao:', logErr);
+        }
+      }
 
       if (responseBody?.success) {
         const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -143,8 +176,26 @@ export function registerHorizonRoutes(app, supabase) {
         if (status === 'ok') update.last_login_at = new Date().toISOString();
       }
 
-      const { error } = await supabase.from('horizon_credentials').update(update).eq('email', email);
+      const { data: account, error } = await supabase
+        .from('horizon_credentials')
+        .update(update)
+        .eq('email', email)
+        .select('label')
+        .maybeSingle();
       if (error) throw error;
+
+      try {
+        const label = account?.label || 'Conta Horizon';
+        const failed = status !== 'ok';
+        await writeHorizonLog(supabase, {
+          status: failed ? 'failure' : 'success',
+          detail: failed ? `${label}: login requer atencao` : `${label}: login confirmado`,
+          level: failed ? 'err' : 'ok',
+          message: failed ? (loginError || 'O robo nao concluiu o login.') : 'Login validado pelo robo.',
+        });
+      } catch (logErr) {
+        console.error('[Horizon Credential Status] Falha ao gravar activity log:', logErr);
+      }
 
       return res.status(200).json({ success: true });
     } catch (err) {
@@ -155,6 +206,32 @@ export function registerHorizonRoutes(app, supabase) {
 
   // GET /api/horizon/credentials — o robô lê as contas elegíveis (exclui as
   // com erro de credencial confirmado) para saber qual senha tentar primeiro.
+  // POST /api/horizon/activity — progresso detalhado enviado pelo robô.
+  // Os eventos surgem em tempo real na tela de Automações e no sino.
+  app.post('/api/horizon/activity', requireHorizonBotToken, async (req, res) => {
+    try {
+      const { phase, account, message, duration } = req.body || {};
+      const status = ACTIVITY_PHASES[phase];
+      const safeAccount = typeof account === 'string' ? account.trim().slice(0, 80) : 'Horizon';
+      const safeMessage = typeof message === 'string' ? message.trim().slice(0, 500) : '';
+      if (!status || !safeMessage) {
+        return res.status(400).json({ error: 'phase e message sao obrigatorios.' });
+      }
+
+      await writeHorizonLog(supabase, {
+        status,
+        duration: typeof duration === 'string' ? duration.slice(0, 40) : null,
+        detail: `${safeAccount}: ${safeMessage}`,
+        level: status === 'failure' ? 'err' : (status === 'success' ? 'ok' : 'info'),
+        message: safeMessage,
+      });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[Horizon Activity] Erro:', err);
+      return res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
   app.get('/api/horizon/credentials', requireHorizonBotToken, async (req, res) => {
     try {
       const { data, error } = await supabase

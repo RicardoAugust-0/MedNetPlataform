@@ -2,18 +2,25 @@ import { useState, useEffect, useCallback, useRef, createContext, useContext, cr
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
 import { apiFetch } from '../lib/analyticsApi.js';
+import { useNotifications } from './useNotifications.jsx';
 
 const AutomationsContext = createContext(null);
 const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, event_type, token, position';
 
 export function AutomationsProvider({ children }) {
   const toast = useToast();
+  const { notify } = useNotifications();
   const [automations, setAutomations] = useState([]);
   const [logs, setLogs] = useState({}); // key: automation_id, value: array of log objects
   const [loading, setLoading] = useState(true);
   const [vpsHealth, setVpsHealth] = useState({ online: false, checking: true, error: null, data: null });
   const [healthUrl, setHealthUrl] = useState('https://botsplaywright.duckdns.org/health');
   const timers = useRef({});
+  const automationsRef = useRef([]);
+
+  useEffect(() => {
+    automationsRef.current = automations;
+  }, [automations]);
 
   // Helper to map DB row to frontend automation model
   const toLocalAutomation = (row) => ({
@@ -209,15 +216,29 @@ export function AutomationsProvider({ children }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'automations' }, () => {
         loadData();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_logs' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_logs' }, (payload) => {
         loadData();
+        if (payload.eventType !== 'INSERT') return;
+        const automation = automationsRef.current.find((item) => item.id === payload.new.automation_id);
+        if (!automation || !/horizon/i.test(automation.name || '')) return;
+
+        const failed = payload.new.status === 'failure';
+        const succeeded = payload.new.status === 'success';
+        const body = payload.new.detail || 'Novo evento do robô Horizon.';
+        notify({
+          title: failed ? 'Horizon precisa de atenção' : 'Atualização do robô Horizon',
+          body,
+          kind: failed ? 'error' : (succeeded ? 'success' : 'info'),
+          link: '/automacoes',
+        });
+        if (failed) toast(body, 'error');
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [loadData, notify, toast]);
 
   // CRUD actions
   const add = useCallback(async (data) => {
