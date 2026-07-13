@@ -247,7 +247,11 @@ export function AutomationsProvider({ children }) {
     }
 
     toast('Automação adicionada', 'success');
-    return toLocalAutomation(inserted);
+    const automation = toLocalAutomation(inserted);
+    // O Realtime mantém outras abas sincronizadas, mas a aba que acabou de
+    // salvar não deve depender dele para refletir a alteração.
+    setAutomations(current => [...current, automation]);
+    return automation;
   }, [automations, toast]);
 
   const update = useCallback(async (id, data, options = {}) => {
@@ -275,6 +279,12 @@ export function AutomationsProvider({ children }) {
       return false;
     }
 
+    // Atualiza o estado desta aba imediatamente. Sem isso, um clique em
+    // "Executar" logo após salvar ainda usaria o endpoint/token anterior até
+    // chegar o evento Realtime (ou até um F5).
+    const automation = toLocalAutomation(updated);
+    setAutomations(current => current.map(item => item.id === id ? automation : item));
+
     if (options.toastMessage) {
       toast(options.toastMessage, 'success');
     } else if (!options.quiet) {
@@ -295,6 +305,7 @@ export function AutomationsProvider({ children }) {
       return false;
     }
 
+    setAutomations(current => current.filter(item => item.id !== id));
     toast('Automação removida', 'success');
     return true;
   }, [toast]);

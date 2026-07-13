@@ -1,6 +1,8 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import { C, fmt, ChartTooltip, CenterLabel, EmptyChart } from './ChartUtils.jsx';
 
+const MAX_CATEGORIAS_NO_GRAFICO = 6;
+
 export function AlertasCategoriaCard({ d, noData }) {
   if (noData || !d?.categorias || Object.keys(d.categorias).length === 0) return null;
   const merged = {};
@@ -11,7 +13,12 @@ export function AlertasCategoriaCard({ d, noData }) {
   const labels = Object.keys(merged).sort((a, b) => merged[b] - merged[a]);
   const total = labels.reduce((sum, k) => sum + merged[k], 0) || 1;
   const colors = [C.vinho, C.info, C.warning, C.success, C.vinho2, C.orange];
-  const rows = labels.map((name, i) => ({ name, value: merged[name], fill: colors[i % colors.length] }));
+  const allRows = labels.map((name, i) => ({ name, value: merged[name], fill: colors[i % colors.length] }));
+  const topRows = allRows.slice(0, MAX_CATEGORIAS_NO_GRAFICO);
+  const outras = allRows.slice(MAX_CATEGORIAS_NO_GRAFICO);
+  const rows = outras.length
+    ? [...topRows, { name: `Outras categorias (${outras.length})`, value: outras.reduce((sum, row) => sum + row.value, 0), fill: 'var(--text-muted)' }]
+    : topRows;
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -22,15 +29,14 @@ export function AlertasCategoriaCard({ d, noData }) {
       <div className="grid-equal-2col">
         <div data-card className="card" style={{ padding: '16px 18px' }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Alertas por categoria</h4>
-          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '2px 0 14px' }}>Distribuição proporcional de alertas por categoria.</p>
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '2px 0 14px' }}>Top {MAX_CATEGORIAS_NO_GRAFICO} categorias; as demais são agrupadas.</p>
           <div style={{ position: 'relative', width: '100%', height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={rows} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="85%" paddingAngle={1} stroke="var(--surface-0, #fff)" strokeWidth={3}>
+                <Pie data={rows} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="88%" paddingAngle={1} stroke="var(--surface-0, #fff)" strokeWidth={3}>
                   {rows.map((r) => <Cell key={r.name} fill={r.fill} />)}
                 </Pie>
                 <Tooltip content={<ChartTooltip formatter={(v, name) => `${name}: ${fmt(v)} alertas (${((v / total) * 100).toFixed(1)}%)`} />} />
-                <Legend verticalAlign="bottom" iconType="rect" wrapperStyle={{ fontSize: 10.5, paddingTop: 8 }} />
               </PieChart>
             </ResponsiveContainer>
             <CenterLabel line1={fmt(total)} line2="categorizados" />

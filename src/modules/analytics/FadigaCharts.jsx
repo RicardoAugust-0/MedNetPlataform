@@ -189,9 +189,6 @@ export default function FadigaCharts({
       {!compare && platformId === 'maxtrack' && (
         <OperatorRankingCard
           platformId={platformId}
-          selectedMonth={selectedMonth}
-          startDate={startDate}
-          endDate={endDate}
           selectedSeverity={selectedSeverity}
         />
       )}

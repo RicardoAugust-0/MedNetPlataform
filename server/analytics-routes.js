@@ -606,56 +606,90 @@ export function registerAnalyticsRoutes(app, supabase) {
       return res.status(400).json({ error: 'Parametro platformId e obrigatorio.' });
     }
     try {
+      const cacheKey = `operator-ranking|${req.originalUrl}`;
+      const cached = resultCache.get(cacheKey);
+      if (cached && (Date.now() - cached.ts < RESULT_TTL)) {
+        return res.json(cached.data);
+      }
+
       const { from, to } = deriveDateParams(month, startDate, endDate);
 
-      const { data: eventRows, error } = await supabase.rpc('get_operator_event_activity', {
-        p_platform_id: platformId,
-        p_date_from: from,
-        p_date_to: to,
-        p_severity: severity || null,
-      });
+      // As consultas são independentes. Executá-las juntas reduz a latência da
+      // rota ao tempo da mais lenta, em vez da soma das três idas ao banco.
+      const [eventResult, sheetResult, profilesResult] = await Promise.all([
+        supabase.rpc('get_operator_event_activity', {
+          p_platform_id: platformId,
+          p_date_from: from,
+          p_date_to: to,
+          p_severity: severity || null,
+        }),
+        supabase.rpc('get_operator_sheet_activity', {
+          p_platform_id: platformId,
+          p_date_from: from,
+          p_date_to: to,
+        }),
+        supabase
+          .from('profiles')
+          .select('nome')
+          .in('role', ['operador', 'admin']),
+      ]);
+
+      const { data: eventRows, error } = eventResult;
       if (error) throw error;
-
-      const { data: sheetRows, error: sheetError } = await supabase.rpc('get_operator_sheet_activity', {
-        p_platform_id: platformId,
-        p_date_from: from,
-        p_date_to: to,
-      });
+      const { data: sheetRows, error: sheetError } = sheetResult;
       if (sheetError) throw sheetError;
+      const { data: dbProfiles, error: profilesError } = profilesResult;
+      if (profilesError) throw profilesError;
 
-      const { data: dbProfiles } = await supabase
-        .from('profiles')
-        .select('nome')
-        .in('role', ['operador', 'admin']);
+      const normalizeOperatorName = (value) => String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const titleCaseOperator = (value) => String(value || '').trim()
+        .toLocaleLowerCase('pt-BR')
+        .replace(/\b\p{L}/gu, letter => letter.toLocaleUpperCase('pt-BR'));
+      const skipSet = new Set(['', '-', 'auto descarte', 'limpeza', 'descarte', 'nao realizado', 'sem contato', 'sistema']);
 
-      const profileNames = (dbProfiles || []).map(p => p.nome).filter(Boolean);
-      const allFullNames = [...new Set([
-        ...profileNames,
-        ...(eventRows || []).map(e => e.operador).filter(Boolean),
-        ...(sheetRows || []).map(e => e.realizado_por).filter(Boolean)
-      ])];
-
-      const getFullOperatorName = (shortName) => {
-        if (!shortName) return null;
-        const norm = shortName.trim().toLowerCase();
-        const normPlain = norm.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const skipSet = new Set(['-', 'auto-descarte', 'limpeza', 'descarte', 'nao realizado', 'sem contato', 'sistema']);
-        if (skipSet.has(normPlain) || norm === '\u2014') return null;
-
-        if (norm === 'kaiky' || norm === 'kaiky souza' || norm === 'kaiky salviano') {
-          return 'Kaiky Salviano';
+      // Perfis são a fonte canônica. Nomes completos já presentes nas fontes
+      // históricas complementam a resolução para instalações antigas.
+      const canonicalByNormalizedName = new Map();
+      for (const name of (dbProfiles || []).map(p => p.nome).filter(Boolean)) {
+        canonicalByNormalizedName.set(normalizeOperatorName(name), name.trim());
+      }
+      for (const name of [
+        ...(eventRows || []).map(e => e.operador),
+        ...(sheetRows || []).map(e => e.realizado_por),
+      ].filter(Boolean)) {
+        const normalized = normalizeOperatorName(name);
+        if (normalized.split(' ').length > 1 && !canonicalByNormalizedName.has(normalized)) {
+          canonicalByNormalizedName.set(normalized, titleCaseOperator(name));
         }
+      }
 
-        let match = allFullNames.find(f => f.toLowerCase() === norm);
-        if (match) return match;
+      const canonicalNames = [...canonicalByNormalizedName.entries()].map(([normalized, name]) => ({ normalized, name }));
+      const explicitAliases = new Map([
+        ['kaiky', 'Kaiky Salviano'],
+        ['kaiky souza', 'Kaiky Salviano'],
+        ['kaiky salviano', 'Kaiky Salviano'],
+      ]);
 
-        match = allFullNames.find(f => {
-          const parts = f.toLowerCase().split(' ');
-          return parts[0] === norm || parts.includes(norm);
-        });
-        if (match) return match;
+      const getFullOperatorName = (rawName) => {
+        const normalized = normalizeOperatorName(rawName);
+        if (skipSet.has(normalized)) return null;
+        if (explicitAliases.has(normalized)) return explicitAliases.get(normalized);
+        if (canonicalByNormalizedName.has(normalized)) return canonicalByNormalizedName.get(normalized);
 
-        return shortName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        const words = normalized.split(' ');
+        const matches = words.length > 1
+          ? canonicalNames.filter(candidate => candidate.normalized.startsWith(`${normalized} `))
+          : canonicalNames.filter(candidate => candidate.normalized.split(' ')[0] === normalized);
+
+        // Só completa um nome abreviado quando existe uma única pessoa possível;
+        // isso impede juntar pessoas diferentes que compartilham o primeiro nome.
+        if (matches.length === 1) return matches[0].name;
+        return titleCaseOperator(rawName);
       };
 
       const toArray24 = (value) => {
@@ -747,7 +781,9 @@ export function registerAnalyticsRoutes(app, supabase) {
         };
       });
 
-      res.json({ ranking, hourlyProductivity });
+      const payload = { ranking, hourlyProductivity };
+      resultCache.set(cacheKey, { data: payload, ts: Date.now() });
+      res.json(payload);
     } catch (err) {
       console.error('[MedNet Backend] Erro no /api/analytics/operator-ranking:', err);
       res.status(500).json({ error: err.message || String(err) });
