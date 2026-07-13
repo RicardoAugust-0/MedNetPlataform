@@ -19,6 +19,19 @@ const HORIZON_SCRAPING_AUTOMATION_NAMES = [
 const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
 const ACTIVITY_PHASES = { started: 'running', progress: 'running', success: 'success', failure: 'failure' };
 const HORIZON_EXTRACTION_COOLDOWN_MS = 15 * 60 * 1000;
+const TREATMENT_RESOLVE_STATUSES = ['done', 'already_synced', 'error', 'no_horizon_match'];
+
+export function buildTreatmentResolutionUpdate(status, erro, tentativasAtuais = 0, now = new Date()) {
+  const update = { status, updated_at: now.toISOString() };
+  if (status === 'done' || status === 'already_synced') {
+    return { ...update, tentativas: 0, erro: null };
+  }
+
+  update.erro = erro || null;
+  update.tentativas = tentativasAtuais + 1;
+  if (status === 'error' && update.tentativas < 3) update.status = 'pending';
+  return update;
+}
 
 // Autenticação máquina-a-máquina para o robô Playwright/N8N na VPS — mesmo
 // espírito do gate em server/ai-chat-routes.js (POST /api/ai/internal/generate-pdf),
@@ -317,7 +330,6 @@ export function registerHorizonRoutes(app, supabase) {
 
   // POST /api/horizon/treatment-queue/:id/resolve — o robô reporta o
   // resultado de cada tentativa de tratativa na Horizon.
-  const TREATMENT_RESOLVE_STATUSES = ['done', 'error', 'no_horizon_match'];
   app.post('/api/horizon/treatment-queue/:id/resolve', requireHorizonBotToken, async (req, res) => {
     try {
       const { id } = req.params;
@@ -326,22 +338,20 @@ export function registerHorizonRoutes(app, supabase) {
         return res.status(400).json({ error: `status deve ser um de: ${TREATMENT_RESOLVE_STATUSES.join(', ')}` });
       }
 
-      const update = { status, updated_at: new Date().toISOString() };
-      if (status === 'done') {
-        update.erro = null;
-      } else {
-        update.erro = erro || null;
+      let tentativasAtuais = 0;
+      if (status !== 'done' && status !== 'already_synced') {
         const { data: atual, error: errAtual } = await supabase
           .from('horizon_treatment_queue')
           .select('tentativas')
           .eq('id', id)
           .single();
         if (errAtual) throw errAtual;
-        update.tentativas = (atual?.tentativas || 0) + 1;
+        tentativasAtuais = atual?.tentativas || 0;
         // Falhas transitórias de seletor, captcha ou rede voltam para a fila.
         // Após três tentativas, mantemos "error" para intervenção manual.
-        if (status === 'error' && update.tentativas < 3) update.status = 'pending';
       }
+
+      const update = buildTreatmentResolutionUpdate(status, erro, tentativasAtuais);
 
       const { error } = await supabase.from('horizon_treatment_queue').update(update).eq('id', id);
       if (error) throw error;

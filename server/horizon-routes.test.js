@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { toTreatmentQueuePayload } from './horizon-routes.js';
+import {
+  buildTreatmentResolutionUpdate,
+  toTreatmentQueuePayload,
+} from './horizon-routes.js';
 
 describe('toTreatmentQueuePayload', () => {
   it('entrega ao robo a placa e o horario exatos do evento Horizon', () => {
@@ -32,5 +35,27 @@ describe('toTreatmentQueuePayload', () => {
 
     expect(payload.horizon_placa).toBe('ABC1D23');
     expect(payload.horizon_ocorrido_em).toBe('2026-07-13T12:00:00Z');
+  });
+});
+
+describe('buildTreatmentResolutionUpdate', () => {
+  const now = new Date('2026-07-13T16:45:00Z');
+
+  it('encerra alerta ausente da grade como ja sincronizado sem consumir tentativa', () => {
+    expect(buildTreatmentResolutionUpdate('already_synced', 'nao localizado', 2, now)).toEqual({
+      status: 'already_synced',
+      tentativas: 0,
+      erro: null,
+      updated_at: '2026-07-13T16:45:00.000Z',
+    });
+  });
+
+  it('mantem retry para uma falha operacional transitoria', () => {
+    expect(buildTreatmentResolutionUpdate('error', 'timeout', 1, now)).toEqual({
+      status: 'pending',
+      tentativas: 2,
+      erro: 'timeout',
+      updated_at: '2026-07-13T16:45:00.000Z',
+    });
   });
 });
