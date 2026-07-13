@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
+import { apiFetch } from '../lib/analyticsApi.js';
 
 const AutomationsContext = createContext(null);
 const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, event_type, token, position';
@@ -324,22 +325,12 @@ export function AutomationsProvider({ children }) {
     ];
 
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (auto.token) {
-        headers['Authorization'] = `Bearer ${auto.token}`;
-      }
-
-      // Call the VPS endpoint
-      const res = await fetch(auto.endpoint, {
+      // O backend encaminha a chamada para a VPS/n8n. Isso mantém tokens fora
+      // do browser e evita bloqueios de CORS de endpoints externos.
+      const res = await apiFetch(`/api/automations/${id}/run`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({
-          trigger: 'manual',
-          operator: operatorName,
-          timestamp: new Date().toISOString(),
-          automation_id: auto.id,
-          automation_name: auto.name
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator: operatorName }),
         signal: AbortSignal.timeout(10000) // 10s timeout
       });
 

@@ -16,7 +16,7 @@ const ROLE_LEVELS = { operador: 0, lider: 1, admin: 2 };
 // sozinho não protege nada — esta API roda com service_role (ignora RLS), então
 // SEM este gate qualquer um alcançaria os dados e o CSV com PII. Validação via
 // supabase.auth.getUser(token) + leitura de profiles.role.
-function requireRole(supabase, minRole) {
+export function requireRole(supabase, minRole) {
   const min = ROLE_LEVELS[minRole] ?? 99;
   return async (req, res, next) => {
     try {
