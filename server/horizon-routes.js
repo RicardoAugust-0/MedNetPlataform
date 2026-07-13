@@ -4,8 +4,16 @@ import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
 import { runAutoCrossCheck } from './auto-crosscheck.js';
 
-// Mesmo id semeado em migration_automations.sql para Bot_HorizonScraping.
-const BOT_HORIZON_SCRAPING_AUTOMATION_ID = 'c1b94e82-e3e7-4c74-bfd4-3a56df93df24';
+// ID legado semeado em migration_automations.sql para Bot_HorizonScraping.
+// A automação pode ter sido renomeada/recriada na operação; por isso o log
+// resolve o registro atual antes de gravar, mantendo compatibilidade com o ID
+// original para instalações que ainda o utilizam.
+const LEGACY_HORIZON_SCRAPING_AUTOMATION_ID = 'c1b94e82-e3e7-4c74-bfd4-3a56df93df24';
+const HORIZON_SCRAPING_AUTOMATION_NAMES = [
+  'Bot_HorizonScraping',
+  'BOT_HorizonExport2Captcha',
+  'BOT_HorizonRelatórios',
+];
 
 const CREDENTIAL_STATUSES = ['ok', 'credential_error', 'session_expired'];
 
@@ -40,6 +48,19 @@ function readFirstFileHeaders(file) {
   return headers;
 }
 
+async function resolveHorizonScrapingAutomationId(supabase) {
+  const { data, error } = await supabase
+    .from('automations')
+    .select('id')
+    .in('name', HORIZON_SCRAPING_AUTOMATION_NAMES)
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id || LEGACY_HORIZON_SCRAPING_AUTOMATION_ID;
+}
+
 export function registerHorizonRoutes(app, supabase) {
   // POST /api/horizon/ingest — chamado pelo Bot_HorizonScraping (VPS) de hora
   // em hora com os relatórios exportados das contas Horizon. Reaproveita o
@@ -68,8 +89,9 @@ export function registerHorizonRoutes(app, supabase) {
       if (responseBody?.success) {
         const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
         try {
+          const automationId = await resolveHorizonScrapingAutomationId(supabase);
           await supabase.from('automation_logs').insert({
-            automation_id: BOT_HORIZON_SCRAPING_AUTOMATION_ID,
+            automation_id: automationId,
             status: 'success',
             duration: `${durationSec}s`,
             detail: `${responseBody.uniqueSavedCount ?? 0} eventos importados`,
