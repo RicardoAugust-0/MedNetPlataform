@@ -1,3 +1,5 @@
+import { buildAutomationWebhookBody } from './automation-webhook.js';
+
 const DEFAULT_INTERVAL_MS = 30_000;
 const CLAIM_LIMIT = 10;
 
@@ -69,14 +71,14 @@ export async function executeScheduledAutomation(
     const response = await fetchImpl(claim.automation_endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
+      body: JSON.stringify(buildAutomationWebhookBody(claim.automation_endpoint, {
         trigger: 'agendado',
         timestamp: new Date().toISOString(),
         scheduled_for: claim.scheduled_for,
         automation_id: claim.automation_id,
         automation_name: claim.automation_name,
         idempotency_key: claim.claim_id,
-      }),
+      })),
       signal: AbortSignal.timeout(15_000),
     });
 

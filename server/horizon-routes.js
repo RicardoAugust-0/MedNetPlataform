@@ -306,12 +306,15 @@ export function registerHorizonRoutes(app, supabase) {
           .single();
         if (errAtual) throw errAtual;
         update.tentativas = (atual?.tentativas || 0) + 1;
+        // Falhas transitórias de seletor, captcha ou rede voltam para a fila.
+        // Após três tentativas, mantemos "error" para intervenção manual.
+        if (status === 'error' && update.tentativas < 3) update.status = 'pending';
       }
 
       const { error } = await supabase.from('horizon_treatment_queue').update(update).eq('id', id);
       if (error) throw error;
 
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, status: update.status, tentativas: update.tentativas || 0 });
     } catch (err) {
       console.error('[Horizon Treatment Queue] Erro ao resolver:', err);
       return res.status(500).json({ error: err.message || String(err) });

@@ -18,7 +18,7 @@ function createSupabase(claims) {
 const claim = {
   automation_id: 'a1b94e82-e3e7-4c74-bfd4-3a56df93df28',
   automation_name: 'Bot_MaxtrackScraping',
-  automation_endpoint: 'https://bots.example/automacoes/maxtrack',
+  automation_endpoint: 'https://botsplaywright.duckdns.org/automacoes/BOT_MaxtrackRelatorios?background=true',
   automation_token: 'secret',
   scheduled_for: '2026-07-13T15:00:00.000Z',
   claim_id: 'd1b94e82-e3e7-4c74-bfd4-3a56df93df29',
@@ -44,6 +44,7 @@ describe('automation scheduler', () => {
         }),
       }),
     );
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({});
     expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
       automation_id: claim.automation_id,
       status: 'success',

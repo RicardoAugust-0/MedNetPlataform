@@ -1,4 +1,5 @@
 import { requireRole } from './analytics-routes.js';
+import { buildAutomationWebhookBody } from './automation-webhook.js';
 
 // Dispara webhooks pelo backend para que tokens de automação não sejam
 // expostos ao navegador e para eliminar a dependência de CORS do n8n/VPS.
@@ -23,13 +24,13 @@ export function registerAutomationRoutes(app, supabase) {
       const response = await fetch(automation.endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(buildAutomationWebhookBody(automation.endpoint, {
           trigger: 'manual',
           operator: req.authUser.email,
           timestamp: new Date().toISOString(),
           automation_id: automation.id,
           automation_name: automation.name,
-        }),
+        })),
         signal: AbortSignal.timeout(15000),
       });
 
