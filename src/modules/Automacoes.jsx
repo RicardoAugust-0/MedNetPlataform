@@ -9,7 +9,7 @@ import ChatTab from './automacoes/ChatTab.jsx';
 
 export default function Automacoes() {
   const [tab, setTab] = useState('hooks');
-  const { automations, logs, horizonQueueStatus, loading, vpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } = useAutomations();
+  const { automations, logs, horizonQueueStatus, loading, vpsHealth, add, update, remove, run, stopAutomationTasks } = useAutomations();
   const confirm = useConfirm();
   const [initialChatParams, setInitialChatParams] = useState(null);
 
@@ -36,17 +36,6 @@ export default function Automacoes() {
       await update(id, data);
     } else {
       await add(data);
-    }
-  };
-
-  const handleStopBot = async () => {
-    const confirmed = await confirm({
-      title: 'Encerrar Robô',
-      message: 'Deseja realmente forçar o encerramento do robô na VPS? O navegador será fechado e os recursos da máquina serão liberados.',
-      danger: true
-    });
-    if (confirmed) {
-      await stopRunningTasks();
     }
   };
 
@@ -132,7 +121,6 @@ export default function Automacoes() {
           logs={logs}
           horizonQueueStatus={horizonQueueStatus}
           vpsHealth={vpsHealth}
-          onStopBot={handleStopBot}
           onRun={run}
           onToggle={handleToggle}
           onSave={handleSave}

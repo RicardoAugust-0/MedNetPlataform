@@ -89,7 +89,7 @@ function formatLastRun(value) {
   return `${date.toLocaleDateString('pt-BR')} ${time}`;
 }
 
-function VpsStrip({ vpsHealth, onStopBot }) {
+function VpsStrip({ vpsHealth }) {
   if (vpsHealth.checking && !vpsHealth.data) {
     return (
       <div className="vps-strip">
@@ -148,15 +148,6 @@ function VpsStrip({ vpsHealth, onStopBot }) {
           <div className="vps-bar"><span style={{ width: ram + '%' }}></span></div>
         </div>
       </div>
-      {onStopBot && (
-        <>
-          <div className="vps-divider"></div>
-          <button className="btn btn-danger btn-sm" onClick={onStopBot} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <i className="ti ti-player-stop"></i>
-            <span>Parar Robô</span>
-          </button>
-        </>
-      )}
     </div>
   );
 }
@@ -583,7 +574,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   );
 }
 
-export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onStopBot, onRun, onToggle, onSave, onDelete }) {
+export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onRun, onToggle, onSave, onDelete }) {
   const [activeSubTab, setActiveSubTab] = useState('vps'); // 'vps', 'whatsapp'
   const [drawer, setDrawer] = useState(null);
   const [modal, setModal] = useState(null);
@@ -712,7 +703,7 @@ export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onS
       {/* SUBTAB 1: VPS AUTOMATIONS (HOOKS DE SAÍDA) */}
       {activeSubTab === 'vps' && (
         <div className="fz-in">
-          <div className="explainer-card">
+          <div className="explainer-card explainer-card--compact">
             <i className="ti ti-info-circle"></i>
             <div className="explainer-card-body">
               <h4 className="explainer-title">Automações via VPS (Webhooks de Saída)</h4>
@@ -722,7 +713,7 @@ export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onS
             </div>
           </div>
 
-          <VpsStrip vpsHealth={vpsHealth} onStopBot={onStopBot} />
+          <VpsStrip vpsHealth={vpsHealth} />
 
           <div className="hooks-toolbar">
             <span className="ht-label"><b>{automations.filter(a => a.active).length}</b> de {automations.length} automações ativas</span>

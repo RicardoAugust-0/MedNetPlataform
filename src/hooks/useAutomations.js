@@ -476,33 +476,6 @@ export function AutomationsProvider({ children }) {
     }
   }, [automations, toast]);
 
-  const stopRunningTasks = useCallback(async () => {
-    try {
-      const apiBase = healthUrl.replace(/\/health$/, '');
-      const res = await fetch(`${apiBase}/tasks`);
-      if (!res.ok) throw new Error();
-      const tasksList = await res.json();
-      
-      const runningTasks = tasksList.filter(t => t.status === 'running' || t.status === 'pending');
-      
-      if (runningTasks.length === 0) {
-        toast('Nenhum robô ativo em execução na VPS.', 'info');
-        return false;
-      }
-      
-      await Promise.all(runningTasks.map(async (t) => {
-        await fetch(`${apiBase}/tasks/${t.id}/stop`, { method: 'POST' });
-      }));
-      
-      toast('Comando de encerramento enviado para a VPS.', 'success');
-      return true;
-    } catch (err) {
-      console.error('[useAutomations] Error stopping tasks:', err);
-      toast('Falha ao tentar encerrar execuções na VPS.', 'error');
-      return false;
-    }
-  }, [healthUrl, toast]);
-
   const stopAutomationTasks = useCallback(async (id) => {
     try {
       const auto = automations.find(a => a.id === id);
@@ -561,7 +534,7 @@ export function AutomationsProvider({ children }) {
 
   return createElement(
     AutomationsContext.Provider,
-    { value: { automations, logs, horizonQueueStatus, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopRunningTasks, stopAutomationTasks } },
+    { value: { automations, logs, horizonQueueStatus, loading, vpsHealth, checkVpsHealth, add, update, remove, run, stopAutomationTasks } },
     children
   );
 }
