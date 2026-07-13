@@ -19,8 +19,60 @@ const EVENT_OPTIONS = [
   'Câmera obstruída',
 ];
 
+const WEEKDAYS = [
+  { value: 1, short: 'Seg' },
+  { value: 2, short: 'Ter' },
+  { value: 3, short: 'Qua' },
+  { value: 4, short: 'Qui' },
+  { value: 5, short: 'Sex' },
+  { value: 6, short: 'Sáb' },
+  { value: 0, short: 'Dom' },
+];
+
+function buildScheduleLabel(type, intervalMinutes, time, days = []) {
+  if (type === 'interval') {
+    const minutes = Number(intervalMinutes);
+    if (minutes === 60) return 'a cada 1 hora';
+    if (minutes > 60 && minutes % 60 === 0) return `a cada ${minutes / 60} horas`;
+    return `a cada ${minutes} minutos`;
+  }
+  if (type === 'daily') return `diariamente às ${time}`;
+  if (type === 'weekly') {
+    const labels = WEEKDAYS.filter(day => days.includes(day.value)).map(day => day.short);
+    return `${labels.join(', ')} às ${time}`;
+  }
+  return '';
+}
+
+function formatNextRun(value) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date(value));
+}
+
+function isValidWebhookUrl(value) {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 function triggerLabelFor(a) {
-  if (a.trigger === 'agendado') return 'Agendado · ' + (a.schedule || 'definir');
+  if (a.trigger === 'agendado') {
+    const structured = buildScheduleLabel(
+      a.scheduleType,
+      a.scheduleIntervalMinutes,
+      a.scheduleTime,
+      a.scheduleDays,
+    );
+    return 'Agendado · ' + (structured || a.schedule || 'definir');
+  }
   if (a.trigger === 'evento') return a.eventType ? a.eventType : 'Por evento de alerta';
   return 'Manual';
 }
@@ -153,6 +205,11 @@ function HookCard({ hook, logs = [], onToggle, onRun, onConfig, onOpenLog }) {
         </span>
         <span className="hook-stat"><i className="ti ti-rotate-clockwise-2"></i> <b>{runsToday}</b> hoje</span>
         <span className="hook-stat"><i className="ti ti-circle-check"></i> <b>{successRate == null ? '—' : successRate + '%'}</b> sucesso</span>
+        {hook.trigger === 'agendado' && hook.active && hook.nextRunAt && (
+          <span className="hook-stat" title="Calculado e executado pelo MedNet">
+            <i className="ti ti-calendar-time"></i> próxima <b>{formatNextRun(hook.nextRunAt)}</b>
+          </span>
+        )}
       </div>
 
       {lastRun ? (
@@ -263,12 +320,34 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   const [icon, setIcon] = useState(automation?.icon || 'ti-robot');
   const [endpoint, setEndpoint] = useState(automation?.endpoint || 'https://botsplaywright.duckdns.org/automacoes/');
   const [trigger, setTrigger] = useState(automation?.trigger || 'manual');
-  const [schedule, setSchedule] = useState(automation?.schedule || '');
+  const legacySchedule = automation?.schedule || '';
+  const [scheduleType, setScheduleType] = useState(
+    automation?.scheduleType || (/cada/i.test(legacySchedule) ? 'interval' : 'daily')
+  );
+  const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState(
+    automation?.scheduleIntervalMinutes || (/15/i.test(legacySchedule) ? 15 : 60)
+  );
+  const [scheduleTime, setScheduleTime] = useState(
+    automation?.scheduleTime || legacySchedule.match(/\b\d{2}:\d{2}\b/)?.[0] || '06:00'
+  );
+  const [scheduleDays, setScheduleDays] = useState(automation?.scheduleDays?.length ? automation.scheduleDays : [1, 2, 3, 4, 5]);
+  const scheduleTimezone = automation?.scheduleTimezone || 'America/Sao_Paulo';
   const [eventType, setEventType] = useState(automation?.eventType || EVENT_OPTIONS[0]);
   const [token, setToken] = useState(automation?.token || '');
+  const [showToken, setShowToken] = useState(false);
   const [active, setActive] = useState(automation?.active ?? true);
 
-  const canSave = name.trim() && endpoint.trim() && (trigger !== 'agendado' || schedule.trim());
+  const validSchedule = trigger !== 'agendado'
+    || (scheduleType === 'interval' && Number(scheduleIntervalMinutes) >= 5 && Number(scheduleIntervalMinutes) <= 10080)
+    || (scheduleType === 'daily' && Boolean(scheduleTime))
+    || (scheduleType === 'weekly' && Boolean(scheduleTime) && scheduleDays.length > 0);
+  const canSave = name.trim() && isValidWebhookUrl(endpoint.trim()) && validSchedule;
+
+  const toggleScheduleDay = (day) => {
+    setScheduleDays(current => current.includes(day)
+      ? current.filter(value => value !== day)
+      : [...current, day]);
+  };
 
   const save = () => {
     if (!canSave) return;
@@ -278,7 +357,14 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
       icon, 
       endpoint: endpoint.trim(), 
       trigger, 
-      schedule: trigger === 'agendado' ? schedule.trim() : null, 
+      schedule: trigger === 'agendado'
+        ? buildScheduleLabel(scheduleType, scheduleIntervalMinutes, scheduleTime, scheduleDays)
+        : null,
+      scheduleType: trigger === 'agendado' ? scheduleType : null,
+      scheduleIntervalMinutes: trigger === 'agendado' && scheduleType === 'interval' ? Number(scheduleIntervalMinutes) : null,
+      scheduleTime: trigger === 'agendado' && scheduleType !== 'interval' ? scheduleTime : null,
+      scheduleDays: trigger === 'agendado' && scheduleType === 'weekly' ? scheduleDays : null,
+      scheduleTimezone: trigger === 'agendado' ? scheduleTimezone : null,
       eventType: trigger === 'evento' ? eventType : null, 
       token: token.trim() || null, 
       active 
@@ -317,6 +403,9 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
             <label className="form-label">Endpoint do webhook (VPS)</label>
             <input className="form-control mono" value={endpoint} onChange={e => setEndpoint(e.target.value)} placeholder="https://sua-vps/hooks/nome" />
             <div className="field-hint"><i className="ti ti-info-circle"></i> A automação é registrada na plataforma; a execução roda na sua VPS através deste endpoint.</div>
+            {endpoint.trim() && !isValidWebhookUrl(endpoint.trim()) && (
+              <div className="field-hint field-error"><i className="ti ti-alert-circle"></i> Informe uma URL completa iniciada por http:// ou https://.</div>
+            )}
           </div>
 
           <div className="form-group">
@@ -327,8 +416,79 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
               ))}
             </div>
             {trigger === 'agendado' && (
-              <div style={{ marginTop: 10 }}>
-                <input className="form-control" value={schedule} onChange={e => setSchedule(e.target.value)} placeholder="Ex: diário às 06:00 · a cada 15 min" />
+              <div className="schedule-config">
+                <div className="schedule-type-grid">
+                  {[
+                    ['interval', 'Intervalo', 'ti-repeat'],
+                    ['daily', 'Todo dia', 'ti-calendar'],
+                    ['weekly', 'Dias da semana', 'ti-calendar-week'],
+                  ].map(([value, label, icon]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`schedule-type-option${scheduleType === value ? ' active' : ''}`}
+                      onClick={() => setScheduleType(value)}
+                    >
+                      <i className={`ti ${icon}`}></i>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {scheduleType === 'interval' && (
+                  <div className="schedule-fields">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Executar a cada</label>
+                      <div className="input-suffix">
+                        <input
+                          className="form-control"
+                          type="number"
+                          min="5"
+                          max="10080"
+                          value={scheduleIntervalMinutes}
+                          onChange={e => setScheduleIntervalMinutes(e.target.value)}
+                        />
+                        <span>minutos</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {scheduleType !== 'interval' && (
+                  <div className="schedule-fields">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Horário</label>
+                      <input className="form-control" type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} />
+                    </div>
+                    <div className="schedule-timezone">
+                      <i className="ti ti-world"></i>
+                      Horário de Brasília
+                    </div>
+                  </div>
+                )}
+
+                {scheduleType === 'weekly' && (
+                  <div>
+                    <label className="form-label">Dias de execução</label>
+                    <div className="weekday-picker">
+                      {WEEKDAYS.map(day => (
+                        <button
+                          type="button"
+                          key={day.value}
+                          className={scheduleDays.includes(day.value) ? 'active' : ''}
+                          onClick={() => toggleScheduleDay(day.value)}
+                        >
+                          {day.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="schedule-summary">
+                  <i className="ti ti-clock-check"></i>
+                  O MedNet executará {buildScheduleLabel(scheduleType, scheduleIntervalMinutes, scheduleTime, scheduleDays)}.
+                </div>
               </div>
             )}
             {trigger === 'evento' && (
@@ -342,7 +502,19 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
 
           <div className="form-group">
             <label className="form-label">Token de autenticação <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>(opcional)</span></label>
-            <input className="form-control mono" value={token} onChange={e => setToken(e.target.value)} placeholder="Segredo enviado no header da requisição" />
+            <div className="secret-input">
+              <input
+                className="form-control mono"
+                type={showToken ? 'text' : 'password'}
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                placeholder="Segredo enviado no header da requisição"
+                autoComplete="new-password"
+              />
+              <button type="button" className="btn-icon" onClick={() => setShowToken(value => !value)} title={showToken ? 'Ocultar token' : 'Mostrar token'}>
+                <i className={`ti ${showToken ? 'ti-eye-off' : 'ti-eye'}`}></i>
+              </button>
+            </div>
           </div>
 
           <div className="toggle-row">

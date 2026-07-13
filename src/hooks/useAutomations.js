@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/analyticsApi.js';
 import { useNotifications } from './useNotifications.jsx';
 
 const AutomationsContext = createContext(null);
-const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, event_type, token, position';
+const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, schedule_type, schedule_interval_minutes, schedule_time, schedule_days, schedule_timezone, next_run_at, last_run_at, last_schedule_status, last_schedule_error, event_type, token, position';
 
 export function AutomationsProvider({ children }) {
   const toast = useToast();
@@ -32,6 +32,15 @@ export function AutomationsProvider({ children }) {
     endpoint: row.endpoint,
     trigger: row.trigger,
     schedule: row.schedule,
+    scheduleType: row.schedule_type,
+    scheduleIntervalMinutes: row.schedule_interval_minutes,
+    scheduleTime: row.schedule_time?.slice(0, 5) || null,
+    scheduleDays: row.schedule_days || [],
+    scheduleTimezone: row.schedule_timezone || 'America/Sao_Paulo',
+    nextRunAt: row.next_run_at,
+    lastScheduledRunAt: row.last_run_at,
+    lastScheduleStatus: row.last_schedule_status,
+    lastScheduleError: row.last_schedule_error,
     eventType: row.event_type,
     token: row.token,
     position: row.position ?? 0,
@@ -251,6 +260,11 @@ export function AutomationsProvider({ children }) {
       endpoint: data.endpoint,
       trigger: data.trigger,
       schedule: data.schedule || null,
+      schedule_type: data.scheduleType || null,
+      schedule_interval_minutes: data.scheduleIntervalMinutes || null,
+      schedule_time: data.scheduleTime || null,
+      schedule_days: data.scheduleDays?.length ? data.scheduleDays : null,
+      schedule_timezone: data.scheduleTimezone || 'America/Sao_Paulo',
       event_type: data.eventType || null,
       token: data.token || null,
       position: pos,
@@ -285,6 +299,11 @@ export function AutomationsProvider({ children }) {
     if (data.endpoint !== undefined) dbRow.endpoint = data.endpoint;
     if (data.trigger !== undefined) dbRow.trigger = data.trigger;
     if (data.schedule !== undefined) dbRow.schedule = data.schedule || null;
+    if (data.scheduleType !== undefined) dbRow.schedule_type = data.scheduleType || null;
+    if (data.scheduleIntervalMinutes !== undefined) dbRow.schedule_interval_minutes = data.scheduleIntervalMinutes || null;
+    if (data.scheduleTime !== undefined) dbRow.schedule_time = data.scheduleTime || null;
+    if (data.scheduleDays !== undefined) dbRow.schedule_days = data.scheduleDays?.length ? data.scheduleDays : null;
+    if (data.scheduleTimezone !== undefined) dbRow.schedule_timezone = data.scheduleTimezone || 'America/Sao_Paulo';
     if (data.eventType !== undefined) dbRow.event_type = data.eventType || null;
     if (data.token !== undefined) dbRow.token = data.token || null;
 
@@ -352,21 +371,21 @@ export function AutomationsProvider({ children }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operator: operatorName }),
-        signal: AbortSignal.timeout(10000) // 10s timeout
+        signal: AbortSignal.timeout(20000) // backend aguarda o webhook por até 15s
       });
 
       const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
       const durationStr = `${durationSec} s`;
-
-      if (!res.ok) {
-        throw new Error(`Servidor respondeu com status ${res.status}`);
-      }
 
       let data;
       try {
         data = await res.json();
       } catch {
         data = { message: 'Execução concluída com sucesso (sem corpo de resposta)' };
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || data.detail || `Servidor respondeu com status ${res.status}`);
       }
 
       stepLogs.push({ t: new Date().toLocaleTimeString('pt-BR'), lvl: 'ok', m: data.message || 'Webhook executado com sucesso' });

@@ -169,8 +169,87 @@
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center; gap: 5px; line-height: 1.4; }
 .field-hint i { font-size: 13px; flex-shrink: 0; }
+.field-hint.field-error { color: var(--danger-600); }
 textarea.form-control { resize: vertical; min-height: 64px; line-height: 1.5; font-family: var(--font-sans); }
 .form-control.mono { font-family: var(--font-mono); font-size: 12px; }
+
+.schedule-config {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.schedule-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.schedule-type-option {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text-secondary);
+  padding: 9px 8px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font: 500 11.5px var(--font-sans);
+  cursor: pointer;
+  transition: all .15s;
+}
+.schedule-type-option:hover { border-color: var(--accent-400); color: var(--text-primary); }
+.schedule-type-option.active { border-color: var(--accent-500); background: var(--accent-50); color: var(--accent-600); }
+.schedule-fields { display: flex; align-items: end; gap: 12px; }
+.schedule-fields .form-group { flex: 1; }
+.schedule-timezone {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.input-suffix { display: flex; align-items: stretch; }
+.input-suffix .form-control { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.input-suffix span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid var(--border-md);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.weekday-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.weekday-picker button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-0);
+  color: var(--text-muted);
+  padding: 6px 3px;
+  font: 600 10.5px var(--font-sans);
+  cursor: pointer;
+}
+.weekday-picker button.active { background: var(--accent-500); border-color: var(--accent-500); color: #fff; }
+.schedule-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.schedule-summary i { color: var(--success-600); font-size: 14px; }
+.secret-input { position: relative; }
+.secret-input .form-control { padding-right: 40px; }
+.secret-input .btn-icon { position: absolute; top: 4px; right: 4px; }
 
 .icon-pick { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .icon-opt { aspect-ratio: 1; border-radius: var(--radius-md); border: 1.5px solid var(--border); background: var(--surface-1); color: var(--text-secondary); display: grid; place-items: center; font-size: 16px; cursor: pointer; transition: all .12s; }
@@ -306,6 +385,9 @@ textarea.form-control { resize: vertical; min-height: 64px; line-height: 1.5; fo
   .drawer {
     width: 100%;
   }
+  .schedule-type-grid { grid-template-columns: 1fr; }
+  .schedule-fields { align-items: stretch; flex-direction: column; }
+  .schedule-timezone { width: 100%; }
 }
 
 /* Layouts split-screen para Disparos sem dependência de Tailwind */

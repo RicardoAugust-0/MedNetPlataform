@@ -640,6 +640,14 @@ produção. Workflow N8N do B3 montado (Schedule 15min → POST
 B3 consome a fila e replica a tratativa na Horizon. Todas as 4 peças
 têm código pronto e agendadas no N8N.
 
+> **Atualização 2026-07-13:** a migration
+> `20260713120000_platform_automation_scheduler.sql` e o executor
+> `server/automation-scheduler.js` transferem o agendamento para o MedNet. Após
+> aplicar a migration e publicar o backend, desativar somente os nodes
+> `Schedule Trigger` correspondentes no N8N para não manter dois relógios. Os
+> robôs/endpoints continuam iguais e o histórico passa a ser gravado em
+> `automation_logs` pelo backend.
+
 **Pendente pra próxima sessão:**
 - Rodar o B3 pela primeira vez em produção com uma pendência real pra
   confirmar o comportamento pós-"Finalizar" (não testável sem

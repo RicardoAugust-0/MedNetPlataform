@@ -56,7 +56,7 @@ export function AtendimentosProvider({ children }) {
     };
   }, []);
 
-  const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, bucket, obs, platformId }) => {
+  const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, bucket, obs }) => {
     if (!profile) return;
     const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const optimistic = { id: crypto.randomUUID(), motorista, placa, transportadora, tipo, bucket, obs, hora, operador: profile.nome, created_at: new Date().toISOString(), _pending: true };
@@ -74,23 +74,6 @@ export function AtendimentosProvider({ children }) {
       return { error };
     }
     setHistory(prev => prev.map(h => h.id === optimistic.id ? toLocal(data) : h));
-
-    // Horizon é espelho da MaxTrack (mesma frota/eventos): propaga o
-    // tratamento para lá também, sem exigir repetição manual do operador.
-    // Best-effort — a VPS pode estar fora do ar sem impedir o atendimento.
-    if (platformId === 'maxtrack' && tipo !== 'limpeza') {
-      supabase.from('automations').select('endpoint, token').eq('name', 'Bot_HorizonTreatment').maybeSingle()
-        .then(({ data: auto }) => {
-          if (!auto?.endpoint) return;
-          fetch(auto.endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(auto.token ? { Authorization: `Bearer ${auto.token}` } : {}) },
-            body: JSON.stringify({ motorista, placa, transportadora, tipo, timestamp: new Date().toISOString() }),
-            signal: AbortSignal.timeout(10000),
-          }).catch(() => {});
-        })
-        .catch(() => {});
-    }
 
     return { data };
   }, [profile]);

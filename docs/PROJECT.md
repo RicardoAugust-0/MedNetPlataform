@@ -335,9 +335,13 @@ Três abas:
 
 - **Integrações & Webhooks** (`HooksTab`):
   - _Automações VPS (hooks de saída):_ cadastra automações que disparam POST a um
-    endpoint da VPS (trigger manual/agendado/por evento). Strip de saúde da VPS
-    (`vpsHealth`), modal VNC (noVNC) para operar o robô remotamente. Persistido
-    via `useAutomations`/`automation_logs`.
+    endpoint da VPS (trigger manual/agendado/por evento). Agendamentos são
+    configurados na própria plataforma (intervalo, diário ou dias da semana,
+    no fuso `America/Sao_Paulo`) e executados por `server/automation-scheduler.js`.
+    As RPCs `claim_due_automations`/`finish_automation_schedule` coordenam a
+    trava no Postgres para impedir disparos duplicados entre instâncias. Strip
+    de saúde da VPS (`vpsHealth`), modal VNC (noVNC) para operar o robô
+    remotamente. Persistido via `useAutomations`/`automation_logs`.
   - _WhatsApp Cloud API & Webhook (entrada):_ formulário das credenciais Meta
     (`phone_number_id`, `whatsapp_business_account_id`, token) e exibição da URL
     de callback + verify token para configurar no painel da Meta.

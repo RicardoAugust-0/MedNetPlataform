@@ -8,6 +8,7 @@ import { registerAiChatRoutes } from './ai-chat-routes.js';
 import { registerHorizonRoutes } from './horizon-routes.js';
 import { registerMaxtrackRoutes } from './maxtrack-routes.js';
 import { registerAutomationRoutes } from './automation-routes.js';
+import { startAutomationScheduler } from './automation-scheduler.js';
 
 // Load env variables from root and server directory
 dotenv.config({ path: '../.env' });
@@ -48,6 +49,13 @@ registerAiChatRoutes(app, supabase);
 registerHorizonRoutes(app, supabase);
 registerMaxtrackRoutes(app, supabase);
 registerAutomationRoutes(app, supabase);
+
+// O banco coordena as reivindicações, portanto múltiplas instâncias do
+// backend podem manter este executor ativo sem disparar o mesmo horário duas
+// vezes. A service role é obrigatória para acessar as RPCs internas.
+startAutomationScheduler(supabase, {
+  enabled: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+});
 
 const server = app.listen(PORT, () => {
   console.log(`[MedNet Backend] Servidor rodando na porta ${PORT}`);
