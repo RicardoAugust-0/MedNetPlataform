@@ -669,6 +669,16 @@ têm código pronto e agendadas no N8N.
 > (`Transjordano → TRANSJORDANO`, `JD Cocenzo... → JD`). O endpoint de
 > credenciais usa `purpose=treatment` para ignorar apenas nesse fluxo o
 > cooldown do robô de relatórios.
+>
+> **Correção operacional 2026-07-13 — alvo Horizon exato:** a migration
+> `20260713170000_horizon_queue_exact_targets.sql` remove vínculos duplicados e
+> garante um único item de fila por `horizon_driver_event_id`. O cross-check
+> atribui cada alerta Horizon ao evento MaxTrack mais próximo, reconcilia como
+> `already_synced` o que já foi tratado e a API entrega ao Playwright
+> `horizon_placa` + `horizon_ocorrido_em`. O robô pesquisa a grafia da própria
+> Horizon (incluindo hífen), converte UTC para `America/Sao_Paulo` e registra
+> buscas sem resultado como falhas com tentativas, em vez de repetir uma
+> pendência eternamente como “não localizada”.
 
 ---
 

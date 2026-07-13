@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { parseCSV, readHeaders, applyPlatformMap } from '../src/utils/fatigueParser.js';
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
-import { runAutoCrossCheck } from './auto-crosscheck.js';
+import { reconcilePendingHorizonTreatments, runAutoCrossCheck } from './auto-crosscheck.js';
 
 // ID legado semeado em migration_automations.sql para Bot_HorizonScraping.
 // A automação pode ter sido renomeada/recriada na operação; por isso o log
@@ -67,6 +67,17 @@ async function resolveHorizonScrapingAutomationId(supabase) {
 function accountLabelFromFile(file) {
   const match = file?.originalname?.match(/^dados_(.+?)_\d{4}-\d{2}-\d{2}\.(xlsx|csv)$/i);
   return match?.[1] || 'Horizon';
+}
+
+export function toTreatmentQueuePayload(row) {
+  const { horizon_event: horizonEvent, ...item } = row;
+  return {
+    ...item,
+    // O Playwright deve localizar o alvo pelos dados da propria Horizon. A
+    // placa/horario MaxTrack continuam no payload para auditoria e fallback.
+    horizon_placa: horizonEvent?.placa || item.placa,
+    horizon_ocorrido_em: horizonEvent?.ocorrido_em || item.ocorrido_em,
+  };
 }
 
 async function writeHorizonLog(supabase, { status, detail, message, level, duration = null }) {
@@ -272,15 +283,32 @@ export function registerHorizonRoutes(app, supabase) {
   // para replicar o mesmo veredito do MaxTrack na Horizon.
   app.get('/api/horizon/treatment-queue', requireHorizonBotToken, async (req, res) => {
     try {
+      await reconcilePendingHorizonTreatments(supabase);
+
       const { data, error } = await supabase
         .from('horizon_treatment_queue')
-        .select('id, placa, nome, ocorrido_em, classificacao, empresa, motivo_raw, intervencao_sugerida, tentativas')
+        .select(`
+          id,
+          placa,
+          nome,
+          ocorrido_em,
+          classificacao,
+          empresa,
+          motivo_raw,
+          intervencao_sugerida,
+          tentativas,
+          horizon_driver_event_id,
+          horizon_event:driver_events!horizon_treatment_queue_horizon_driver_event_id_fkey(
+            placa,
+            ocorrido_em
+          )
+        `)
         .eq('status', 'pending')
         .order('ocorrido_em', { ascending: true })
         .limit(500);
       if (error) throw error;
 
-      return res.status(200).json(data || []);
+      return res.status(200).json((data || []).map(toTreatmentQueuePayload));
     } catch (err) {
       console.error('[Horizon Treatment Queue] Erro ao listar:', err);
       return res.status(500).json({ error: err.message || String(err) });
