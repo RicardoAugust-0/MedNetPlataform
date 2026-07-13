@@ -251,7 +251,11 @@ export function registerHorizonRoutes(app, supabase) {
       if (error) throw error;
 
       const cutoff = Date.now() - HORIZON_EXTRACTION_COOLDOWN_MS;
+      const treatmentPurpose = req.query.purpose === 'treatment';
       const eligible = (data || []).filter((account) => {
+        // O cooldown evita reextrair relatórios em disparos repetidos, mas o
+        // tratamento precisa enxergar imediatamente a conta da empresa alvo.
+        if (treatmentPurpose) return true;
         if (!account.last_extracted_at) return true;
         return new Date(account.last_extracted_at).getTime() < cutoff;
       }).map(({ last_extracted_at, ...account }) => account);
@@ -270,7 +274,7 @@ export function registerHorizonRoutes(app, supabase) {
     try {
       const { data, error } = await supabase
         .from('horizon_treatment_queue')
-        .select('id, placa, nome, ocorrido_em, classificacao, motivo_raw, intervencao_sugerida, tentativas')
+        .select('id, placa, nome, ocorrido_em, classificacao, empresa, motivo_raw, intervencao_sugerida, tentativas')
         .eq('status', 'pending')
         .order('ocorrido_em', { ascending: true })
         .limit(500);

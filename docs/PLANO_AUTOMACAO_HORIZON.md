@@ -659,6 +659,17 @@ têm código pronto e agendadas no N8N.
   fila de verdade em produção (decidido, não fazer antes disso
   funcionar).
 
+> **Atualização 2026-07-13 — roteamento por empresa:** a primeira execução
+> real levou cerca de 20 minutos e terminou com `0/1` resolvida porque o bot
+> varreu contas sem saber a origem do alerta. O campo `driver_events.frota`
+> já contém a empresa do evento MaxTrack (`Transjordano`, `JD Cocenzo...`). A
+> migration `20260713160000_horizon_queue_company_routing.sql` propaga esse
+> valor como `horizon_treatment_queue.empresa`, e o bot passa a normalizar o
+> nome e abrir somente a credencial cujo `label` corresponde à empresa
+> (`Transjordano → TRANSJORDANO`, `JD Cocenzo... → JD`). O endpoint de
+> credenciais usa `purpose=treatment` para ignorar apenas nesse fluxo o
+> cooldown do robô de relatórios.
+
 ---
 
 <details>

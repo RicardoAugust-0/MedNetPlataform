@@ -41,6 +41,7 @@ async function upsertQueueItem(supabase, event, horizonEvent) {
     nome: event.nome,
     ocorrido_em: event.ocorrido_em,
     classificacao: event.analise_ia_plataforma,
+    empresa: event.frota || null,
     motivo_raw: event.descricao,
     intervencao_sugerida: sugerirIntervencaoHorizon(event.analise_ia_plataforma, event.descricao),
     horizon_driver_event_id: horizonEvent.id,
@@ -75,6 +76,7 @@ async function matchAndUpsert(supabase, event) {
       nome: event.nome,
       ocorrido_em: event.ocorrido_em,
       classificacao: event.analise_ia_plataforma,
+      empresa: event.frota || null,
       motivo_raw: event.descricao,
       intervencao_sugerida: sugerirIntervencaoHorizon(event.analise_ia_plataforma, event.descricao),
       horizon_driver_event_id: null,
@@ -102,7 +104,7 @@ async function matchAndUpsert(supabase, event) {
 async function recentEligibleMaxtrackEvents(supabase) {
   const { data, error } = await supabase
     .from('driver_events')
-    .select('id, placa, nome, ocorrido_em, analise_ia_plataforma, descricao')
+    .select('id, placa, nome, ocorrido_em, analise_ia_plataforma, descricao, frota')
     .eq('platform_id', 'maxtrack')
     .in('analise_ia_plataforma', ['Positivo', 'Falso positivo'])
     .order('ocorrido_em', { ascending: false })
@@ -119,7 +121,7 @@ async function processRecentMaxtrackEvents(supabase) {
 async function retryUnmatchedAfterHorizonIngest(supabase) {
   const { data: pending, error } = await supabase
     .from('horizon_treatment_queue')
-    .select('driver_event_id, placa, nome, ocorrido_em, classificacao, motivo_raw')
+    .select('driver_event_id, placa, nome, ocorrido_em, classificacao, motivo_raw, empresa')
     .eq('status', 'no_horizon_match')
     .order('ocorrido_em', { ascending: false })
     .limit(500);
@@ -132,6 +134,7 @@ async function retryUnmatchedAfterHorizonIngest(supabase) {
       nome: item.nome,
       ocorrido_em: item.ocorrido_em,
       analise_ia_plataforma: item.classificacao,
+      frota: item.empresa,
       descricao: item.motivo_raw,
     });
   }
