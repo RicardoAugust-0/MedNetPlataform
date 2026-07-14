@@ -1,0 +1,9 @@
+.git
+.claude
+.env
+.env.*
+node_modules
+server/node_modules
+dist
+coverage
+npm-debug.log*

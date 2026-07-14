@@ -9,6 +9,7 @@ import {
   normClf,
   buildImportRows
 } from '../src/utils/fatigueParser.js';
+import { retryTransientFetch } from './transient-retry.js';
 
 export const uploadMiddleware = multer({
   storage: multer.memoryStorage(),
@@ -126,9 +127,12 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
 
     while (i < totalRows) {
       const chunk = uniqueRows.slice(i, i + chunkSize);
-      const { error: upsertError } = await supabase.rpc('upsert_driver_events_preserve', {
-        p_rows: chunk,
-      });
+      // O RPC faz upsert pela chave natural do evento, portanto e seguro
+      // repetir quando a conexao cai sem uma resposta conclusiva.
+      const { error: upsertError } = await retryTransientFetch(
+        () => supabase.rpc('upsert_driver_events_preserve', { p_rows: chunk }),
+        { label: `Import Backend · lote ${Math.floor(i / chunkSize) + 1}` },
+      );
 
       if (upsertError) {
         console.error('[Import Backend] Erro no upsert do Supabase:', upsertError);

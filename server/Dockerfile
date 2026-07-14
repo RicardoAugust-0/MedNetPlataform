@@ -1,13 +1,14 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy server package.json first
-COPY server/package.json ./server/
+# Copy the dependency manifests first so production installs exactly the
+# versions validated in this repository.
+COPY server/package.json server/package-lock.json ./server/
 
 # Install dependencies
 WORKDIR /app/server
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copy shared code (needed for fatigueParser.js and crosscheck/utils.js relative imports)
 WORKDIR /app

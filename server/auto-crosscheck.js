@@ -1,4 +1,5 @@
 import { normalizePlate } from '../src/modules/crosscheck/utils.js';
+import { retryTransientFetch } from './transient-retry.js';
 
 // A Horizon e a MaxTrack espelham a mesma frota. Uma ocorrencia Horizon pode
 // receber a tratativa da ocorrencia MaxTrack mais proxima, dentro desta janela.
@@ -269,7 +270,13 @@ export async function reconcilePendingHorizonTreatments(supabase) {
 // melhor pareamento ou revelar que um evento ja foi tratado.
 export async function runAutoCrossCheck(supabase, platformId) {
   if (platformId === 'maxtrack' || platformId === 'horizon') {
-    await processRecentMaxtrackEvents(supabase);
+    // O fluxo usa somente upserts/deletes deterministas e preserva claims e
+    // estados terminais. Pode ser reexecutado com seguranca se o transporte
+    // com o Supabase cair no meio do processamento.
+    await retryTransientFetch(
+      () => processRecentMaxtrackEvents(supabase),
+      { label: `Auto Cross-Check · ${platformId}` },
+    );
   }
 }
 
@@ -277,16 +284,21 @@ export async function runAutoCrossCheck(supabase, platformId) {
 // pelo banco (HEAD + count exact), sem trazer a fila inteira para o Node.
 export async function getHorizonTreatmentQueueSummary(supabase) {
   const statuses = ['pending', 'processing', 'done', 'error', 'no_horizon_match'];
-  const results = await Promise.all(statuses.map((status) => (
-    supabase
-      .from('horizon_treatment_queue')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', status)
-  )));
+  const results = await retryTransientFetch(async () => {
+    const responses = await Promise.all(statuses.map((status) => (
+      supabase
+        .from('horizon_treatment_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', status)
+    )));
+    const failed = responses.find((result) => result.error);
+    return failed ? { error: failed.error } : { data: responses, error: null };
+  }, { label: 'Resumo da fila Horizon' });
+
+  if (results.error) throw results.error;
 
   const summary = {};
-  results.forEach((result, index) => {
-    if (result.error) throw result.error;
+  results.data.forEach((result, index) => {
     summary[statuses[index]] = result.count || 0;
   });
   return summary;

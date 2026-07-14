@@ -35,6 +35,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
+console.log(`[MedNet Backend] Runtime Node: ${process.version}`);
 console.log(`[MedNet Backend] Conectado ao Supabase: ${supabaseUrl}`);
 
 // Health check endpoint
