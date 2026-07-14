@@ -666,9 +666,14 @@ export function buildImportRows(stage, operatorEmail) {
       if (tratadoPor !== operatorEmail.toLowerCase()) { stats.operador++; continue; }
     }
 
-    // Filtro de velocidade < 10 km/h (mínimo de veículo em movimento).
+    // A MaxTrack contabiliza alertas fechados mesmo com o veículo abaixo de
+    // 10 km/h. Preservamos essas linhas para o Analytics refletir o relatório
+    // de origem; as demais plataformas mantêm a regra de veículo em movimento.
     const speedVal = toNum(getVal(row, 'speed'));
-    if (speedVal !== null && speedVal < 10) { stats.velocidade++; continue; }
+    if (stage.platformId !== 'maxtrack' && speedVal !== null && speedVal < 10) {
+      stats.velocidade++;
+      continue;
+    }
 
     const classificationRaw = getVal(row, 'classification');
     const classificationNorm = classificationRaw ? normClf(classificationRaw) : 'Não classificado';

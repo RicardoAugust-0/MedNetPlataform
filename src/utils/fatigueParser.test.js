@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normClf, normCrit, toUF, detect, aggregate } from './fatigueParser.js';
+import { normClf, normCrit, toUF, detect, aggregate, buildImportRows } from './fatigueParser.js';
 
 describe('fatigueParser · normClf', () => {
   it('identifica falso positivo', () => {
@@ -122,5 +122,35 @@ describe('fatigueParser · aggregate (exclusão de "Leve")', () => {
       agg.mensal_crit.series['Médio']
     ).reduce((a, b) => a + b, 0);
     expect(totalCrit).toBe(2);
+  });
+});
+
+describe('fatigueParser · buildImportRows (velocidade mínima)', () => {
+  const headers = ['Data', 'Identificador/Placa', 'Nome', 'Criticidade', 'Classificação', 'Velocidade Inicial'];
+  const mapping = {
+    datetime: 'Data',
+    plate: 'Identificador/Placa',
+    type: 'Nome',
+    criticality: 'Criticidade',
+    classification: 'Classificação',
+    speed: 'Velocidade Inicial',
+  };
+  const lowSpeedRow = ['2026-07-14 10:00:00', 'ABC1D23', 'Fadiga', 'Grave', 'Positivo', '5'];
+
+  it('preserva alertas MaxTrack abaixo de 10 km/h', () => {
+    const result = buildImportRows({ platformId: 'maxtrack', headers, mapping, dataRows: [lowSpeedRow] }, '');
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].velocidade_kmh).toBe(5);
+    expect(result.stats.velocidade).toBe(0);
+    expect(result.stats.importadas).toBe(1);
+  });
+
+  it('mantém o filtro abaixo de 10 km/h nas demais plataformas', () => {
+    const result = buildImportRows({ platformId: 'sascar', headers, mapping, dataRows: [lowSpeedRow] }, '');
+
+    expect(result.rows).toHaveLength(0);
+    expect(result.stats.velocidade).toBe(1);
+    expect(result.stats.importadas).toBe(0);
   });
 });

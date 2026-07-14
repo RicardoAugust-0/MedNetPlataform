@@ -316,8 +316,9 @@ performático"):**
 2. 🔶 **Bot MaxTrack** (novo escopo do B2) — mesmo padrão do B1: Playwright
    Python dentro do orquestrador FastAPI (`automacoes/`, não o projeto
    Node/TS separado — esse fica obsoleto/substituído), login na MaxTrack,
-   vai em Central de Eventos → aba "Fechados", filtra período curto (ex:
-   última 1h, pra não repetir o problema do export de 106MB), clica
+   vai em Central de Eventos → aba "Fechados", filtra as últimas 24h
+   (captura alertas fechados horas depois da ocorrência sem repetir o
+   problema do export de 106MB visto na janela de 10 dias), clica
    "Exportar CSV", **aguarda o job assíncrono terminar** (fila de processos
    do MaxTrack, ver ícone de sino no canto superior — pode demorar,
    precisa de polling com timeout/retry), baixa o arquivo, envia via
@@ -348,13 +349,15 @@ performático"):**
    `MAXTRACK_PASSWORD` (não é pool de contas como a Horizon) e sem
    2Captcha (nenhum captcha visto na MaxTrack até agora). Fluxo: login →
    "Central de Eventos" → aba "Fechados" → filtro de período (últimas
-   `MAXTRACK_FILTRO_HORAS`h, default 2) → exporta CSV → poll da fila de
+   `MAXTRACK_FILTRO_HORAS`h, default e mínimo de 24 desde 2026-07-14) → exporta CSV → poll da fila de
    "Processos" da MaxTrack até concluir → baixa → `POST
    /api/maxtrack/ingest`. Bot name pro orquestrador FastAPI:
    `BOT_MaxtrackRelatorios` (endpoint
    `/automacoes/BOT_MaxtrackRelatorios`, precisa registrar no N8N igual o
    B1). Env vars novas em `.env`/`.env.example` do robô:
-   `MAXTRACK_USER`, `MAXTRACK_PASSWORD`, `MAXTRACK_FILTRO_HORAS`.
+   `MAXTRACK_USER`, `MAXTRACK_PASSWORD`, `MAXTRACK_FILTRO_HORAS`. A janela
+   de 24h é intencional: o upsert torna a sobreposição idempotente e evita
+   perder eventos que só entram em "Fechados" mais de 2h após a ocorrência.
 
    ⚠️ **Diferença em relação ao B1:** os seletores do
    `BOT_HorizonRelatorios` vieram de uma gravação Codegen real; este bot
