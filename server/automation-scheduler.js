@@ -1,7 +1,11 @@
 import { buildAutomationWebhookBody, isPlaywrightAutomationEndpoint } from './automation-webhook.js';
+import { isTransientFetchError, retryTransientFetch } from './transient-retry.js';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const CLAIM_LIMIT = 10;
+const WEBHOOK_MAX_ATTEMPTS = 3;
+const WEBHOOK_RETRY_BASE_DELAY_MS = 2_000;
+const RETRYABLE_WEBHOOK_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 function timeLabel(date = new Date()) {
   return date.toLocaleTimeString('pt-BR', {
@@ -19,6 +23,19 @@ function parseResponseBody(rawBody) {
   } catch {
     return { message: rawBody };
   }
+}
+
+function webhookErrorMessage(error) {
+  const message = error?.message || 'Erro desconhecido ao chamar o webhook';
+  const causeCode = error?.cause?.code;
+  return causeCode && !message.includes(causeCode) ? `${message} (${causeCode})` : message;
+}
+
+export function isRetryableWebhookError(error) {
+  return isTransientFetchError(error)
+    || error?.name === 'TimeoutError'
+    || error?.name === 'AbortError'
+    || RETRYABLE_WEBHOOK_STATUSES.has(error?.httpStatus);
 }
 
 async function finishClaim(supabase, claim, success, error = null) {
@@ -45,7 +62,11 @@ async function writeExecutionLog(supabase, claim, { success, duration, detail, l
 export async function executeScheduledAutomation(
   supabase,
   claim,
-  { fetchImpl = fetch, logger = console } = {},
+  {
+    fetchImpl = fetch,
+    logger = console,
+    webhookRetryBaseDelayMs = WEBHOOK_RETRY_BASE_DELAY_MS,
+  } = {},
 ) {
   const startedAt = Date.now();
   const lines = [
@@ -60,6 +81,7 @@ export async function executeScheduledAutomation(
   let success = false;
   let detail = 'Falha na execução agendada';
   let errorMessage = null;
+  let webhookAttempts = 0;
 
   try {
     const headers = {
@@ -68,30 +90,64 @@ export async function executeScheduledAutomation(
     };
     if (claim.automation_token) headers.Authorization = `Bearer ${claim.automation_token}`;
 
-    const response = await fetchImpl(claim.automation_endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(buildAutomationWebhookBody(claim.automation_endpoint, {
-        trigger: 'agendado',
-        timestamp: new Date().toISOString(),
-        scheduled_for: claim.scheduled_for,
-        automation_id: claim.automation_id,
-        automation_name: claim.automation_name,
-        idempotency_key: claim.claim_id,
-      })),
-      signal: AbortSignal.timeout(15_000),
-    });
+    // Corpo e chave permanecem idênticos em todas as tentativas. Isso permite
+    // que o receptor deduplique pelo claim_id e evita metadados divergentes.
+    const body = JSON.stringify(buildAutomationWebhookBody(claim.automation_endpoint, {
+      trigger: 'agendado',
+      timestamp: new Date().toISOString(),
+      scheduled_for: claim.scheduled_for,
+      automation_id: claim.automation_id,
+      automation_name: claim.automation_name,
+      idempotency_key: claim.claim_id,
+    }));
 
-    const payload = parseResponseBody(await response.text());
-    if (!response.ok) {
-      throw new Error(payload.error || payload.message || `Webhook respondeu com status ${response.status}`);
-    }
+    const { payload } = await retryTransientFetch(async () => {
+      webhookAttempts += 1;
+      const response = await fetchImpl(claim.automation_endpoint, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      const responsePayload = parseResponseBody(await response.text());
+      if (!response.ok) {
+        const responseMessage = responsePayload.error || responsePayload.message || 'Resposta sem detalhes';
+        const error = new Error(`Webhook respondeu HTTP ${response.status}: ${responseMessage}`);
+        error.httpStatus = response.status;
+        throw error;
+      }
+      return { payload: responsePayload };
+    }, {
+      label: `Webhook ${claim.automation_name}`,
+      maxAttempts: WEBHOOK_MAX_ATTEMPTS,
+      baseDelayMs: webhookRetryBaseDelayMs,
+      logger,
+      shouldRetry: isRetryableWebhookError,
+      onRetry: ({ error, attempt, maxAttempts, delayMs }) => {
+        lines.push({
+          t: timeLabel(),
+          lvl: 'warn',
+          m: `Tentativa ${attempt}/${maxAttempts} falhou: ${webhookErrorMessage(error)}. Nova tentativa em ${(delayMs / 1000).toFixed(1)}s.`,
+        });
+      },
+    });
 
     success = true;
     detail = payload.detail || payload.message || 'Webhook agendado acionado com sucesso';
+    if (webhookAttempts > 1) {
+      lines.push({
+        t: timeLabel(),
+        lvl: 'ok',
+        m: `Webhook confirmado na tentativa ${webhookAttempts}/${WEBHOOK_MAX_ATTEMPTS}.`,
+      });
+    }
     lines.push({ t: timeLabel(), lvl: 'ok', m: detail });
   } catch (error) {
-    errorMessage = error?.message || 'Erro desconhecido ao chamar o webhook';
+    const baseErrorMessage = webhookErrorMessage(error);
+    errorMessage = webhookAttempts > 1
+      ? `${baseErrorMessage} após ${webhookAttempts} tentativas`
+      : baseErrorMessage;
     detail = errorMessage;
     lines.push({ t: timeLabel(), lvl: 'err', m: `Falha: ${errorMessage}` });
     logger.error(`[Automation Scheduler] ${claim.automation_name}:`, error);
@@ -122,7 +178,11 @@ export async function executeScheduledAutomation(
 
 export async function runAutomationSchedulerTick(
   supabase,
-  { fetchImpl = fetch, logger = console } = {},
+  {
+    fetchImpl = fetch,
+    logger = console,
+    webhookRetryBaseDelayMs = WEBHOOK_RETRY_BASE_DELAY_MS,
+  } = {},
 ) {
   const { data: claims, error } = await supabase.rpc('claim_due_automations', {
     p_limit: CLAIM_LIMIT,
@@ -131,7 +191,11 @@ export async function runAutomationSchedulerTick(
   if (!claims?.length) return 0;
 
   await Promise.all(
-    claims.map((claim) => executeScheduledAutomation(supabase, claim, { fetchImpl, logger })),
+    claims.map((claim) => executeScheduledAutomation(supabase, claim, {
+      fetchImpl,
+      logger,
+      webhookRetryBaseDelayMs,
+    })),
   );
   return claims.length;
 }

@@ -52,4 +52,26 @@ describe('retryTransientFetch', () => {
     })).resolves.toBe(result);
     expect(operation).toHaveBeenCalledTimes(1);
   });
+
+  it('aceita classificador e callback de retry customizados', async () => {
+    const error = Object.assign(new Error('HTTP 503'), { httpStatus: 503 });
+    const operation = vi.fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce('ok');
+    const onRetry = vi.fn();
+
+    await expect(retryTransientFetch(operation, {
+      baseDelayMs: 0,
+      logger: silentLogger,
+      shouldRetry: (candidate) => candidate.httpStatus === 503,
+      onRetry,
+    })).resolves.toBe('ok');
+
+    expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({
+      error,
+      attempt: 1,
+      maxAttempts: 3,
+      delayMs: 0,
+    }));
+  });
 });

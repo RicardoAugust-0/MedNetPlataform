@@ -22,8 +22,9 @@ function delay(ms) {
 }
 
 /**
- * Repete somente falhas de transporte. Erros HTTP/PostgREST validos retornam
- * imediatamente para nao mascarar schema drift, RLS ou payload invalido.
+ * Por padrao repete somente falhas de transporte. O chamador pode fornecer um
+ * classificador mais amplo para respostas HTTP comprovadamente transitorias;
+ * erros funcionais devem retornar imediatamente.
  *
  * A operacao precisa ser idempotente: uma falha de rede pode acontecer depois
  * de o servidor remoto ter processado a requisicao, mas antes da resposta.
@@ -35,6 +36,8 @@ export async function retryTransientFetch(
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
     logger = console,
+    shouldRetry = isTransientFetchError,
+    onRetry = null,
   } = {},
 ) {
   const attempts = Math.max(1, maxAttempts);
@@ -43,20 +46,24 @@ export async function retryTransientFetch(
     try {
       const result = await operation();
       const resultError = result?.error;
-      if (!resultError || !isTransientFetchError(resultError) || attempt === attempts) {
+      if (!resultError || !shouldRetry(resultError) || attempt === attempts) {
         return result;
       }
 
+      const retryDelayMs = baseDelayMs * (2 ** (attempt - 1));
       logger.warn(
         `[Transient Retry] ${label}: tentativa ${attempt}/${attempts} falhou; repetindo.`,
         resultError,
       );
+      onRetry?.({ error: resultError, attempt, maxAttempts: attempts, delayMs: retryDelayMs });
     } catch (error) {
-      if (!isTransientFetchError(error) || attempt === attempts) throw error;
+      if (!shouldRetry(error) || attempt === attempts) throw error;
+      const retryDelayMs = baseDelayMs * (2 ** (attempt - 1));
       logger.warn(
         `[Transient Retry] ${label}: tentativa ${attempt}/${attempts} falhou; repetindo.`,
         error,
       );
+      onRetry?.({ error, attempt, maxAttempts: attempts, delayMs: retryDelayMs });
     }
 
     await delay(baseDelayMs * (2 ** (attempt - 1)));
