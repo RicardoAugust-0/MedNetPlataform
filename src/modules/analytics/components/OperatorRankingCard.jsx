@@ -157,7 +157,7 @@ export default function OperatorRankingCard({ platformId, selectedSeverity }) {
       <div data-card data-accent="vinho" className="card" style={{ padding: '16px 18px' }}>
         <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Alertas fechados por operador</h4>
         <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '2px 0 14px' }}>
-          Consulte uma hora específica ou compare o desempenho no período inteiro.
+          Somente alertas com “Operador - Última Atualização” e “Data finalização evento” preenchidos. Consulte uma hora específica ou compare o período inteiro.
         </p>
 
         {!loading && !errored && (

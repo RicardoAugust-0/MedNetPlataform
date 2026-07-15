@@ -16,6 +16,23 @@ export const uploadMiddleware = multer({
   limits: { fileSize: 100 * 1024 * 1024 }
 }).array('files');
 
+// O ranking MaxTrack pode alimentar remuneração, então as colunas de origem
+// precisam ser autoritativas quando realmente existem no arquivo. Isso permite
+// que uma célula atualmente vazia limpe um valor antigo sem fazer o mesmo em
+// layouts/plataformas que nem sequer possuem essas colunas.
+export function getImportAuthority(stage) {
+  const hasMappedColumn = (field) => {
+    const header = stage.mapping?.[field];
+    return Boolean(header && stage.headers.includes(header));
+  };
+  const isMaxtrack = stage.platformId === 'maxtrack';
+
+  return {
+    p_authoritative_operator: isMaxtrack && hasMappedColumn('operator'),
+    p_authoritative_treatment_end: isMaxtrack && hasMappedColumn('treatEnd'),
+  };
+}
+
 // Handler da rota do Express que orquestra a importação
 export async function handleImportEvents(supabase, req, res, clearCache) {
   try {
@@ -94,6 +111,7 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
       dataRows: combinedDataRows,
       mapping
     };
+    const importAuthority = getImportAuthority(stage);
 
     const { rows, stats } = buildImportRows(stage, operatorEmail);
 
@@ -130,7 +148,10 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
       // O RPC faz upsert pela chave natural do evento, portanto e seguro
       // repetir quando a conexao cai sem uma resposta conclusiva.
       const { error: upsertError } = await retryTransientFetch(
-        () => supabase.rpc('upsert_driver_events_preserve', { p_rows: chunk }),
+        () => supabase.rpc('upsert_driver_events_preserve', {
+          p_rows: chunk,
+          ...importAuthority,
+        }),
         { label: `Import Backend · lote ${Math.floor(i / chunkSize) + 1}` },
       );
 
