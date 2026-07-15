@@ -9,6 +9,7 @@ import { reconcilePendingHorizonTreatments, runAutoCrossCheck } from './auto-cro
 // resolve o registro atual antes de gravar, mantendo compatibilidade com o ID
 // original para instalações que ainda o utilizam.
 const LEGACY_HORIZON_SCRAPING_AUTOMATION_ID = 'c1b94e82-e3e7-4c74-bfd4-3a56df93df24';
+const HORIZON_TREATMENT_AUTOMATION_ID = 'f0a94e82-e3e7-4c74-bfd4-3a56df93df27';
 const HORIZON_SCRAPING_AUTOMATION_NAMES = [
   'Bot_HorizonScraping',
   'BOT_HorizonExport2Captcha',
@@ -22,6 +23,40 @@ const HORIZON_EXTRACTION_COOLDOWN_MS = 15 * 60 * 1000;
 const TREATMENT_RESOLVE_STATUSES = ['done', 'already_synced', 'error', 'no_horizon_match'];
 const TREATMENT_CLAIM_LIMIT = 500;
 const TREATMENT_LEASE_SECONDS = 30 * 60;
+
+export function buildHorizonCredentialUpdate(
+  current,
+  { status, loginError, workingPassword },
+  now = new Date(),
+) {
+  const update = { updated_at: now.toISOString() };
+  if (workingPassword) {
+    if (!current) throw new Error('Conta Horizon não encontrada.');
+    update.password = workingPassword;
+    update.password_candidates = [current.password, ...(current.password_candidates || [])]
+      .filter((candidate, index, values) => (
+        typeof candidate === 'string'
+        && candidate.length > 0
+        && candidate !== workingPassword
+        && values.indexOf(candidate) === index
+      ));
+    update.status = 'ok';
+    update.last_login_at = now.toISOString();
+    update.last_error = null;
+    return update;
+  }
+
+  update.status = status;
+  if (status === 'ok') {
+    update.last_login_at = now.toISOString();
+    update.last_error = null;
+  } else if (status === 'credential_error') {
+    update.last_error = loginError || 'Falha de autenticação — nenhuma senha candidata funcionou';
+  } else {
+    update.last_error = loginError || 'A sessão Horizon não foi concluída pelo robô.';
+  }
+  return update;
+}
 
 export function buildTreatmentResolutionUpdate(status, erro, tentativasAtuais = 0, now = new Date()) {
   const update = {
@@ -112,8 +147,12 @@ export function toTreatmentQueuePayload(row) {
   };
 }
 
-async function writeHorizonLog(supabase, { status, detail, message, level, duration = null }) {
-  const automationId = await resolveHorizonScrapingAutomationId(supabase);
+async function writeHorizonLog(
+  supabase,
+  { status, detail, message, level, duration = null },
+  automationIdOverride = null,
+) {
+  const automationId = automationIdOverride || await resolveHorizonScrapingAutomationId(supabase);
   const { error } = await supabase.from('automation_logs').insert({
     automation_id: automationId,
     status,
@@ -253,25 +292,30 @@ export function registerHorizonRoutes(app, supabase) {
   // login (sucesso, senha rotacionada que funcionou, ou erro de credencial).
   app.post('/api/horizon/credential-status', requireHorizonBotToken, async (req, res) => {
     try {
-      const { email, status, error: loginError, workingPassword } = req.body || {};
+      const {
+        email,
+        status,
+        error: loginError,
+        workingPassword,
+        source,
+      } = req.body || {};
       if (!email || !status || !CREDENTIAL_STATUSES.includes(status)) {
         return res.status(400).json({ error: 'email e status (ok|credential_error|session_expired) são obrigatórios.' });
       }
 
-      const update = { updated_at: new Date().toISOString() };
-      if (workingPassword) {
-        // Uma senha candidata funcionou: promove-a a senha primária do próximo ciclo.
-        update.password = workingPassword;
-        update.status = 'ok';
-        update.last_login_at = new Date().toISOString();
-        update.last_error = null;
-      } else if (status === 'credential_error') {
-        update.status = status;
-        update.last_error = loginError || 'Falha de autenticação — nenhuma senha candidata funcionou';
-      } else {
-        update.status = status;
-        if (status === 'ok') update.last_login_at = new Date().toISOString();
-      }
+      const { data: current, error: currentError } = await supabase
+        .from('horizon_credentials')
+        .select('label, status, password, password_candidates')
+        .eq('email', email)
+        .maybeSingle();
+      if (currentError) throw currentError;
+      if (!current) return res.status(404).json({ error: 'Conta Horizon não encontrada.' });
+
+      const update = buildHorizonCredentialUpdate(current, {
+        status,
+        loginError,
+        workingPassword,
+      });
 
       const { data: account, error } = await supabase
         .from('horizon_credentials')
@@ -280,16 +324,24 @@ export function registerHorizonRoutes(app, supabase) {
         .select('label')
         .maybeSingle();
       if (error) throw error;
+      if (!account) return res.status(404).json({ error: 'Conta Horizon não encontrada.' });
 
+      const shouldLogStatus = (
+        update.status !== 'ok'
+        || current.status !== 'ok'
+        || Boolean(workingPassword)
+      );
       try {
         const label = account?.label || 'Conta Horizon';
-        const failed = status !== 'ok';
-        await writeHorizonLog(supabase, {
-          status: failed ? 'failure' : 'success',
-          detail: failed ? `${label}: login requer atencao` : `${label}: login confirmado`,
-          level: failed ? 'err' : 'ok',
-          message: failed ? (loginError || 'O robo nao concluiu o login.') : 'Login validado pelo robo.',
-        });
+        const failed = update.status !== 'ok';
+        if (shouldLogStatus) {
+          await writeHorizonLog(supabase, {
+            status: failed ? 'failure' : 'success',
+            detail: failed ? `${label}: login requer atencao` : `${label}: login confirmado`,
+            level: failed ? 'err' : 'ok',
+            message: failed ? (loginError || 'O robo nao concluiu o login.') : 'Login validado pelo robo.',
+          }, source === 'treatment' ? HORIZON_TREATMENT_AUTOMATION_ID : null);
+        }
       } catch (logErr) {
         console.error('[Horizon Credential Status] Falha ao gravar activity log:', logErr);
       }

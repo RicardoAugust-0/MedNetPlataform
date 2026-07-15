@@ -13,6 +13,13 @@ const STATUS_INFO = {
 };
 const HORIZON_CREDENTIAL_COLUMNS = 'id, label, email, password, password_candidates, status, last_login_at, last_extracted_at, last_error';
 
+function fetchHorizonAccounts() {
+  return supabase
+    .from('horizon_credentials')
+    .select(HORIZON_CREDENTIAL_COLUMNS)
+    .order('label', { ascending: true });
+}
+
 function StatusPill({ status }) {
   const info = STATUS_INFO[status] || STATUS_INFO.ok;
   return <span className="pillc" style={{ background: info.bg, color: info.color }}>{info.label}</span>;
@@ -47,11 +54,7 @@ export default function IntegracoesHorizon() {
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('horizon_credentials')
-      .select(HORIZON_CREDENTIAL_COLUMNS)
-      .order('label', { ascending: true });
+    const { data, error } = await fetchHorizonAccounts();
     if (error) {
       toast('Erro ao carregar contas Horizon: ' + error.message, 'error');
     } else {
@@ -60,7 +63,19 @@ export default function IntegracoesHorizon() {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchHorizonAccounts().then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        toast('Erro ao carregar contas Horizon: ' + error.message, 'error');
+      } else {
+        setAccounts(data || []);
+      }
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [toast]);
 
   const addAccount = async () => {
     const label = newLabel.trim();
@@ -136,10 +151,9 @@ export default function IntegracoesHorizon() {
       .update({
         password: editPassword.trim(),
         password_candidates: editCandidates,
-        // Editar credenciais é a ação do operador para resolver um erro de senha —
-        // some com o alerta na UI reiniciando o status para 'ok'.
-        status: acc.status === 'credential_error' ? 'ok' : acc.status,
-        last_error: acc.status === 'credential_error' ? null : acc.last_error,
+        // Editar credenciais também reabre contas com falha operacional.
+        status: acc.status !== 'ok' ? 'ok' : acc.status,
+        last_error: acc.status !== 'ok' ? null : acc.last_error,
         updated_at: new Date().toISOString(),
       })
       .eq('id', acc.id);
@@ -165,7 +179,8 @@ export default function IntegracoesHorizon() {
         <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
           O robô <strong>Bot_HorizonScraping</strong> usa estas credenciais para extrair relatórios de hora em hora.
           A Horizon força troca de senha periodicamente — cadastre aqui a senha atual e as senhas candidatas que costumam circular;
-          se o login falhar, o robô tenta as candidatas em ordem antes de marcar a conta com erro.
+          se a Horizon rejeitar explicitamente a senha, o robô tenta as candidatas em ordem. Captcha, timeout e indisponibilidade
+          aparecem como falha de sessão e não bloqueiam a conta.
         </div>
 
         {accounts.length === 0 ? (
@@ -197,7 +212,7 @@ export default function IntegracoesHorizon() {
                     )}
                   </div>
 
-                  {acc.status === 'credential_error' && acc.last_error && !isEditing && (
+                  {acc.status !== 'ok' && acc.last_error && !isEditing && (
                     <div style={{ fontSize: 11.5, color: 'var(--danger-500)', marginTop: 4 }}>
                       <i className="ti ti-alert-triangle"></i> {acc.last_error}
                     </div>

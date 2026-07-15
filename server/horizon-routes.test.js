@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import {
+  buildHorizonCredentialUpdate,
   buildTreatmentResolutionUpdate,
   inspectHorizonExport,
   toTreatmentQueuePayload,
@@ -13,6 +14,49 @@ const HORIZON_HEADERS = [
   'Gravidade',
   'Evento',
 ];
+
+describe('buildHorizonCredentialUpdate', () => {
+  const now = new Date('2026-07-15T15:30:00Z');
+
+  it('mantem falha operacional elegivel e preserva o diagnostico', () => {
+    expect(buildHorizonCredentialUpdate(null, {
+      status: 'session_expired',
+      loginError: 'Captcha sem resposta.',
+    }, now)).toEqual({
+      status: 'session_expired',
+      last_error: 'Captcha sem resposta.',
+      updated_at: '2026-07-15T15:30:00.000Z',
+    });
+  });
+
+  it('limpa o erro anterior quando o login volta a funcionar', () => {
+    expect(buildHorizonCredentialUpdate(null, {
+      status: 'ok',
+    }, now)).toEqual({
+      status: 'ok',
+      last_login_at: '2026-07-15T15:30:00.000Z',
+      last_error: null,
+      updated_at: '2026-07-15T15:30:00.000Z',
+    });
+  });
+
+  it('promove candidata sem perder a rotacao anterior', () => {
+    expect(buildHorizonCredentialUpdate({
+      password: 'senha-atual',
+      password_candidates: ['senha-anterior', 'senha-funcional'],
+    }, {
+      status: 'ok',
+      workingPassword: 'senha-funcional',
+    }, now)).toEqual({
+      password: 'senha-funcional',
+      password_candidates: ['senha-atual', 'senha-anterior'],
+      status: 'ok',
+      last_login_at: '2026-07-15T15:30:00.000Z',
+      last_error: null,
+      updated_at: '2026-07-15T15:30:00.000Z',
+    });
+  });
+});
 
 describe('inspectHorizonExport', () => {
   it('reconhece CSV Horizon valido sem nenhuma linha de eventos', () => {
