@@ -17,7 +17,7 @@ export const AVAILABLE_ICONS = [
 const LinksContext = createContext(null);
 const LINK_COLUMNS = 'id, section, name, description, url, icon, bg, ic, position';
 
-export function LinksProvider({ children }) {
+export function LinksProvider({ children, enabled = true }) {
   const toast = useToast();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,10 +29,14 @@ export function LinksProvider({ children }) {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    const timeoutId = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const channel = supabase
       .channel('links-live-' + crypto.randomUUID())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'links' }, () => {
@@ -40,7 +44,7 @@ export function LinksProvider({ children }) {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [load]);
+  }, [enabled, load]);
 
   const add = useCallback(async ({ name, desc, url, section, icon, bg, ic }) => {
     const p = PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -106,7 +110,7 @@ export function LinksProvider({ children }) {
 
   return createElement(
     LinksContext.Provider,
-    { value: { links, loading, add, update, remove, reorder } },
+    { value: { links, loading: enabled && loading, add, update, remove, reorder } },
     children
   );
 }

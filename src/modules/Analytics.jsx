@@ -1,11 +1,9 @@
+import { lazy, Suspense } from 'react';
 import '../styles/analytics.css';
 import Skeleton from '../components/Skeleton.jsx';
 
 // Subcomponents
 import FadigaKPIs from './analytics/FadigaKPIs.jsx';
-import ComparisonView from './analytics/ComparisonView.jsx';
-import FadigaCharts from './analytics/FadigaCharts.jsx';
-import ImportModal from './analytics/ImportModal.jsx';
 import FadigaKPIsDrill from './analytics/components/FadigaKPIsDrill.jsx';
 
 // Modular components
@@ -17,32 +15,40 @@ import ComparisonModal from './analytics/components/ComparisonModal.jsx';
 import { useAnalyticsState } from './analytics/hooks/useAnalyticsState.js';
 import { useFadigaScore } from './analytics/hooks/useFadigaScore.js';
 
+const ComparisonView = lazy(() => import('./analytics/ComparisonView.jsx'));
+const FadigaCharts = lazy(() => import('./analytics/FadigaCharts.jsx'));
+const ImportModal = lazy(() => import('./analytics/ImportModal.jsx'));
+
+function AnalyticsContentSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Carregando indicadores de analytics">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} height={90} radius={12} />
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} height={220} radius={14} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChartsLoading() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 20 }} aria-busy="true">
+      <Skeleton height={220} radius={14} />
+      <Skeleton height={220} radius={14} />
+    </div>
+  );
+}
+
 export default function Analytics() {
   const state = useAnalyticsState();
   const fadigaScoreResult = useFadigaScore(state.d);
   const fadigaScore = (state.activeId || state.compare) ? fadigaScoreResult?.score ?? null : null;
-
-  if (state.loading) {
-    return (
-      <div style={{ width: '100%', padding: '4px 0 24px' }} aria-busy="true">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <Skeleton width={220} height={28} radius={8} />
-          <Skeleton width={160} height={28} radius={8} style={{ marginLeft: 'auto' }} />
-          <Skeleton width={100} height={28} radius={8} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} height={90} radius={12} />
-          ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} height={220} radius={14} />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ width: '100%', padding: '4px 0 24px' }}>
@@ -76,6 +82,10 @@ export default function Analytics() {
           fadigaScore={fadigaScore}
         />
 
+        {state.loading ? (
+          <AnalyticsContentSkeleton />
+        ) : (
+          <>
         <SourceChips
           sourcesList={state.sourcesList}
           activeId={state.activeId}
@@ -187,42 +197,46 @@ export default function Analytics() {
 
         {/* Comparação */}
         {state.compare && state.sources.length >= 2 && (
-          <ComparisonView
-            sources={state.sources}
-            selectedMonth={state.selectedMonth}
-            formatMonthKey={state.formatMonthKey}
-            compareCompanies={state.compareCompanies}
-            setCompareCompanies={state.setCompareCompanies}
-            selectedSeverity={state.selectedSeverity}
-            compareMode={state.compareMode}
-          />
+          <Suspense fallback={<ChartsLoading />}>
+            <ComparisonView
+              sources={state.sources}
+              selectedMonth={state.selectedMonth}
+              formatMonthKey={state.formatMonthKey}
+              compareCompanies={state.compareCompanies}
+              setCompareCompanies={state.setCompareCompanies}
+              selectedSeverity={state.selectedSeverity}
+              compareMode={state.compareMode}
+            />
+          </Suspense>
         )}
 
         {(state.activeId || state.compare) && (
-          <FadigaCharts
-            d={state.d}
-            noData={state.noData}
-            selectedMonth={state.selectedMonth}
-            setSelectedMonth={state.setSelectedMonth}
-            formatMonthKey={state.formatMonthKey}
-            startDate={state.startDate}
-            endDate={state.endDate}
-            selectedSeverity={state.selectedSeverity}
-            setSelectedSeverity={state.setSelectedSeverity}
-            selectedClassification={state.selectedClassification}
-            setSelectedClassification={state.setSelectedClassification}
-            selectedType={state.selectedType}
-            setSelectedType={state.setSelectedType}
-            availableTypes={state.availableTypes}
-            selectedCompany={state.selectedCompany}
-            setSelectedCompany={state.setSelectedCompany}
-            availableCompanies={state.availableCompanies}
-            selectedUf={state.selectedUf}
-            setSelectedUf={state.setSelectedUf}
-            availableUfs={state.availableUfs}
-            compare={state.compare}
-            platformId={state.activeSource?.platformId}
-          />
+          <Suspense fallback={<ChartsLoading />}>
+            <FadigaCharts
+              d={state.d}
+              noData={state.noData}
+              selectedMonth={state.selectedMonth}
+              setSelectedMonth={state.setSelectedMonth}
+              formatMonthKey={state.formatMonthKey}
+              startDate={state.startDate}
+              endDate={state.endDate}
+              selectedSeverity={state.selectedSeverity}
+              setSelectedSeverity={state.setSelectedSeverity}
+              selectedClassification={state.selectedClassification}
+              setSelectedClassification={state.setSelectedClassification}
+              selectedType={state.selectedType}
+              setSelectedType={state.setSelectedType}
+              availableTypes={state.availableTypes}
+              selectedCompany={state.selectedCompany}
+              setSelectedCompany={state.setSelectedCompany}
+              availableCompanies={state.availableCompanies}
+              selectedUf={state.selectedUf}
+              setSelectedUf={state.setSelectedUf}
+              availableUfs={state.availableUfs}
+              compare={state.compare}
+              platformId={state.activeSource?.platformId}
+            />
+          </Suspense>
         )}
 
         {/* Nota explicativa de rodapé */}
@@ -230,15 +244,21 @@ export default function Analytics() {
           <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Como ler. </b>
           Os indicadores são recalculados a cada importação e filtragem. Criticidades com grafias divergentes são unificadas em Gravíssimo / Grave / Médio; a classificação é normalizada em Positivo / Falso positivo / Não classificado. Eventos de criticidade <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Leve</b> são preservados no banco, mas ficam fora da análise. A UF é extraída do texto da localidade. Use <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Comparar plataformas</b> para confrontar duas ou mais fontes e <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Exportar PDF</b> para gerar o relatório completo para impressão.
         </div>
+          </>
+        )}
 
       </div>
 
-      <ImportModal
-        modalOpen={state.modalOpen}
-        setModalOpen={state.setModalOpen}
-        saving={state.saving}
-        onImportConfirm={state.onImportConfirm}
-      />
+      {state.modalOpen && (
+        <Suspense fallback={null}>
+          <ImportModal
+            modalOpen={state.modalOpen}
+            setModalOpen={state.setModalOpen}
+            saving={state.saving}
+            onImportConfirm={state.onImportConfirm}
+          />
+        </Suspense>
+      )}
 
       {state.compareModalOpen && (
         <ComparisonModal

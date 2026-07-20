@@ -569,12 +569,12 @@
   font-size: 28px;
 }
 
-/* Override CDN Tabler Icons to set font-display: block */
+/* Mantém os ícones visíveis com fallback enquanto a fonte remota é baixada. */
 @font-face {
   font-family: "tabler-icons";
   font-style: normal;
   font-weight: normal;
-  font-display: block;
+  font-display: swap;
   src:
     url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/fonts/tabler-icons.woff2")
       format("woff2"),

@@ -7,7 +7,7 @@ import { createDebouncedPatchQueue } from './debouncedPatchQueue.js';
 const NotesContext = createContext(null);
 const NOTE_COLUMNS = 'id, title, body, is_personal, author_id, updated_at';
 
-export function NotesProvider({ children }) {
+export function NotesProvider({ children, enabled = true }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [notes, setNotes] = useState([]);
@@ -32,10 +32,14 @@ export function NotesProvider({ children }) {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    const timeoutId = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const channel = supabase
       .channel('notes-live-' + crypto.randomUUID())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notes' }, ({ new: row }) => {
@@ -49,7 +53,7 @@ export function NotesProvider({ children }) {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [patchQueue]);
+  }, [enabled, patchQueue]);
 
   useEffect(() => () => { void patchQueue.flushAll(); }, [patchQueue]);
 
@@ -84,7 +88,7 @@ export function NotesProvider({ children }) {
 
   return createElement(
     NotesContext.Provider,
-    { value: { notes, loading, add, update, remove } },
+    { value: { notes, loading: enabled && loading, add, update, remove } },
     children
   );
 }

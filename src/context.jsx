@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useOpenAlerts } from './hooks/useOpenAlerts';
 import { useSheetHistory } from './hooks/useSheetHistory';
 
@@ -12,8 +13,14 @@ function save(k, v) {
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
+  const { pathname } = useLocation();
+  const openAlertsEnabled = pathname === '/'
+    || pathname === '/dashboard'
+    || pathname.startsWith('/dashboard/')
+    || pathname === '/monitor'
+    || pathname.startsWith('/monitor/');
   const [platformId,  setPlatformIdState]  = useState(() => load('platformId', 'sascar'));
-  const { drivers, loading: driversLoading, loadedAt: driversLoadedAt, reload: reloadDrivers, lastImportedAt } = useOpenAlerts();
+  const { drivers, loading: driversLoading, loadedAt: driversLoadedAt, reload: reloadDrivers, lastImportedAt } = useOpenAlerts({ enabled: openAlertsEnabled });
   const sheetHistory = useSheetHistory();
   const [filters,     setFilters]          = useState({ empresa:'', comportamento:'', turno:'', prioridade:'', busca:'' });
   const [theme,       setThemeState]       = useState(() => load('theme',    'dark'));

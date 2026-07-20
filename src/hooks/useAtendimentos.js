@@ -8,7 +8,7 @@ const ATENDIMENTO_COLUMNS = 'id, motorista, placa, transportadora, operador_nome
 
 const AtendimentosContext = createContext(null);
 
-export function AtendimentosProvider({ children }) {
+export function AtendimentosProvider({ children, enabled = true }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [history, setHistory] = useState([]);
@@ -27,13 +27,17 @@ export function AtendimentosProvider({ children }) {
     if (error) { setError(error.message); toast('Erro ao carregar histórico', 'error'); }
     else { setHistory(data.map(toLocal)); setHistoryLoadedAt(new Date().toISOString()); }
     setLoading(false);
-  }, []);
+  }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    const timeoutId = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [enabled, load]);
 
   // Realtime — atendimentos de outros operadores aparecem automaticamente
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     
     // Gerando um nome de canal único para evitar conflitos de inscrição múltipla
     // quando o hook é usado em múltiplos componentes simultaneamente.
@@ -54,7 +58,7 @@ export function AtendimentosProvider({ children }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [enabled]);
 
   const registrar = useCallback(async ({ motorista, placa, transportadora, tipo, bucket, obs }) => {
     if (!profile) return;
@@ -76,7 +80,7 @@ export function AtendimentosProvider({ children }) {
     setHistory(prev => prev.map(h => h.id === optimistic.id ? toLocal(data) : h));
 
     return { data };
-  }, [profile]);
+  }, [profile, toast]);
 
   const loadByRange = useCallback(async (start, end) => {
     if (!isSupabaseConfigured) return { data: [], error: null };
@@ -179,7 +183,7 @@ export function AtendimentosProvider({ children }) {
 
   return createElement(
     AtendimentosContext.Provider,
-    { value: { history, loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter, loadAllByFilter, deleteByFilter } },
+    { value: { history, loading: enabled && loading, error, historyLoadedAt, registrar, reload: load, loadByRange, loadDriverHistory, loadAtendimentosForFilter, loadAllByFilter, deleteByFilter } },
     children
   );
 }

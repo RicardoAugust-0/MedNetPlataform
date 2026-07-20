@@ -6,7 +6,7 @@ import { createDebouncedPatchQueue } from './debouncedPatchQueue.js';
 const TemplatesContext = createContext(null);
 const TEMPLATE_COLUMNS = 'id, tag, tag_label, title, body, position, created_at';
 
-export function TemplatesProvider({ children }) {
+export function TemplatesProvider({ children, enabled = true }) {
   const toast = useToast();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,10 +31,14 @@ export function TemplatesProvider({ children }) {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    const timeoutId = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const channel = supabase
       .channel('templates-live-' + crypto.randomUUID())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'templates' }, ({ new: row }) => {
@@ -48,7 +52,7 @@ export function TemplatesProvider({ children }) {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [patchQueue]);
+  }, [enabled, patchQueue]);
 
   useEffect(() => () => { void patchQueue.flushAll(); }, [patchQueue]);
 
@@ -94,7 +98,7 @@ export function TemplatesProvider({ children }) {
 
   return createElement(
     TemplatesContext.Provider,
-    { value: { templates, loading, add, update, remove, reorder } },
+    { value: { templates, loading: enabled && loading, add, update, remove, reorder } },
     children
   );
 }

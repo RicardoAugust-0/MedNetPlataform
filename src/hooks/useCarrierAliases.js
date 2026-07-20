@@ -5,13 +5,13 @@ const KEY = 'carrier_aliases';
 
 const CarrierAliasesContext = createContext(null);
 
-export function CarrierAliasesProvider({ children }) {
+export function CarrierAliasesProvider({ children, enabled = true }) {
   const [aliases, setAliasesState] = useState({});
-  const [loading, setLoading]       = useState(isSupabaseConfigured);
+  const [loading, setLoading]       = useState(isSupabaseConfigured && enabled);
 
   // Load inicial
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     let cancelled = false;
 
     supabase
@@ -26,11 +26,11 @@ export function CarrierAliasesProvider({ children }) {
       });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
 
   // Realtime — propaga mudança feita no Admin sem precisar de reload
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const channelName = `carrier-aliases-live-${crypto.randomUUID()}`;
     const channel = supabase
       .channel(channelName)
@@ -43,7 +43,7 @@ export function CarrierAliasesProvider({ children }) {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [enabled]);
 
   const setAliases = useCallback(async (next) => {
     setAliasesState(next);
@@ -85,7 +85,7 @@ export function CarrierAliasesProvider({ children }) {
 
   return createElement(
     CarrierAliasesContext.Provider,
-    { value: { aliases, loading, setAliases, resolveAlias, resolveMonitorName } },
+    { value: { aliases, loading: enabled && loading, setAliases, resolveAlias, resolveMonitorName } },
     children
   );
 }

@@ -4,16 +4,17 @@ import { supabase } from "../supabase.js";
 const ProfilesContext = createContext(null);
 const PROFILE_COLUMNS = 'id, nome, cargo, role, avatar_url, created_at';
 
-export function ProfilesProvider({ children }) {
+export function ProfilesProvider({ children, enabled = true }) {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return;
     supabase.from('profiles').select(PROFILE_COLUMNS).order('created_at').then(({ data }) => {
       if (data) setProfiles(data);
       setLoading(false);
     });
-  }, []);
+  }, [enabled]);
 
   const applyPatch = useCallback((id, patch) => {
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
@@ -49,12 +50,13 @@ export function ProfilesProvider({ children }) {
   }, [profiles, applyPatch, persistPatch]);
 
   return (
-    <ProfilesContext.Provider value={{ profiles, loading, updateRole, updateInfo }}>
+    <ProfilesContext.Provider value={{ profiles, loading: enabled && loading, updateRole, updateInfo }}>
       {children}
     </ProfilesContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProfiles() {
   const context = useContext(ProfilesContext);
   if (!context) {

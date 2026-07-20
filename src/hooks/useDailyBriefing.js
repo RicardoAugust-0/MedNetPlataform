@@ -13,12 +13,12 @@ function todayKey() {
 }
 
 export function useDailyBriefing() {
-  const { drivers, driversLoading } = useApp();
+  const { drivers, driversLoading, driversLoadedAt } = useApp();
   const { notify } = useNotifications();
   const firedRef = useRef(false);
 
   useEffect(() => {
-    if (driversLoading || firedRef.current) return;
+    if (driversLoading || !driversLoadedAt || firedRef.current) return;
 
     const storageKey = `mn_briefing_seen_${todayKey()}`;
     if (localStorage.getItem(storageKey)) {
@@ -49,5 +49,5 @@ export function useDailyBriefing() {
 
     localStorage.setItem(storageKey, '1');
     firedRef.current = true;
-  }, [drivers, driversLoading, notify]);
+  }, [drivers, driversLoading, driversLoadedAt, notify]);
 }

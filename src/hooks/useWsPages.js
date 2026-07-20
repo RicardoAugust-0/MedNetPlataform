@@ -6,7 +6,7 @@ import { createDebouncedPatchQueue } from './debouncedPatchQueue.js';
 const WsPagesContext = createContext(null);
 const WS_PAGE_COLUMNS = 'id, title, icon_index, category, favorite, content, position, created_at';
 
-export function WsPagesProvider({ children }) {
+export function WsPagesProvider({ children, enabled = true }) {
   const toast = useToast();
   const [wsPages, setWsPages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,10 +34,14 @@ export function WsPagesProvider({ children }) {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    const timeoutId = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const channel = supabase
       .channel('ws-pages-live-' + crypto.randomUUID())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ws_pages' }, ({ new: row }) => {
@@ -51,7 +55,7 @@ export function WsPagesProvider({ children }) {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [patchQueue]);
+  }, [enabled, patchQueue]);
 
   useEffect(() => () => { void patchQueue.flushAll(); }, [patchQueue]);
 
@@ -97,7 +101,7 @@ export function WsPagesProvider({ children }) {
 
   return createElement(
     WsPagesContext.Provider,
-    { value: { wsPages, loading, add, update, remove, reorder } },
+    { value: { wsPages, loading: enabled && loading, add, update, remove, reorder } },
     children
   );
 }

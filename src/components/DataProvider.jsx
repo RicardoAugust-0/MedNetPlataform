@@ -25,14 +25,18 @@ function RoleScopedAutomationsProvider({ children }) {
 }
 
 export function DataProvider({ children }) {
+  const { pathname } = useLocation();
+  const isDashboard = pathname === '/' || pathname === '/dashboard' || pathname.startsWith('/dashboard/');
+  const isMonitor = pathname === '/monitor' || pathname.startsWith('/monitor/');
+
   return (
-    <ProfilesProvider>
-      <CarrierAliasesProvider>
-        <AtendimentosProvider>
-          <LinksProvider>
-            <NotesProvider>
-              <TemplatesProvider>
-                <WsPagesProvider>
+    <ProfilesProvider enabled={isDashboard || pathname.startsWith('/admin/equipe')}>
+      <CarrierAliasesProvider enabled={isDashboard || isMonitor || pathname.startsWith('/dossies') || pathname.startsWith('/admin/integracoes/transportadoras')}>
+        <AtendimentosProvider enabled={isDashboard || isMonitor || pathname.startsWith('/admin/sistema/limpeza')}>
+          <LinksProvider enabled={pathname === '/links' || pathname.startsWith('/links/')}>
+            <NotesProvider enabled={pathname === '/notas' || pathname.startsWith('/notas/')}>
+              <TemplatesProvider enabled={isMonitor || pathname === '/templates' || pathname.startsWith('/templates/')}>
+                <WsPagesProvider enabled={pathname === '/workspace' || pathname.startsWith('/workspace/')}>
                   <RoleScopedAutomationsProvider>
                     {children}
                   </RoleScopedAutomationsProvider>

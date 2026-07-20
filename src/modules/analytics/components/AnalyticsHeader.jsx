@@ -1,5 +1,7 @@
+import { lazy, Suspense } from 'react';
 import SavedViewsMenu from './SavedViewsMenu.jsx';
-import FadigaZeroGauge from './FadigaZeroGauge.jsx';
+
+const FadigaZeroGauge = lazy(() => import('./FadigaZeroGauge.jsx'));
 
 export default function AnalyticsHeader({
   activeId,
@@ -38,7 +40,11 @@ export default function AnalyticsHeader({
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-          {fadigaScore != null && <FadigaZeroGauge score={fadigaScore} />}
+          {fadigaScore != null && (
+            <Suspense fallback={null}>
+              <FadigaZeroGauge score={fadigaScore} />
+            </Suspense>
+          )}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', background: 'var(--surface-1)', border: '1px solid var(--border)', padding: '6px 11px', borderRadius: '99px' }}>
             <i className="ti ti-calendar" style={{ fontSize: '13px', color: 'var(--text-muted)' }}></i>
             {d && d.meta?.periodo ? `${d.meta.periodo[0]} – ${d.meta.periodo[1]}` : 'Sem período definido'}
