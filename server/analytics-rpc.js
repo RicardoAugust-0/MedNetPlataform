@@ -72,13 +72,15 @@ async function querySupportMetrics(supabase, params) {
 
   if (error) {
     if (isMissingSupportMetricsRPC(error)) {
-      const missingError = new Error(
-        'RPC analytics_support_metrics ausente. Aplique a migration 20260720113000 antes do backend.',
+      // Esta RPC apenas enriquece o rollup com evidencia e tempos de
+      // tratativa. Durante um deploy em que o backend sobe antes da migration,
+      // mantenha o restante do Analytics disponivel com os mesmos valores
+      // neutros que o proprio get_analytics_rollup ja devolve.
+      console.warn(
+        '[MedNet Backend] RPC analytics_support_metrics ausente; '
+        + 'aplique a migration 20260720113000. Servindo Analytics sem metricas de suporte.',
       );
-      missingError.name = 'MissingAnalyticsSupportRpcError';
-      missingError.code = 'ANALYTICS_SUPPORT_RPC_MISSING';
-      missingError.cause = error;
-      throw missingError;
+      return supportMetricsFromRPC(null);
     }
     throw error;
   }

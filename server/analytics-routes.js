@@ -26,7 +26,6 @@ export function isTransientAnalyticsRpcError(error) {
     || error?.name === 'TimeoutError'
     || error?.name === 'AbortError'
     || code.startsWith('08')
-    || code === 'ANALYTICS_SUPPORT_RPC_MISSING'
     || ['53300', '57014', '57P01', 'PGRST000', 'PGRST001', 'PGRST002', 'PGRST003'].includes(code);
 }
 

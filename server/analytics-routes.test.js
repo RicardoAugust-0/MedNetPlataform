@@ -136,7 +136,6 @@ describe('analytics payload resilience', () => {
     expect(isTransientAnalyticsRpcError({ code: 'PGRST003' })).toBe(true);
     expect(isTransientAnalyticsRpcError({ message: 'fetch failed', cause: { code: 'ETIMEDOUT' } })).toBe(true);
     expect(isTransientAnalyticsRpcError({ code: '42703', message: 'column not found' })).toBe(false);
-    expect(isTransientAnalyticsRpcError({ code: 'ANALYTICS_SUPPORT_RPC_MISSING' })).toBe(true);
   });
 
   it('nao confunde erro interno 42883 com RPC de rollup ausente', () => {

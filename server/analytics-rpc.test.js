@@ -80,7 +80,8 @@ describe('analytics support metrics RPC', () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
-  it('exige a migration quando a RPC agregada ainda nao existe', async () => {
+  it('mantem o dashboard disponivel quando a RPC de suporte ainda nao existe', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const supabase = createSupabase({
       supportError: {
         code: 'PGRST202',
@@ -88,15 +89,26 @@ describe('analytics support metrics RPC', () => {
       },
     });
 
-    await expect(buildSingleAnalyticsViaRPC(supabase, {
-      platformId: 'maxtrack',
-      month: 'all',
-      severity: 'all',
-      classification: 'all',
-    }, helpers)).rejects.toMatchObject({
-      code: 'ANALYTICS_SUPPORT_RPC_MISSING',
-      name: 'MissingAnalyticsSupportRpcError',
-    });
+    try {
+      const result = await buildSingleAnalyticsViaRPC(supabase, {
+        platformId: 'maxtrack',
+        month: 'all',
+        severity: 'all',
+        classification: 'all',
+      }, helpers);
+
+      expect(result.d.kpis).toMatchObject({
+        total: 4,
+        pct_evidencia: null,
+        t_ini_mediana: null,
+        t_fin_mediana: null,
+      });
+      expect(result.d.evidencia).toBeNull();
+      expect(result.d.hasEvidence).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('20260720113000'));
+    } finally {
+      warnSpy.mockRestore();
+    }
 
     expect(supabase.from).not.toHaveBeenCalled();
   });
