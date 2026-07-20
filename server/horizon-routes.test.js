@@ -66,7 +66,7 @@ describe('inspectHorizonExport', () => {
       buffer: Buffer.from(HORIZON_HEADERS.join(';') + '\n'),
     };
 
-    expect(inspectHorizonExport(file)).toMatchObject({
+    await expect(inspectHorizonExport(file)).resolves.toMatchObject({
       hasHorizonLayout: true,
       isValidEmpty: true,
       dataRows: [],
@@ -82,7 +82,7 @@ describe('inspectHorizonExport', () => {
       buffer: XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }),
     };
 
-    expect(inspectHorizonExport(file)).toMatchObject({
+    await expect(inspectHorizonExport(file)).resolves.toMatchObject({
       hasHorizonLayout: true,
       isValidEmpty: true,
       dataRows: [],
@@ -97,7 +97,7 @@ describe('inspectHorizonExport', () => {
       buffer: Buffer.from([HORIZON_HEADERS.join(';'), eventRow.join(';')].join('\n')),
     };
 
-    expect(inspectHorizonExport(file)).toMatchObject({
+    await expect(inspectHorizonExport(file)).resolves.toMatchObject({
       hasHorizonLayout: true,
       isValidEmpty: false,
       dataRows: [eventRow],
@@ -111,7 +111,7 @@ describe('inspectHorizonExport', () => {
       buffer: Buffer.from('download indisponivel\n'),
     };
 
-    expect(inspectHorizonExport(file)).toMatchObject({
+    await expect(inspectHorizonExport(file)).resolves.toMatchObject({
       hasHorizonLayout: false,
       isValidEmpty: false,
     });

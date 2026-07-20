@@ -1,7 +1,7 @@
 import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { unlink } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -105,9 +105,15 @@ export function createSpreadsheetUploadMiddleware(config = getSpreadsheetUploadC
 
 export const uploadMiddleware = createSpreadsheetUploadMiddleware();
 
-async function cleanupUploadedFiles(files = []) {
+export async function cleanupUploadedFiles(files = []) {
   const paths = files.map((file) => file?.path).filter(Boolean);
   await Promise.allSettled(paths.map((filePath) => unlink(filePath)));
+}
+
+export async function readUploadedFileBuffer(file) {
+  if (Buffer.isBuffer(file?.buffer)) return file.buffer;
+  if (file?.path) return readFile(file.path);
+  throw new Error(`Arquivo temporario indisponivel: ${file?.originalname || 'sem nome'}`);
 }
 
 function detectCsvDelimiter(firstLine) {
@@ -244,10 +250,11 @@ async function* iterateCsvDataRows(file) {
   }
 }
 
-function inspectWorkbookFile(file) {
-  const workbook = file?.path
-    ? XLSX.readFile(file.path, { cellDates: true })
-    : XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+async function inspectWorkbookFile(file) {
+  // The ESM SheetJS build does not bind Node's fs adapter, so XLSX.readFile()
+  // always throws "Cannot access file" for disk-backed Multer uploads. Read
+  // through Node first, then give SheetJS the bytes it can parse reliably.
+  const workbook = XLSX.read(await readUploadedFileBuffer(file), { type: 'buffer', cellDates: true });
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
   const aoa = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   const { headers, dataRows } = readHeaders(aoa);
@@ -265,7 +272,7 @@ export async function readUploadHeaders(file) {
   const extension = path.extname(String(file?.originalname || '')).toLowerCase();
   const mime = String(file?.mimetype || '').toLowerCase();
   const isCsv = extension === '.csv' || ['text/csv', 'application/csv', 'text/plain'].includes(mime);
-  if (!isCsv) return inspectWorkbookFile(file).headers;
+  if (!isCsv) return (await inspectWorkbookFile(file)).headers;
 
   const { iterator, headers } = await openCsvData(file);
   if (typeof iterator.return === 'function') await iterator.return();

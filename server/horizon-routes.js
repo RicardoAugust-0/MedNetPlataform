@@ -1,6 +1,11 @@
 import * as XLSX from 'xlsx';
 import { parseCSV, readHeaders, applyPlatformMap } from '../src/utils/fatigueParser.js';
-import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
+import {
+  cleanupUploadedFiles,
+  handleImportEvents,
+  readUploadedFileBuffer,
+  uploadMiddleware,
+} from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
 import { reconcilePendingHorizonTreatments, runAutoCrossCheck } from './auto-crosscheck.js';
 import { safeSecretEqual } from './security.js';
@@ -93,13 +98,14 @@ export function requireHorizonBotToken(req, res, next) {
   next();
 }
 
-export function inspectHorizonExport(file) {
+export async function inspectHorizonExport(file) {
   const isCsv = /\.csv$/i.test(file.originalname) || file.mimetype === 'text/csv';
+  const contents = await readUploadedFileBuffer(file);
   let aoa;
   if (isCsv) {
-    aoa = parseCSV(file.buffer.toString('utf-8'));
+    aoa = parseCSV(contents.toString('utf-8'));
   } else {
-    const wb = XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+    const wb = XLSX.read(contents, { type: 'buffer', cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
     aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   }
@@ -191,10 +197,10 @@ export function registerHorizonRoutes(app, supabase) {
     };
 
     try {
-      const inspectedFiles = uploadedFiles.map((file) => ({
+      const inspectedFiles = await Promise.all(uploadedFiles.map(async (file) => ({
         file,
-        ...inspectHorizonExport(file),
-      }));
+        ...await inspectHorizonExport(file),
+      })));
       emptyExports = inspectedFiles.filter((item) => item.isValidEmpty);
 
       // Ignora somente exports vazios cujo layout Horizon foi confirmado. Um
@@ -286,6 +292,8 @@ export function registerHorizonRoutes(app, supabase) {
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || String(err) });
       }
+    } finally {
+      await cleanupUploadedFiles(uploadedFiles);
     }
   });
 

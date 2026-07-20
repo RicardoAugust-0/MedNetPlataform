@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import * as XLSX from 'xlsx';
 import { getImportAuthority, handleImportEvents, readUploadHeaders } from './analytics-import.js';
 
 describe('getImportAuthority', () => {
@@ -140,6 +141,51 @@ describe('handleImportEvents · colunas financeiras MaxTrack', () => {
         success: true,
         uniqueSavedCount: 1,
       }));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('processa XLSX armazenado em disco sem usar XLSX.readFile', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'mednet-import-test-'));
+    const filePath = path.join(tempDir, 'maxtrack.xlsx');
+    const headers = ['Data', 'Identificador/Placa', 'Nome'];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      headers,
+      ['2026-07-20T13:00:00Z', 'ABC1D23', 'Fadiga'],
+    ]), 'Dados');
+    await writeFile(filePath, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+
+    const file = {
+      originalname: 'maxtrack.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      path: filePath,
+      size: 100,
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: 1, error: null });
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis(),
+    };
+
+    try {
+      await expect(readUploadHeaders(file)).resolves.toEqual(headers);
+      await handleImportEvents({ rpc }, {
+        files: [file],
+        body: {
+          platformId: 'maxtrack',
+          operatorEmail: '',
+          mapping: JSON.stringify({
+            datetime: 'Data',
+            plate: 'Identificador/Placa',
+            type: 'Nome',
+          }),
+        },
+      }, res, vi.fn());
+
+      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(200);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
