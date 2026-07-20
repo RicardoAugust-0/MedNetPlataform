@@ -137,7 +137,7 @@ export const exportToHTML = async (d) => {
         }
         // Fallback for cross-origin links
         return `<link rel="stylesheet" href="${href}" />`;
-      } catch (err) {
+      } catch {
         // If fetch fails, keep the link tag
         return `<link rel="stylesheet" href="${link.href}" />`;
       }

@@ -57,14 +57,16 @@ export default function ComparisonModal({
 
   return (
     <div data-noprint onClick={(e) => { if (e.target === e.currentTarget) setCompareModalOpen(false); }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,7,23,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div className="fz-in" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '450px', maxWidth: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
+      <div className="fz-in" role="dialog" aria-modal="true" aria-labelledby="analytics-comparison-title" style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px 24px', width: '450px', maxWidth: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(15,25,35,0.14)' }}>
 
         {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div id="analytics-comparison-title" style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <i className="ti ti-arrows-diff" style={{ fontSize: '18px', color: '#9E1A45' }}></i> Comparar
           </div>
           <button
+            type="button"
+            aria-label="Fechar comparação"
             onClick={() => setCompareModalOpen(false)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '18px', padding: '4px', display: 'flex' }}
           >

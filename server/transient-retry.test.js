@@ -74,4 +74,34 @@ describe('retryTransientFetch', () => {
       delayMs: 0,
     }));
   });
+
+  it('respeita Retry-After quando ele e maior que o backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      const error = Object.assign(new Error('HTTP 503'), {
+        httpStatus: 503,
+        retryAfterMs: 5_000,
+      });
+      const operation = vi.fn()
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce('ok');
+      const onRetry = vi.fn();
+
+      const resultPromise = retryTransientFetch(operation, {
+        baseDelayMs: 1_000,
+        logger: silentLogger,
+        shouldRetry: (candidate) => candidate.httpStatus === 503,
+        onRetry,
+      });
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(operation).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(resultPromise).resolves.toBe('ok');
+      expect(operation).toHaveBeenCalledTimes(2);
+      expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ delayMs: 5_000 }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

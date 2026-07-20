@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { C, fmt, kf, axisLineProps, gridProps, ChartTooltip, EmptyChart } from './ChartUtils.jsx';
+import { fmt, kf, axisLineProps, gridProps, ChartTooltip, EmptyChart } from './ChartUtils.jsx';
 
 function RankingChart({ rows, color, icon }) {
   return (

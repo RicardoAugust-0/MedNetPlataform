@@ -6,8 +6,7 @@ import { useDragReorder } from '../hooks/useDragReorder';
 import { getCustomVars, setCustomVars } from './monitor/utils';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../hooks/useToast.jsx';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_URL } from '../lib/runtimeConfig.js';
 
 const TABS = ['todos','contato','questionario','alerta','encerramento','whatsapp','variaveis'];
 const TAB_LABELS = { todos:'Todos', contato:'Contato', questionario:'Questionário', alerta:'Alerta', encerramento:'Encerramento', whatsapp: 'WhatsApp (Meta)', variaveis:'Variáveis' };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { isSupabaseConfigured } from '../supabase';
+import { isSupabaseConfigured, isMockAuthEnabled } from '../supabase';
 
 const LogoSVG = ({ size = 44 }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, borderRadius: 9, boxShadow: '0 6px 20px rgba(158,26,69,0.45)' }}>
@@ -70,12 +70,12 @@ export default function LoginPage() {
               <div style={s.sub}>Use as credenciais fornecidas pelo administrador</div>
               <form onSubmit={handleLogin} style={{ marginTop: 22 }}>
                 <div className="form-group">
-                  <label className="form-label">E-mail</label>
-                  <input className="form-control" type="email" placeholder="operador@mednet.com.br" value={email} onChange={e => setEmail(e.target.value)} autoFocus />
+                  <label className="form-label" htmlFor="login-email">E-mail</label>
+                  <input id="login-email" className="form-control" type="email" placeholder="operador@mednet.com.br" value={email} onChange={e => setEmail(e.target.value)} autoFocus />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Senha</label>
-                  <input className="form-control" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+                  <label className="form-label" htmlFor="login-password">Senha</label>
+                  <input id="login-password" className="form-control" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
                 </div>
                 {error && <div style={s.errorBox}><i className="ti ti-alert-circle"></i> {error}</div>}
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8, padding: '10px' }} disabled={loading}>
@@ -92,8 +92,8 @@ export default function LoginPage() {
               <div style={s.sub}>Enviaremos um link para redefinir sua senha</div>
               <form onSubmit={handleReset} style={{ marginTop: 22 }}>
                 <div className="form-group">
-                  <label className="form-label">E-mail da conta</label>
-                  <input className="form-control" type="email" placeholder="operador@mednet.com.br" value={email} onChange={e => setEmail(e.target.value)} autoFocus />
+                  <label className="form-label" htmlFor="recovery-email">E-mail da conta</label>
+                  <input id="recovery-email" className="form-control" type="email" placeholder="operador@mednet.com.br" value={email} onChange={e => setEmail(e.target.value)} autoFocus />
                 </div>
                 {error && <div style={s.errorBox}><i className="ti ti-alert-circle"></i> {error}</div>}
                 {info  && <div style={s.infoBox}><i className="ti ti-circle-check"></i> {info}</div>}
@@ -109,7 +109,10 @@ export default function LoginPage() {
 
           {!isSupabaseConfigured && (
             <div style={{ ...s.errorBox, marginTop: 16 }}>
-              <i className="ti ti-settings-exclamation"></i> Supabase não configurado. No modo local, qualquer e-mail/senha permite acesso (use admin@mednet.com.br para testar modo admin).
+              <i className="ti ti-settings-exclamation"></i>{' '}
+              {isMockAuthEnabled
+                ? 'Supabase não configurado. Mock de autenticação habilitado explicitamente para desenvolvimento.'
+                : 'Supabase não configurado. O acesso está bloqueado até a configuração do ambiente.'}
             </div>
           )}
 

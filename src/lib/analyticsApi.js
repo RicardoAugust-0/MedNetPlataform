@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.js';
+import { API_URL } from './runtimeConfig.js';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+export { API_URL } from './runtimeConfig.js';
 
 /**
  * Header Authorization com o access_token da sessão Supabase atual.
@@ -63,7 +64,7 @@ export async function apiFetch(path, options = {}) {
   if (res.status !== 401) return res;
 
   // Tenta renovar a sessão e repetir uma única vez.
-  let refreshed = null;
+  let refreshed;
   try {
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token || null;

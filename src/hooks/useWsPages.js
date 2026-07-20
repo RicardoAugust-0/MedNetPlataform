@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
+import { createDebouncedPatchQueue } from './debouncedPatchQueue.js';
 
 const WsPagesContext = createContext(null);
 const WS_PAGE_COLUMNS = 'id, title, icon_index, category, favorite, content, position, created_at';
@@ -9,14 +10,29 @@ export function WsPagesProvider({ children }) {
   const toast = useToast();
   const [wsPages, setWsPages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const timers = useRef({});
+  const [patchQueue] = useState(() => createDebouncedPatchQueue({
+    delay: 800,
+    persist: async (id, patch) => {
+      const dbPatch = {};
+      if (patch.title    !== undefined) dbPatch.title      = patch.title;
+      if (patch.icon     !== undefined) dbPatch.icon_index = patch.icon;
+      if (patch.category !== undefined) dbPatch.category   = patch.category;
+      if (patch.favorite !== undefined) dbPatch.favorite   = patch.favorite;
+      if (patch.content  !== undefined) dbPatch.content    = patch.content;
+      if (!Object.keys(dbPatch).length) return;
+      dbPatch.updated_at = new Date().toISOString();
+      const { error } = await supabase.from('ws_pages').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    onError: () => toast('Erro ao salvar página', 'error'),
+  }));
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('ws_pages').select(WS_PAGE_COLUMNS).order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar workspace', 'error');
     else if (data) setWsPages(data.map(toLocal));
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -28,14 +44,16 @@ export function WsPagesProvider({ children }) {
         setWsPages(prev => prev.some(p => p.id === row.id) ? prev : [...prev, toLocal(row)]);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ws_pages' }, ({ new: row }) => {
-        setWsPages(prev => prev.map(p => p.id === row.id ? toLocal(row) : p));
+        setWsPages(prev => prev.map(p => p.id === row.id ? patchQueue.overlay(row.id, toLocal(row)) : p));
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ws_pages' }, ({ old: row }) => {
         setWsPages(prev => prev.filter(p => p.id !== row.id));
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, []);
+  }, [patchQueue]);
+
+  useEffect(() => () => { void patchQueue.flushAll(); }, [patchQueue]);
 
   const add = useCallback(async ({ title, icon, category, content }) => {
     const pos = wsPages.length > 0 ? Math.max(...wsPages.map(p => p.position ?? 0)) + 1 : 0;
@@ -51,24 +69,12 @@ export function WsPagesProvider({ children }) {
       return;
     }
     setWsPages(prev => prev.map(p => p.id === opt.id ? toLocal(data) : p));
-  }, [wsPages]);
+  }, [wsPages, toast]);
 
   const update = useCallback((id, patch) => {
     setWsPages(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
-    clearTimeout(timers.current[id]);
-    timers.current[id] = setTimeout(async () => {
-      const dbPatch = {};
-      if (patch.title    !== undefined) dbPatch.title      = patch.title;
-      if (patch.icon     !== undefined) dbPatch.icon_index = patch.icon;
-      if (patch.category !== undefined) dbPatch.category   = patch.category;
-      if (patch.favorite !== undefined) dbPatch.favorite   = patch.favorite;
-      if (patch.content  !== undefined) dbPatch.content    = patch.content;
-      if (!Object.keys(dbPatch).length) return;
-      dbPatch.updated_at = new Date().toISOString();
-      const { error } = await supabase.from('ws_pages').update(dbPatch).eq('id', id);
-      if (error) toast('Erro ao salvar página', 'error');
-    }, 800);
-  }, []);
+    patchQueue.enqueue(id, patch);
+  }, [patchQueue]);
 
   const reorder = useCallback(async (newPages) => {
     setWsPages(newPages);
@@ -83,10 +89,11 @@ export function WsPagesProvider({ children }) {
   }, [load, toast]);
 
   const remove = useCallback(async (id) => {
+    patchQueue.discard(id);
     setWsPages(prev => prev.filter(p => p.id !== id));
     const { error } = await supabase.from('ws_pages').delete().eq('id', id);
     if (error) { load(); toast('Erro ao excluir página', 'error'); }
-  }, [load]);
+  }, [load, patchQueue, toast]);
 
   return createElement(
     WsPagesContext.Provider,

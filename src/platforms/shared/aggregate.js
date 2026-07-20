@@ -16,13 +16,12 @@ export function aggregate(events, history, platform, options = {}) {
   const rules = platform.rules || { slaLimitMin: 30, criticalAlertsCount: 5, minMovingSpeedKmh: 10 };
   const platformId = platform.id;
 
-  let totalEventos = 0;
   let falsosPositivos = 0;
   let filtradosPorVelocidade = 0;
 
   // 1. Filtrar eventos brutos pertencentes a esta plataforma
   const platformEvents = (events || []).filter(e => e.platform_id === platformId);
-  totalEventos = platformEvents.length;
+  const totalEventos = platformEvents.length;
 
   const validEvents = [];
 
@@ -155,8 +154,6 @@ export function aggregate(events, history, platform, options = {}) {
 
   let histFiltered = rawDrivers.map(d => {
     const clear = clearMap[d.placa] || {};
-    let { alertas, tipos, ultimoEvento, reportaveis, tiposReportar, ultimoEventoReportar, tecnicos, tiposTecnico } = d;
-
     let eventosDetalhados = (d.eventosDetalhados || []).map(e => ({
       ...e, ts: e.ts ? new Date(e.ts) : null,
     }));
@@ -171,20 +168,20 @@ export function aggregate(events, history, platform, options = {}) {
       eventosDetalhados.filter(e => e.bucket === 'reportar').length    - evR.length +
       eventosDetalhados.filter(e => e.bucket === 'tecnico').length     - evT.length;
 
-    alertas              = evI.length;
-    tipos                = [...new Set(evI.map(e => e.tipo))];
-    ultimoEvento         = maxTsFromDateObj(evI);
-    reportaveis          = evR.length;
-    tiposReportar        = [...new Set(evR.map(e => e.tipo))];
-    ultimoEventoReportar = maxTsFromDateObj(evR);
-    tecnicos             = evT.length;
+    const alertas              = evI.length;
+    const tipos                = [...new Set(evI.map(e => e.tipo))];
+    const ultimoEvento         = maxTsFromDateObj(evI);
+    const reportaveis          = evR.length;
+    const tiposReportar        = [...new Set(evR.map(e => e.tipo))];
+    const ultimoEventoReportar = maxTsFromDateObj(evR);
+    const tecnicos             = evT.length;
 
     const nextTiposTecnico = {};
     evT.forEach(e => {
       const t = e.tipo || '—';
       nextTiposTecnico[t] = (nextTiposTecnico[t] || 0) + 1;
     });
-    tiposTecnico = nextTiposTecnico;
+    const tiposTecnico = nextTiposTecnico;
 
     eventosDetalhados    = [...evI, ...evR, ...evT];
 

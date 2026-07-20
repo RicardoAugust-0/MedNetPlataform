@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabase.js';
 import { useToast } from '../../hooks/useToast.jsx';
 import { useConfirm } from '../../hooks/useConfirm';
-import { useReauth } from '../../hooks/useReauth.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
 
 const STATUS_INFO = {
@@ -11,7 +10,7 @@ const STATUS_INFO = {
   credential_error: { label: 'Erro de senha', bg: 'rgba(226, 75, 74, 0.18)', color: 'var(--danger-500)' },
   session_expired:  { label: 'Sessão expirada', bg: 'rgba(232, 160, 32, 0.18)', color: 'var(--warning-500)' },
 };
-const HORIZON_CREDENTIAL_COLUMNS = 'id, label, email, password, password_candidates, status, last_login_at, last_extracted_at, last_error';
+const HORIZON_CREDENTIAL_COLUMNS = 'id, label, email, status, last_login_at, last_extracted_at, last_error';
 
 function fetchHorizonAccounts() {
   return supabase
@@ -37,16 +36,15 @@ function formatDate(iso) {
 export default function IntegracoesHorizon() {
   const toast = useToast();
   const confirm = useConfirm();
-  const reauth = useReauth();
-
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editPassword, setEditPassword] = useState('');
   const [editCandidates, setEditCandidates] = useState([]);
+  const [candidatesTouched, setCandidatesTouched] = useState(false);
   const [newCandidate, setNewCandidate] = useState('');
   const [saving, setSaving] = useState(false);
-  const [revealedId, setRevealedId] = useState(null);
+  const [showEditPassword, setShowEditPassword] = useState(false);
 
   const [newLabel, setNewLabel] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -111,51 +109,48 @@ export default function IntegracoesHorizon() {
 
   const startEdit = (acc) => {
     setEditingId(acc.id);
-    setEditPassword(acc.password);
-    setEditCandidates(Array.isArray(acc.password_candidates) ? [...acc.password_candidates] : []);
+    setEditPassword('');
+    setEditCandidates([]);
+    setCandidatesTouched(false);
     setNewCandidate('');
+    setShowEditPassword(false);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditPassword('');
     setEditCandidates([]);
+    setCandidatesTouched(false);
     setNewCandidate('');
-    setRevealedId(null);
-  };
-
-  const handleReveal = async (accId) => {
-    if (revealedId === accId) { setRevealedId(null); return; }
-    const ok = await reauth({
-      message: 'Por segurança, confirme sua senha para revelar a senha desta conta Horizon.',
-    });
-    if (ok) setRevealedId(accId);
+    setShowEditPassword(false);
   };
 
   const addCandidate = () => {
     const c = newCandidate.trim();
     if (!c || editCandidates.includes(c)) return;
     setEditCandidates(prev => [...prev, c]);
+    setCandidatesTouched(true);
     setNewCandidate('');
   };
 
   const removeCandidate = (c) => {
     setEditCandidates(prev => prev.filter(x => x !== c));
+    setCandidatesTouched(true);
   };
 
   const saveEdit = async (acc) => {
-    if (!editPassword.trim()) return;
     setSaving(true);
+    const patch = {
+      // Editar metadados também reabre contas com falha operacional.
+      status: acc.status !== 'ok' ? 'ok' : acc.status,
+      last_error: acc.status !== 'ok' ? null : acc.last_error,
+      updated_at: new Date().toISOString(),
+    };
+    if (editPassword.trim()) patch.password = editPassword.trim();
+    if (candidatesTouched) patch.password_candidates = editCandidates;
     const { error } = await supabase
       .from('horizon_credentials')
-      .update({
-        password: editPassword.trim(),
-        password_candidates: editCandidates,
-        // Editar credenciais também reabre contas com falha operacional.
-        status: acc.status !== 'ok' ? 'ok' : acc.status,
-        last_error: acc.status !== 'ok' ? null : acc.last_error,
-        updated_at: new Date().toISOString(),
-      })
+      .update(patch)
       .eq('id', acc.id);
     setSaving(false);
 
@@ -221,36 +216,46 @@ export default function IntegracoesHorizon() {
                   {isEditing && (
                     <div style={{ marginTop: 10, padding: 10, background: 'var(--surface-2, rgba(0,0,0,0.03))', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Senha atual</label>
+                        <label className="form-label" htmlFor={`horizon-password-${acc.id}`}>Nova senha (opcional)</label>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <input
+                            id={`horizon-password-${acc.id}`}
                             className="form-control"
-                            type={revealedId === acc.id ? 'text' : 'password'}
+                            type={showEditPassword ? 'text' : 'password'}
                             value={editPassword}
                             onChange={e => setEditPassword(e.target.value)}
+                            placeholder="Deixe em branco para manter a senha atual"
+                            autoComplete="new-password"
                             style={{ fontSize: 13, padding: '5px 8px', flex: 1 }}
                           />
                           <button
                             type="button"
                             className="btn-icon"
-                            onClick={() => handleReveal(acc.id)}
-                            title={revealedId === acc.id ? 'Ocultar senha' : 'Revelar senha (requer confirmação)'}
+                            onClick={() => setShowEditPassword(value => !value)}
+                            title={showEditPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'}
                           >
-                            <i className={`ti ${revealedId === acc.id ? 'ti-eye-off' : 'ti-eye'}`}></i>
+                            <i className={`ti ${showEditPassword ? 'ti-eye-off' : 'ti-eye'}`}></i>
                           </button>
                         </div>
                       </div>
 
                       <div>
-                        <label className="form-label">Senhas candidatas (rotação)</label>
+                        <label className="form-label">Substituir senhas candidatas (opcional)</label>
+                        {!candidatesTouched && (
+                          <div className="field-hint" style={{ marginBottom: 6 }}>
+                            As candidatas atuais não são carregadas no navegador e serão preservadas.
+                          </div>
+                        )}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                           {editCandidates.map(c => (
-                            <span key={c} className="pillc" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: revealedId === acc.id ? undefined : 'monospace' }}>
-                              {revealedId === acc.id ? c : '•'.repeat(Math.min(c.length, 10))}
-                              <i className="ti ti-x" style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => removeCandidate(c)}></i>
+                            <span key={c} className="pillc" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              {c}
+                              <button type="button" className="btn-icon" aria-label="Remover candidata" onClick={() => removeCandidate(c)} style={{ padding: 0 }}>
+                                <i className="ti ti-x" style={{ fontSize: 11 }}></i>
+                              </button>
                             </span>
                           ))}
-                          {editCandidates.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma candidata cadastrada</span>}
+                          {candidatesTouched && editCandidates.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>A lista será removida ao salvar</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <input
@@ -269,7 +274,7 @@ export default function IntegracoesHorizon() {
 
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button className="btn btn-sm" onClick={cancelEdit} disabled={saving}>Cancelar</button>
-                        <button className="btn btn-sm btn-primary" onClick={() => saveEdit(acc)} disabled={saving || !editPassword.trim()}>
+                        <button className="btn btn-sm btn-primary" onClick={() => saveEdit(acc)} disabled={saving}>
                           {saving ? <><i className="ti ti-loader-2 fz-spin"></i> Salvando…</> : 'Salvar'}
                         </button>
                       </div>

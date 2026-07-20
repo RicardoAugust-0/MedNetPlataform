@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/analyticsApi.js';
 import { useNotifications } from './useNotifications.jsx';
 
 const AutomationsContext = createContext(null);
-const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, schedule_type, schedule_interval_minutes, schedule_time, schedule_days, schedule_timezone, next_run_at, last_run_at, last_schedule_status, last_schedule_error, event_type, token, position';
+const AUTOMATION_COLUMNS = 'id, name, icon, description, active, endpoint, trigger, schedule, schedule_type, schedule_interval_minutes, schedule_time, schedule_days, schedule_timezone, next_run_at, last_run_at, last_schedule_status, last_schedule_error, event_type, position';
 
 export function mergeOptimisticAutomationLogs(logsMap, optimisticRuns) {
   const merged = { ...logsMap };
@@ -31,7 +31,12 @@ export function mergeOptimisticAutomationLogs(logsMap, optimisticRuns) {
   return { logs: merged, optimisticRuns: remaining };
 }
 
-export function AutomationsProvider({ children }) {
+export function getAutomationPollingDelay(baseMs, consecutiveFailures, maxMs = 120000) {
+  const failures = Math.max(0, Math.min(Number(consecutiveFailures) || 0, 8));
+  return Math.min(baseMs * (2 ** failures), maxMs);
+}
+
+export function AutomationsProvider({ children, enabled = true, active = true }) {
   const toast = useToast();
   const { notify } = useNotifications();
   const [automations, setAutomations] = useState([]);
@@ -52,6 +57,7 @@ export function AutomationsProvider({ children }) {
   const logsRef = useRef({});
   const optimisticRunsRef = useRef({});
   const liveRefreshUntilRef = useRef(0);
+  const logRefreshErrorRef = useRef(false);
 
   useEffect(() => {
     automationsRef.current = automations;
@@ -81,7 +87,6 @@ export function AutomationsProvider({ children }) {
     lastScheduleStatus: row.last_schedule_status,
     lastScheduleError: row.last_schedule_error,
     eventType: row.event_type,
-    token: row.token,
     position: row.position ?? 0,
   }), []);
 
@@ -131,7 +136,19 @@ export function AutomationsProvider({ children }) {
 
   // Fetch all automations and logs
   const loadData = useCallback(async () => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !enabled) {
+      setAutomations([]);
+      setLogs({});
+      optimisticRunsRef.current = {};
+      setHorizonQueueStatus({
+        pending: 0,
+        processing: 0,
+        doneToday: 0,
+        error: 0,
+        noMatch: 0,
+        loading: false,
+      });
+      setVpsHealth({ online: false, checking: false, error: null, data: null });
       setLoading(false);
       return;
     }
@@ -139,25 +156,36 @@ export function AutomationsProvider({ children }) {
     try {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const queuePromise = Promise.all([
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'processing'),
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).in('status', ['done', 'already_synced']).gte('updated_at', todayStart.toISOString()),
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'error'),
-        supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'no_horizon_match'),
-      ]);
+      const queuePromise = active
+        ? Promise.all([
+            supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending').retry(false),
+            supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'processing').retry(false),
+            supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).in('status', ['done', 'already_synced']).gte('updated_at', todayStart.toISOString()).retry(false),
+            supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'error').retry(false),
+            supabase.from('horizon_treatment_queue').select('id', { count: 'exact', head: true }).eq('status', 'no_horizon_match').retry(false),
+          ])
+        : Promise.resolve([]);
+
+      const logsPromise = active
+        ? supabase
+            .from('automation_logs')
+            .select('id, automation_id, status, duration, detail, logs, created_at')
+            .order('created_at', { ascending: false })
+            .limit(500)
+            .retry(false)
+        : Promise.resolve({ data: [], error: null });
+
+      const settingsPromise = active
+        ? supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle()
+        : Promise.resolve({ data: null, error: null });
 
       const [autosRes, logsRes, settingsRes, queueResults] = await Promise.all([
         supabase
           .from('automations')
           .select(AUTOMATION_COLUMNS)
           .order('position', { ascending: true }),
-        supabase
-          .from('automation_logs')
-          .select('id, automation_id, status, duration, detail, logs, created_at')
-          .order('created_at', { ascending: false })
-          .limit(500),
-        supabase.from('app_settings').select('value').eq('key', 'vps_config').maybeSingle(),
+        logsPromise,
+        settingsPromise,
         queuePromise,
       ]);
 
@@ -183,7 +211,7 @@ export function AutomationsProvider({ children }) {
       optimisticRunsRef.current = merged.optimisticRuns;
       setLogs(merged.logs);
 
-      if (queueResults.every(result => !result.error)) {
+      if (active && queueResults.every(result => !result.error)) {
         setHorizonQueueStatus({
           pending: queueResults[0].count || 0,
           processing: queueResults[1].count || 0,
@@ -192,8 +220,10 @@ export function AutomationsProvider({ children }) {
           noMatch: queueResults[4].count || 0,
           loading: false,
         });
-      } else {
+      } else if (active) {
         console.error('[useAutomations] Error loading Horizon queue:', queueResults.find(result => result.error)?.error);
+        setHorizonQueueStatus(current => ({ ...current, loading: false }));
+      } else {
         setHorizonQueueStatus(current => ({ ...current, loading: false }));
       }
 
@@ -217,25 +247,36 @@ export function AutomationsProvider({ children }) {
       }
     } catch (err) {
       console.error('[useAutomations] Error loading data:', err);
-      toast('Erro ao carregar dados das automações', 'error');
+      if (active) toast('Erro ao carregar dados das automações', 'error');
     } finally {
       setLoading(false);
     }
-  }, [toast, toLocalAutomation, toLocalLog]);
+  }, [active, enabled, toast, toLocalAutomation, toLocalLog]);
 
   const refreshLogs = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled || !active) return true;
 
     const { data, error } = await supabase
       .from('automation_logs')
       .select('id, automation_id, status, duration, detail, logs, created_at')
       .order('created_at', { ascending: false })
-      .limit(500);
+      .limit(500)
+      // O polling abaixo possui backoff proprio; quatro retries internos por
+      // tentativa apenas multiplicariam o congestionamento e o ruido do console.
+      .retry(false);
 
     if (error) {
-      console.error('[useAutomations] Error refreshing logs:', error);
-      return;
+      if (!logRefreshErrorRef.current) {
+        console.warn('[useAutomations] Logs indisponiveis; polling em backoff:', error.message);
+      }
+      logRefreshErrorRef.current = true;
+      return false;
     }
+
+    if (logRefreshErrorRef.current) {
+      console.info('[useAutomations] Conexao de logs restabelecida.');
+    }
+    logRefreshErrorRef.current = false;
 
     const logsMap = {};
     (data || []).forEach((row) => {
@@ -250,7 +291,8 @@ export function AutomationsProvider({ children }) {
     );
     optimisticRunsRef.current = merged.optimisticRuns;
     setLogs(merged.logs);
-  }, [toLocalLog]);
+    return true;
+  }, [active, enabled, toLocalLog]);
 
   // VPS health checking
   const checkVpsHealth = useCallback(async () => {
@@ -291,6 +333,7 @@ export function AutomationsProvider({ children }) {
           ram: data.ram ?? 0,
         }
       });
+      return true;
     } catch {
       // In case of error (SSL error, server offline, CORS, connection refused),
       // we show the error state rather than falling back to mocks.
@@ -300,6 +343,7 @@ export function AutomationsProvider({ children }) {
         error: 'Healthcheck inativo ou offline',
         data: null
       });
+      return false;
     }
   }, [healthUrl]);
 
@@ -309,12 +353,14 @@ export function AutomationsProvider({ children }) {
 
   // Realtime é o caminho principal. Este polling adaptativo garante a mesma
   // experiência quando o websocket estiver reconectando ou bloqueado:
-  // 2s durante execuções e 15s quando a tela está ociosa/visível.
+  // 2s durante execuções e 15s quando a tela está ociosa/visível. Falhas
+  // consecutivas aplicam backoff exponencial ate dois minutos.
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled || !active) return;
 
     let inFlight = false;
     let lastRefreshAt = 0;
+    let consecutiveFailures = 0;
 
     const tick = async (force = false) => {
       if (document.visibilityState !== 'visible' || inFlight) return;
@@ -322,14 +368,16 @@ export function AutomationsProvider({ children }) {
         items.some((item) => item.status === 'running')
       ));
       const liveWindow = Date.now() < liveRefreshUntilRef.current;
-      const intervalMs = hasRunningLog || liveWindow ? 2000 : 15000;
+      const baseIntervalMs = hasRunningLog || liveWindow ? 2000 : 15000;
+      const intervalMs = getAutomationPollingDelay(baseIntervalMs, consecutiveFailures);
       if (!force && Date.now() - lastRefreshAt < intervalMs) return;
 
       inFlight = true;
-      lastRefreshAt = Date.now();
       try {
-        await refreshLogs();
+        const succeeded = await refreshLogs();
+        consecutiveFailures = succeeded ? 0 : consecutiveFailures + 1;
       } finally {
+        lastRefreshAt = Date.now();
         inFlight = false;
       }
     };
@@ -344,19 +392,56 @@ export function AutomationsProvider({ children }) {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [refreshLogs]);
+  }, [active, enabled, refreshLogs]);
 
-  // Ping health every 30s once automations load
+  // Healthcheck somente na tela de Automacoes. Quando a VPS estiver offline,
+  // recue progressivamente em vez de manter requisicoes a cada 30 segundos.
   useEffect(() => {
-    if (loading) return;
-    checkVpsHealth();
-    const id = setInterval(checkVpsHealth, 30000);
-    return () => clearInterval(id);
-  }, [loading, checkVpsHealth]);
+    if (loading || !enabled || !active) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    let timeoutId = null;
+    let consecutiveFailures = 0;
+
+    const schedule = (delayMs) => {
+      if (cancelled) return;
+      timeoutId = setTimeout(tick, delayMs);
+    };
+
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      if (document.visibilityState !== 'visible') {
+        schedule(30000);
+        return;
+      }
+
+      inFlight = true;
+      const succeeded = await checkVpsHealth();
+      inFlight = false;
+      consecutiveFailures = succeeded ? 0 : consecutiveFailures + 1;
+      schedule(getAutomationPollingDelay(30000, consecutiveFailures, 240000));
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || inFlight) return;
+      clearTimeout(timeoutId);
+      void tick();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    void tick();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [active, enabled, loading, checkVpsHealth]);
 
   // Realtime handlers
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !enabled) return;
     const timerStore = timers.current;
 
     const channel = supabase
@@ -365,8 +450,10 @@ export function AutomationsProvider({ children }) {
         loadData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_logs' }, (payload) => {
-        clearTimeout(timerStore.logsRefresh);
-        timerStore.logsRefresh = setTimeout(refreshLogs, 100);
+        if (active) {
+          clearTimeout(timerStore.logsRefresh);
+          timerStore.logsRefresh = setTimeout(refreshLogs, 100);
+        }
         if (payload.eventType === 'UPDATE' && payload.new?.status === 'running') return;
         const changedRow = payload.new || payload.old;
         const automation = automationsRef.current.find((item) => item.id === changedRow?.automation_id);
@@ -385,12 +472,12 @@ export function AutomationsProvider({ children }) {
         if (failed) toast(body, 'error');
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'horizon_treatment_queue' }, () => {
+        if (!active) return;
         clearTimeout(timerStore.queueRefresh);
         timerStore.queueRefresh = setTimeout(loadData, 500);
       })
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') refreshLogs();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (active && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')) {
           console.warn('[useAutomations] Realtime ' + status + '; polling de segurança ativo.');
         }
       });
@@ -400,7 +487,7 @@ export function AutomationsProvider({ children }) {
       clearTimeout(timerStore.queueRefresh);
       supabase.removeChannel(channel);
     };
-  }, [loadData, notify, refreshLogs, toast]);
+  }, [active, enabled, loadData, notify, refreshLogs, toast]);
 
   // CRUD actions
   const add = useCallback(async (data) => {
@@ -474,7 +561,7 @@ export function AutomationsProvider({ children }) {
     }
 
     // Atualiza o estado desta aba imediatamente. Sem isso, um clique em
-    // "Executar" logo após salvar ainda usaria o endpoint/token anterior até
+    // "Executar" logo após salvar ainda usaria o endpoint anterior até
     // chegar o evento Realtime (ou até um F5).
     const automation = toLocalAutomation(updated);
     setAutomations(current => current.map(item => item.id === id ? automation : item));
@@ -658,7 +745,12 @@ export function AutomationsProvider({ children }) {
       if (!botName) return false;
 
       const apiBase = healthUrl.replace(/\/health$/, '');
-      const res = await fetch(`${apiBase}/tasks`);
+      const taskQuery = new URLSearchParams({
+        bot_name: botName,
+        active_only: 'true',
+        limit: '50',
+      });
+      const res = await fetch(`${apiBase}/tasks?${taskQuery.toString()}`);
       if (!res.ok) throw new Error('Falha ao obter lista de tarefas da VPS');
       const tasksList = await res.json();
       

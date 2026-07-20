@@ -24,7 +24,7 @@ export function useAnalyticsState() {
   const [activeId, setActiveId] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_active_id') || null;
-    } catch (e) {
+    } catch {
       return null;
     }
   });
@@ -33,7 +33,7 @@ export function useAnalyticsState() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_selected_month') || null;
-    } catch (e) {
+    } catch {
       return null;
     }
   });
@@ -41,7 +41,7 @@ export function useAnalyticsState() {
   const [compare, setCompare] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_compare') === 'true';
-    } catch (e) {
+    } catch {
       return false;
     }
   });
@@ -50,7 +50,7 @@ export function useAnalyticsState() {
     try {
       const saved = localStorage.getItem('mednet_analytics_compare_platform_ids');
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -61,13 +61,15 @@ export function useAnalyticsState() {
   useEffect(() => {
     try {
       localStorage.setItem('mednet_analytics_compare_platform_ids', JSON.stringify(comparePlatformIds));
-    } catch (e) {}
+    } catch {
+      // Storage may be unavailable in hardened/private browser contexts.
+    }
   }, [comparePlatformIds]);
 
   const [selectedSeverity, setSelectedSeverity] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_severity') || 'all';
-    } catch (e) {
+    } catch {
       return 'all';
     }
   });
@@ -75,7 +77,7 @@ export function useAnalyticsState() {
   const [startDate, setStartDate] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_start_date') || '';
-    } catch (e) {
+    } catch {
       return '';
     }
   });
@@ -83,7 +85,7 @@ export function useAnalyticsState() {
   const [endDate, setEndDate] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_end_date') || '';
-    } catch (e) {
+    } catch {
       return '';
     }
   });
@@ -107,13 +109,14 @@ export function useAnalyticsState() {
   // Sequência de carregamento
   const loadSeqRef = useRef(0);
   const loadAbortRef = useRef(null);
+  const platformCountsCacheRef = useRef({ data: {}, loadedAt: 0 });
 
   const [selectedCompany, setSelectedCompany] = useState('');
   const [compareCompanies, setCompareCompanies] = useState(() => {
     try {
       const saved = localStorage.getItem('mednet_analytics_compare_companies');
       return saved ? JSON.parse(saved) : {};
-    } catch (e) {
+    } catch {
       return {};
     }
   });
@@ -122,14 +125,14 @@ export function useAnalyticsState() {
   const [compareMode, setCompareMode] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_compare_mode') || 'platforms';
-    } catch (e) {
+    } catch {
       return 'platforms';
     }
   });
   const [companyComparePlatform, setCompanyComparePlatform] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_company_cmp_platform') || '';
-    } catch (e) {
+    } catch {
       return '';
     }
   });
@@ -137,7 +140,7 @@ export function useAnalyticsState() {
     try {
       const saved = localStorage.getItem('mednet_analytics_company_cmp_list');
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -155,33 +158,37 @@ export function useAnalyticsState() {
       localStorage.setItem('mednet_analytics_compare_mode', compareMode);
       localStorage.setItem('mednet_analytics_company_cmp_platform', companyComparePlatform);
       localStorage.setItem('mednet_analytics_company_cmp_list', JSON.stringify(companyCompareList));
-    } catch (e) {}
+    } catch {
+      // Storage may be unavailable in hardened/private browser contexts.
+    }
   }, [compareMode, companyComparePlatform, companyCompareList]);
 
   useEffect(() => {
     try {
       localStorage.setItem('mednet_analytics_compare_companies', JSON.stringify(compareCompanies));
-    } catch (e) {}
+    } catch {
+      // Storage may be unavailable in hardened/private browser contexts.
+    }
   }, [compareCompanies]);
 
   const [selectedClassification, setSelectedClassification] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_classification') || 'all';
-    } catch (e) {
+    } catch {
       return 'all';
     }
   });
   const [selectedType, setSelectedType] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_type') || '';
-    } catch (e) {
+    } catch {
       return '';
     }
   });
   const [selectedUf, setSelectedUf] = useState(() => {
     try {
       return localStorage.getItem('mednet_analytics_uf') || '';
-    } catch (e) {
+    } catch {
       return '';
     }
   });
@@ -268,7 +275,11 @@ export function useAnalyticsState() {
     setSelectedUf(snapshot.selectedUf ?? '');
   };
 
-  const loadFromDatabase = async (preferredPlatformId = null, isSilent = false) => {
+  const loadFromDatabase = async (
+    preferredPlatformId = null,
+    isSilent = false,
+    forceCountsRefresh = false,
+  ) => {
     if (loadAbortRef.current) loadAbortRef.current.abort();
     const controller = new AbortController();
     loadAbortRef.current = controller;
@@ -279,28 +290,41 @@ export function useAnalyticsState() {
       setLoading(true);
     }
     try {
-      let counts = {};
-      try {
-        const res = await apiFetch('/api/platforms', { signal: controller.signal });
-        if (res.ok) {
+      const cachedCounts = platformCountsCacheRef.current;
+      const cacheIsFresh = cachedCounts.loadedAt > 0
+        && Date.now() - cachedCounts.loadedAt < 60_000;
+      let counts = cachedCounts.data;
+
+      if (forceCountsRefresh || !cacheIsFresh) {
+        try {
+          const res = await apiFetch('/api/platforms', { signal: controller.signal });
+          if (!res.ok) throw new Error(`Falha ao obter contagem do servidor (${res.status})`);
           counts = await res.json();
-        } else {
-          throw new Error('Falha ao obter contagem do servidor');
-        }
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-        console.warn('[MedNet] Fallback para Supabase local para contagem:', err);
-        const promises = PLATFORMS.map(async (p) => {
-          const { count, error } = await supabase
-            .from('driver_events')
-            .select('id', { count: 'exact', head: true })
-            .eq('platform_id', p.id)
-            .or('severidade.is.null,severidade.neq.Leve');
-          if (!error && count !== null) {
-            counts[p.id] = count;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          console.warn('[MedNet] API de contagens indisponivel; tentando RPC agregada:', err);
+
+          // Uma falha do backend antes abria oito HEADs paralelos na mesma VPS.
+          // A RPC entrega o mesmo rollup em uma unica requisicao e respeita o
+          // AbortController da carga atual.
+          const { data: fallbackCounts, error: fallbackError } = await supabase
+            .rpc('analytics_platform_counts')
+            .abortSignal(controller.signal)
+            .retry(false);
+          if (fallbackError) {
+            if (controller.signal.aborted) return;
+            throw fallbackError;
           }
-        });
-        await Promise.all(promises);
+          counts = fallbackCounts && typeof fallbackCounts === 'object'
+            ? fallbackCounts
+            : {};
+        }
+
+        if (isStale()) return;
+        platformCountsCacheRef.current = {
+          data: counts,
+          loadedAt: Date.now(),
+        };
       }
       if (isStale()) return;
       setPlatformCounts(counts);
@@ -564,7 +588,7 @@ export function useAnalyticsState() {
         'success'
       );
 
-      await loadFromDatabase(platformId);
+      await loadFromDatabase(platformId, false, true);
     } catch (err) {
       console.error('Erro ao realizar importação no backend:', err);
       const errMsg = err?.message || String(err);
@@ -672,7 +696,7 @@ export function useAnalyticsState() {
         setActiveId(null);
         localStorage.removeItem('mednet_analytics_active_id');
       }
-      await loadFromDatabase();
+      await loadFromDatabase(null, false, true);
     } catch (err) {
       console.error('Erro ao excluir registros:', err);
       toast('Erro ao excluir registros do banco de dados: ' + (err.message || String(err)), 'error');

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAutomations } from '../hooks/useAutomations';
 import { useConfirm } from '../hooks/useConfirm';
-import { useToast } from '../hooks/useToast.jsx';
 import '../styles/automacoes.css';
 import { HooksTab } from './automacoes/HooksTab.jsx';
 import DisparosTab from './automacoes/DisparosTab.jsx';

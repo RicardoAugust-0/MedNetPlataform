@@ -9,39 +9,44 @@ import { registerHorizonRoutes } from './horizon-routes.js';
 import { registerMaxtrackRoutes } from './maxtrack-routes.js';
 import { registerAutomationRoutes } from './automation-routes.js';
 import { startAutomationScheduler } from './automation-scheduler.js';
+import { buildCorsOptions, loadRuntimeConfig, registerHealthRoutes } from './runtime-config.js';
+import { createRateLimitMiddleware, createSecurityHeadersMiddleware } from './security.js';
 
 // Load env variables from root and server directory
 dotenv.config({ path: '../.env' });
 dotenv.config();
 
 const app = express();
-// CORS: por padrão permissivo (compat). Defina CORS_ORIGIN (lista separada por
-// vírgula) para travar a API à(s) origem(ns) do front em produção. A proteção
-// real das rotas é o middleware de auth/role — CORS é só defesa-em-profundidade.
-const corsAllowed = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
-  : null;
-app.use(cors(corsAllowed ? { origin: corsAllowed } : {}));
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('[MedNet Backend] ERRO: Credenciais do Supabase não configuradas.');
+let runtime;
+try {
+  runtime = loadRuntimeConfig();
+} catch (error) {
+  console.error('[MedNet Backend] ERRO de configuracao:', error.message);
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-console.log(`[MedNet Backend] Runtime Node: ${process.version}`);
-console.log(`[MedNet Backend] Conectado ao Supabase: ${supabaseUrl}`);
+app.disable('x-powered-by');
+app.set('trust proxy', runtime.trustProxyHops);
+app.use(createSecurityHeadersMiddleware({
+  production: runtime.production,
+  ...runtime.securityHeaders,
+}));
+app.use(cors(buildCorsOptions(runtime.corsAllowedOrigins, { production: runtime.production })));
+app.use(createRateLimitMiddleware(runtime.rateLimit));
+app.use(express.json({
+  limit: runtime.jsonBodyLimit,
+  verify(req, res, buffer) {
+    if (req.method === 'POST' && req.originalUrl?.startsWith('/api/whatsapp/webhook')) {
+      req.rawBody = Buffer.from(buffer);
+    }
+  },
+}));
 
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'MedNet Analytics API' });
-});
+const supabase = createClient(runtime.supabaseUrl, runtime.supabaseKey);
+console.log(`[MedNet Backend] Runtime Node: ${process.version}`);
+console.log(`[MedNet Backend] Conectado ao Supabase: ${runtime.supabaseUrl}`);
+registerHealthRoutes(app, supabase, { readinessTimeoutMs: runtime.readinessTimeoutMs });
 
 // Register modular routes
 registerAnalyticsRoutes(app, supabase);
@@ -55,7 +60,20 @@ registerAutomationRoutes(app, supabase);
 // backend podem manter este executor ativo sem disparar o mesmo horário duas
 // vezes. A service role é obrigatória para acessar as RPCs internas.
 startAutomationScheduler(supabase, {
-  enabled: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  enabled: Boolean(runtime.serviceRoleKey),
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Corpo da requisicao acima do limite.' });
+  }
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    return res.status(400).json({ error: 'JSON invalido.' });
+  }
+  if (error?.status === 403) return res.status(403).json({ error: 'Origem nao permitida.' });
+  console.error('[MedNet Backend] Erro nao tratado:', error?.message || error);
+  return res.status(500).json({ error: 'Erro interno.' });
 });
 
 const server = app.listen(PORT, () => {

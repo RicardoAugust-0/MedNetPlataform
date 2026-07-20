@@ -18,114 +18,72 @@
 
 const SP_OFFSET = '-03:00';
 
-function normText(value) {
-  return (value == null ? '' : String(value)).trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function isMissingSupportMetricsRPC(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+  return ['PGRST202', '42883'].includes(code)
+    && /analytics_support_metrics/i.test(message)
+    && /could not find|does not exist|schema cache/i.test(message);
 }
 
-function hasEvidence(value) {
-  if (value == null || value === '') return false;
-  const s = normText(value);
-  if (
-    s === '0' ||
-    s === '-' ||
-    s.includes('sem') ||
-    s.includes('aguard') ||
-    s.includes('indispon') ||
-    s === 'nao' ||
-    s.includes('nao ') ||
-    s.includes('false')
-  ) {
-    return false;
-  }
-  return true;
+function normalizeSupportSources({ sources, platformId, frotas }) {
+  const values = Array.isArray(sources)
+    ? sources
+    : [{ platform_id: platformId, frotas }];
+
+  return values
+    .map((source) => ({
+      platform_id: source.platform_id || source.platformId,
+      frotas: Array.isArray(source.frotas) ? source.frotas : null,
+    }))
+    .filter((source) => source.platform_id && (!Array.isArray(source.frotas) || source.frotas.length > 0));
 }
 
-function median(values) {
-  if (!values.length) return null;
-  const arr = values.slice().sort((a, b) => a - b);
-  const mid = Math.floor(arr.length / 2);
-  return arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
-}
-
-function applyMetricRow(metrics, row) {
-  if (row.evidencia != null && row.evidencia !== '') {
-    metrics.evidenceTotal++;
-    if (hasEvidence(row.evidencia)) metrics.evidenceAvailable++;
-  }
-
-  const occurred = row.ocorrido_em ? new Date(row.ocorrido_em).getTime() : NaN;
-  if (!Number.isFinite(occurred)) return;
-
-  const start = row.inicio_tratativa ? new Date(row.inicio_tratativa).getTime() : NaN;
-  if (Number.isFinite(start)) {
-    const minutes = (start - occurred) / 60000;
-    if (minutes >= 0 && minutes < 1440) metrics.treatStartDiffs.push(minutes);
-  }
-
-  const end = row.fim_tratativa ? new Date(row.fim_tratativa).getTime() : NaN;
-  if (Number.isFinite(end)) {
-    const minutes = (end - occurred) / 60000;
-    if (minutes >= 0 && minutes < 4320) metrics.treatEndDiffs.push(minutes);
-  }
-}
-
-function finishSupportMetrics(metrics) {
-  const startMedian = median(metrics.treatStartDiffs);
-  const endMedian = median(metrics.treatEndDiffs);
+function supportMetricsFromRPC(data) {
+  const evidenceTotal = Number(data?.evidence_total || 0);
+  const evidenceAvailable = Number(data?.evidence_available || 0);
   return {
-    pct_evidencia: metrics.evidenceTotal
-      ? +((metrics.evidenceAvailable / metrics.evidenceTotal) * 100).toFixed(1)
+    pct_evidencia: evidenceTotal
+      ? +((evidenceAvailable / evidenceTotal) * 100).toFixed(1)
       : null,
-    evidencia: metrics.evidenceTotal
-      ? { disp: metrics.evidenceAvailable, aguard: metrics.evidenceTotal - metrics.evidenceAvailable }
+    evidencia: evidenceTotal
+      ? { disp: evidenceAvailable, aguard: evidenceTotal - evidenceAvailable }
       : null,
-    hasEvidence: metrics.evidenceTotal > 0,
-    t_ini_mediana: startMedian != null ? +startMedian.toFixed(1) : null,
-    t_fin_mediana: endMedian != null ? +endMedian.toFixed(1) : null,
+    hasEvidence: evidenceTotal > 0,
+    t_ini_mediana: data?.t_ini_mediana == null ? null : Number(data.t_ini_mediana),
+    t_fin_mediana: data?.t_fin_mediana == null ? null : Number(data.t_fin_mediana),
   };
 }
 
-async function collectSupportMetrics(supabase, {
-  platformId, frotas, dateFrom, dateTo, severity, classification, eventType,
-}) {
-  if (Array.isArray(frotas) && frotas.length === 0) {
-    return { evidenceTotal: 0, evidenceAvailable: 0, treatStartDiffs: [], treatEndDiffs: [] };
-  }
-
-  const metrics = { evidenceTotal: 0, evidenceAvailable: 0, treatStartDiffs: [], treatEndDiffs: [] };
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    let q = supabase
-      .from('driver_events')
-      .select('ocorrido_em,evidencia,inicio_tratativa,fim_tratativa')
-      .eq('platform_id', platformId)
-      .neq('sev_norm', 'Leve')
-      .order('id')
-      .range(from, from + pageSize - 1);
-
-    if (Array.isArray(frotas)) q = q.in('fleet_raw', frotas);
-    if (dateFrom) q = q.gte('ocorrido_em', dateFrom);
-    if (dateTo) q = q.lte('ocorrido_em', dateTo);
-    if (classification && classification !== 'all') q = q.eq('clf_norm', classification);
-    if (eventType) q = q.eq('nome_evento', eventType);
-    if (severity && severity !== 'all') {
-      if (severity === 'high') q = q.in('sev_norm', ['Grave', 'Gravíssimo']);
-      else if (severity === 'medium') q = q.eq('sev_norm', 'Médio');
-      else q = q.eq('sev_norm', severity);
-    }
-
-    const { data, error } = await q;
-    if (error) throw error;
-    for (const row of data || []) applyMetricRow(metrics, row);
-    if (!data || data.length < pageSize) break;
-  }
-
-  return metrics;
-}
-
 async function querySupportMetrics(supabase, params) {
-  return finishSupportMetrics(await collectSupportMetrics(supabase, params));
+  const sources = normalizeSupportSources(params);
+  if (sources.length === 0) {
+    return supportMetricsFromRPC(null);
+  }
+
+  const { data, error } = await supabase.rpc('analytics_support_metrics', {
+    p_sources: sources,
+    p_date_from: params.dateFrom || null,
+    p_date_to: params.dateTo || null,
+    p_severity: params.severity || null,
+    p_classification: params.classification || null,
+    p_event_type: params.eventType || null,
+  });
+
+  if (error) {
+    if (isMissingSupportMetricsRPC(error)) {
+      const missingError = new Error(
+        'RPC analytics_support_metrics ausente. Aplique a migration 20260720113000 antes do backend.',
+      );
+      missingError.name = 'MissingAnalyticsSupportRpcError';
+      missingError.code = 'ANALYTICS_SUPPORT_RPC_MISSING';
+      missingError.cause = error;
+      throw missingError;
+    }
+    throw error;
+  }
+
+  return supportMetricsFromRPC(data);
 }
 
 function mergeSupportMetrics(d, support) {
@@ -427,23 +385,15 @@ export async function buildCompareViaRPC(supabase, {
     p_tz: 'America/Sao_Paulo',
   });
   resolveFrotaChart(d, resolveMonitorName, aliases);
-  const combinedSupport = { evidenceTotal: 0, evidenceAvailable: 0, treatStartDiffs: [], treatEndDiffs: [] };
-  for (let i = 0; i < sources.length; i++) {
-    const raw = await collectSupportMetrics(supabase, {
-      platformId: sources[i].platformId,
-      frotas: resolvedForCombined[i].frotas,
-      dateFrom: from,
-      dateTo: to,
-      severity,
-      classification,
-      eventType,
-    });
-    combinedSupport.evidenceTotal += raw.evidenceTotal;
-    combinedSupport.evidenceAvailable += raw.evidenceAvailable;
-    combinedSupport.treatStartDiffs.push(...raw.treatStartDiffs);
-    combinedSupport.treatEndDiffs.push(...raw.treatEndDiffs);
-  }
-  mergeSupportMetrics(d, finishSupportMetrics(combinedSupport));
+  const combinedSupport = await querySupportMetrics(supabase, {
+    sources: resolvedForCombined,
+    dateFrom: from,
+    dateTo: to,
+    severity,
+    classification,
+    eventType,
+  });
+  mergeSupportMetrics(d, combinedSupport);
 
   // Mês anterior (só quando há um mês específico selecionado).
   let prevD = null;
@@ -460,23 +410,15 @@ export async function buildCompareViaRPC(supabase, {
       p_tz: 'America/Sao_Paulo',
     });
     resolveFrotaChart(prevD, resolveMonitorName, aliases);
-    const prevCombinedSupport = { evidenceTotal: 0, evidenceAvailable: 0, treatStartDiffs: [], treatEndDiffs: [] };
-    for (let i = 0; i < sources.length; i++) {
-      const raw = await collectSupportMetrics(supabase, {
-        platformId: sources[i].platformId,
-        frotas: resolvedForCombined[i].frotas,
-        dateFrom: pb.from,
-        dateTo: pb.to,
-        severity,
-        classification,
-        eventType,
-      });
-      prevCombinedSupport.evidenceTotal += raw.evidenceTotal;
-      prevCombinedSupport.evidenceAvailable += raw.evidenceAvailable;
-      prevCombinedSupport.treatStartDiffs.push(...raw.treatStartDiffs);
-      prevCombinedSupport.treatEndDiffs.push(...raw.treatEndDiffs);
-    }
-    mergeSupportMetrics(prevD, finishSupportMetrics(prevCombinedSupport));
+    const prevCombinedSupport = await querySupportMetrics(supabase, {
+      sources: resolvedForCombined,
+      dateFrom: pb.from,
+      dateTo: pb.to,
+      severity,
+      classification,
+      eventType,
+    });
+    mergeSupportMetrics(prevD, prevCombinedSupport);
   }
 
   const availableUfs = (((d && d.uf && d.uf.labels) || []).slice()).sort();

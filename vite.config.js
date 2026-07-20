@@ -22,17 +22,10 @@ export default defineConfig({
           { src: '/maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
+      // Dados do Supabase são autenticados e podem conter informações
+      // sensíveis. O service worker limita-se ao precache dos assets da app.
       workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              networkTimeoutSeconds: 10,
-            },
-          },
-        ],
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
@@ -52,17 +45,5 @@ export default defineConfig({
         safari10: true,
       }
     },
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('recharts')) return 'recharts';
-            if (id.includes('xlsx')) return 'xlsx';
-            if (id.includes('@tiptap')) return 'tiptap';
-            return 'vendor';
-          }
-        }
-      }
-    }
   }
 })

@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import { useAtendimentos } from '../../hooks/useAtendimentos.js';
 import { useToast } from '../../hooks/useToast.jsx';
+import { buildCleanupDateRange } from './cleanupDateRange.js';
 import { exportCSV } from '../monitor/utils.jsx';
 
 const TIPO_OPTS = [
@@ -25,17 +26,12 @@ export default function SistemaLimpeza() {
   const [confirming, setConfirming]   = useState(false);
   const [deleting, setDeleting]       = useState(false);
 
-  // Converte período relativo em { from, to } no formato YYYY-MM-DD (local).
-  const dateRange = useMemo(() => {
-    const fmt = (d) => d.toISOString().slice(0, 10);
-    const now = new Date();
-    if (period === 'todos')     return { from: null, to: null };
-    if (period === 'hoje')      return { from: fmt(now), to: fmt(now) };
-    if (period === 'semana')    { const d = new Date(now); d.setDate(d.getDate() - 7);  return { from: fmt(d), to: fmt(now) }; }
-    if (period === 'mes')       { const d = new Date(now); d.setDate(d.getDate() - 30); return { from: fmt(d), to: fmt(now) }; }
-    if (period === 'intervalo') return { from: from || null, to: to || null };
-    return { from: null, to: null };
-  }, [period, from, to]);
+  // Converte período relativo em YYYY-MM-DD usando o calendário local. Usar
+  // toISOString aqui deslocava "hoje" para amanhã após 21h em UTC-3.
+  const dateRange = useMemo(
+    () => buildCleanupDateRange(period, from, to),
+    [period, from, to],
+  );
 
   const canPreview = period !== 'intervalo' || (from && to);
 

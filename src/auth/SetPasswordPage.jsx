@@ -78,8 +78,9 @@ export default function SetPasswordPage() {
 
               <form onSubmit={handleSubmit} style={{ marginTop: 22 }}>
                 <div className="form-group">
-                  <label className="form-label">Nova senha</label>
+                  <label className="form-label" htmlFor="new-password">Nova senha</label>
                   <input
+                    id="new-password"
                     className="form-control"
                     type="password"
                     placeholder="Mínimo 6 caracteres"
@@ -90,8 +91,9 @@ export default function SetPasswordPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Confirmar senha</label>
+                  <label className="form-label" htmlFor="confirm-password">Confirmar senha</label>
                   <input
+                    id="confirm-password"
                     className="form-control"
                     type="password"
                     placeholder="Repita a senha"

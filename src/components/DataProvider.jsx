@@ -6,6 +6,23 @@ import { NotesProvider } from '../hooks/useNotes';
 import { TemplatesProvider } from '../hooks/useTemplates';
 import { WsPagesProvider } from '../hooks/useWsPages';
 import { AutomationsProvider } from '../hooks/useAutomations';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { useLocation } from 'react-router-dom';
+
+function RoleScopedAutomationsProvider({ children }) {
+  const { profile } = useAuth();
+  const { pathname } = useLocation();
+  const canManageAutomations = profile?.role === 'admin' || profile?.role === 'lider';
+  const isAutomationsRoute = pathname === '/automacoes' || pathname.startsWith('/automacoes/');
+  return (
+    <AutomationsProvider
+      enabled={canManageAutomations}
+      active={canManageAutomations && isAutomationsRoute}
+    >
+      {children}
+    </AutomationsProvider>
+  );
+}
 
 export function DataProvider({ children }) {
   return (
@@ -16,9 +33,9 @@ export function DataProvider({ children }) {
             <NotesProvider>
               <TemplatesProvider>
                 <WsPagesProvider>
-                  <AutomationsProvider>
+                  <RoleScopedAutomationsProvider>
                     {children}
-                  </AutomationsProvider>
+                  </RoleScopedAutomationsProvider>
                 </WsPagesProvider>
               </TemplatesProvider>
             </NotesProvider>

@@ -102,38 +102,46 @@ Deno.serve(async (req) => {
   let record: any = null;
 
   try {
-    // 1. Validar Autenticação (Service Role, local trigger, ou sessão de operador)
+    // 1. Validar autenticação (service role, trigger com secret, ou operador).
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Não autorizado' }, 401);
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Não autorizado' }, 401);
 
-    const tokenStr = authHeader.replace('Bearer ', '');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const tokenStr = authHeader.slice('Bearer '.length).trim();
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
+    const triggerSecret = Deno.env.get('TRIGGER_SECRET')?.trim();
 
-    const triggerSecret = Deno.env.get('TRIGGER_SECRET');
+    if (!serviceRoleKey || !supabaseUrl) {
+      console.error('[append-sheet] SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY não configurados.');
+      return json({ error: 'Configuração interna indisponível' }, 503);
+    }
 
     let isAuthorized = false;
     if (tokenStr === serviceRoleKey) {
       // Chamada com a service_role key (scripts internos / jobs)
       isAuthorized = true;
-    } else if (triggerSecret && tokenStr === triggerSecret) {
-      // Caminho seguro: trigger do banco autenticada com o secret compartilhado
-      isAuthorized = true;
-    } else if (!triggerSecret && tokenStr === 'SYSTEM_TRIGGER') {
-      // COMPATIBILIDADE: aceita o literal legado APENAS enquanto TRIGGER_SECRET
-      // não estiver configurado. Configure o secret (env da função + Vault) para
-      // fechar a brecha — ver migration *_secure_append_sheet_trigger.sql.
-      console.warn('[append-sheet] Token legado SYSTEM_TRIGGER aceito. Configure TRIGGER_SECRET para encerrar o modo de compatibilidade.');
-      isAuthorized = true;
     } else {
-      // Valida sessão de operador logado
-      const userClient = createClient(
-        supabaseUrl,
-        Deno.env.get('SUPABASE_ANON_KEY')!,
-        { global: { headers: { Authorization: authHeader } } },
-      );
-      const { data: { user } } = await userClient.auth.getUser();
-      if (user) isAuthorized = true;
+      // Sem secret não existe caminho alternativo para chamadas não-service.
+      if (!triggerSecret) {
+        console.error('[append-sheet] TRIGGER_SECRET não configurado; chamada recusada.');
+        return json({ error: 'Autorização interna não configurada' }, 503);
+      }
+
+      if (tokenStr === triggerSecret) {
+        isAuthorized = true;
+      }
+
+      // Mantém a chamada direta de um operador autenticado, mas somente em um
+      // ambiente que também tenha o secret interno devidamente provisionado.
+      if (!isAuthorized) {
+        const userClient = createClient(
+          supabaseUrl,
+          Deno.env.get('SUPABASE_ANON_KEY')!,
+          { global: { headers: { Authorization: authHeader } } },
+        );
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) isAuthorized = true;
+      }
     }
 
     if (!isAuthorized) return json({ error: 'Não autorizado' }, 401);

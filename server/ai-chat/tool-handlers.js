@@ -60,7 +60,7 @@ async function generate_pdf_report(supabase, userId, { title, content, subtitle 
 
 // Executador de ferramentas unificado. `ctx` acumula efeitos colaterais.
 export async function executeTool(supabase, userId, name, args, ctx = {}) {
-  console.log(`[AI Agent Tool] Calling ${name} with args:`, JSON.stringify(args));
+  console.log(`[AI Agent Tool] Executando ${name}.`);
   switch (name) {
     case 'generate_pdf_report':
       return await generate_pdf_report(supabase, userId, args);

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../components/Modal';
 import { useAuth } from '../../auth/AuthContext.jsx';
-
 import { useToast } from '../../hooks/useToast.jsx';
+import { API_URL } from '../../lib/runtimeConfig.js';
 
 
 const ICON_OPTIONS = [
@@ -370,7 +370,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
   const [scheduleDays, setScheduleDays] = useState(automation?.scheduleDays?.length ? automation.scheduleDays : [1, 2, 3, 4, 5]);
   const scheduleTimezone = automation?.scheduleTimezone || 'America/Sao_Paulo';
   const [eventType, setEventType] = useState(automation?.eventType || EVENT_OPTIONS[0]);
-  const [token, setToken] = useState(automation?.token || '');
+  const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [active, setActive] = useState(automation?.active ?? true);
 
@@ -388,7 +388,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
 
   const save = () => {
     if (!canSave) return;
-    onSave({ 
+    const payload = {
       name: name.trim(), 
       desc: desc.trim(), 
       icon, 
@@ -402,17 +402,20 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
       scheduleTime: trigger === 'agendado' && scheduleType !== 'interval' ? scheduleTime : null,
       scheduleDays: trigger === 'agendado' && scheduleType === 'weekly' ? scheduleDays : null,
       scheduleTimezone: trigger === 'agendado' ? scheduleTimezone : null,
-      eventType: trigger === 'evento' ? eventType : null, 
-      token: token.trim() || null, 
+      eventType: trigger === 'evento' ? eventType : null,
       active 
-    });
+    };
+    // Em edição, campo vazio significa "preservar o segredo atual". O token
+    // nunca é lido de volta do banco para o navegador.
+    if (isNew || token.trim()) payload.token = token.trim() || null;
+    onSave(payload);
   };
 
   return (
     <Modal open onClose={onClose} width={650} labelledBy="hooks-config-modal-title">
         <div className="modal-header">
           <div className="modal-title" id="hooks-config-modal-title"><i className="ti ti-settings"></i> {isNew ? 'Nova automação' : 'Configurar ' + automation.name}</div>
-          <button className="btn-icon" onClick={onClose}><i className="ti ti-x"></i></button>
+          <button className="btn-icon" onClick={onClose} aria-label="Fechar configuração"><i className="ti ti-x"></i></button>
         </div>
 
         <div className="modal-body">
@@ -545,7 +548,7 @@ function AutomationModal({ automation, onSave, onDelete, onClose }) {
                 type={showToken ? 'text' : 'password'}
                 value={token}
                 onChange={e => setToken(e.target.value)}
-                placeholder="Segredo enviado no header da requisição"
+                placeholder={isNew ? 'Segredo enviado no header da requisição' : 'Deixe em branco para manter o token atual'}
                 autoComplete="new-password"
               />
               <button type="button" className="btn-icon" onClick={() => setShowToken(value => !value)} title={showToken ? 'Ocultar token' : 'Mostrar token'}>
@@ -586,7 +589,6 @@ export function HooksTab({ automations, logs, horizonQueueStatus, vpsHealth, onR
 
   const toast = useToast();
   const { profile, session } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
   const authHeader = () => ({ Authorization: `Bearer ${session?.access_token}` });
 
   const getWebhookUrl = () => {

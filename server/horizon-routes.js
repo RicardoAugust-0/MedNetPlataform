@@ -3,6 +3,7 @@ import { parseCSV, readHeaders, applyPlatformMap } from '../src/utils/fatiguePar
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
 import { reconcilePendingHorizonTreatments, runAutoCrossCheck } from './auto-crosscheck.js';
+import { safeSecretEqual } from './security.js';
 
 // ID legado semeado em migration_automations.sql para Bot_HorizonScraping.
 // A automação pode ter sido renomeada/recriada na operação; por isso o log
@@ -86,7 +87,7 @@ export function requireHorizonBotToken(req, res, next) {
   const header = req.headers.authorization || '';
   const incoming = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
 
-  if (!expected || incoming !== expected) {
+  if (!expected || !safeSecretEqual(incoming, expected)) {
     return res.status(401).json({ error: 'Não autorizado.' });
   }
   next();

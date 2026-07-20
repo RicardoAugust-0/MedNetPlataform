@@ -21,17 +21,37 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
       - run: npm ci
 
+      - run: npm ci --prefix server
+
       - run: npm run lint
-        continue-on-error: true
 
       - run: npm test
+
+      - name: Check backend syntax
+        run: find server -path 'server/node_modules' -prune -o -name '*.js' -print0 | xargs -0 -n1 node --check
 
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.101.0
+          github-token: ${{ github.token }}
+
+      - name: Replay every database migration
+        run: supabase db start

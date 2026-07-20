@@ -17,6 +17,7 @@ export default function EquipeTab() {
   const [editCargo, setEditCargo] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [roleSavingId, setRoleSavingId] = useState(null);
 
   const startEdit = (p) => { setEditing(p.id); setEditNome(p.nome || ''); setEditCargo(p.cargo || ''); };
   const saveEdit  = async () => {
@@ -53,6 +54,17 @@ export default function EquipeTab() {
       setInviteEmail('');
     }
     setInviting(false);
+  };
+
+  const handleRoleChange = async (profileId, role) => {
+    setRoleSavingId(profileId);
+    const { error } = await updateRole(profileId, role);
+    setRoleSavingId(null);
+    if (error) {
+      toast(error.message || 'Não foi possível alterar o perfil de acesso', 'error');
+      return;
+    }
+    toast('Perfil de acesso atualizado', 'success');
   };
 
   const fmtLastSeen = (iso) => {
@@ -150,8 +162,8 @@ export default function EquipeTab() {
                   className="form-control"
                   style={{ width: 'auto', fontSize: 11, padding: '3px 8px' }}
                   value={p.role || 'operador'}
-                  onChange={e => updateRole(p.id, e.target.value)}
-                  disabled={p.id === me?.id}
+                  onChange={e => handleRoleChange(p.id, e.target.value)}
+                  disabled={p.id === me?.id || roleSavingId === p.id}
                 >
                   <option value="operador">Operador</option>
                   <option value="lider">Líder</option>

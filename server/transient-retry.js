@@ -21,6 +21,14 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function retryDelayMs(error, baseDelayMs, attempt) {
+  const exponentialDelay = Math.max(0, baseDelayMs) * (2 ** (attempt - 1));
+  const requestedDelay = Number(error?.retryAfterMs);
+  return Number.isFinite(requestedDelay) && requestedDelay >= 0
+    ? Math.max(exponentialDelay, requestedDelay)
+    : exponentialDelay;
+}
+
 /**
  * Por padrao repete somente falhas de transporte. O chamador pode fornecer um
  * classificador mais amplo para respostas HTTP comprovadamente transitorias;
@@ -50,23 +58,24 @@ export async function retryTransientFetch(
         return result;
       }
 
-      const retryDelayMs = baseDelayMs * (2 ** (attempt - 1));
+      const nextDelayMs = retryDelayMs(resultError, baseDelayMs, attempt);
       logger.warn(
         `[Transient Retry] ${label}: tentativa ${attempt}/${attempts} falhou; repetindo.`,
         resultError,
       );
-      onRetry?.({ error: resultError, attempt, maxAttempts: attempts, delayMs: retryDelayMs });
+      onRetry?.({ error: resultError, attempt, maxAttempts: attempts, delayMs: nextDelayMs });
+      await delay(nextDelayMs);
+      continue;
     } catch (error) {
       if (!shouldRetry(error) || attempt === attempts) throw error;
-      const retryDelayMs = baseDelayMs * (2 ** (attempt - 1));
+      const nextDelayMs = retryDelayMs(error, baseDelayMs, attempt);
       logger.warn(
         `[Transient Retry] ${label}: tentativa ${attempt}/${attempts} falhou; repetindo.`,
         error,
       );
-      onRetry?.({ error, attempt, maxAttempts: attempts, delayMs: retryDelayMs });
+      onRetry?.({ error, attempt, maxAttempts: attempts, delayMs: nextDelayMs });
+      await delay(nextDelayMs);
     }
-
-    await delay(baseDelayMs * (2 ** (attempt - 1)));
   }
 
   throw new Error(`${label}: numero de tentativas esgotado.`);

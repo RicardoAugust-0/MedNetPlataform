@@ -33,10 +33,14 @@ export function ProfilesProvider({ children }) {
   }, [applyPatch]);
 
   const updateRole = useCallback(async (id, role) => {
-    const prev = profiles.find(p => p.id === id);
+    const { error } = await supabase.rpc('admin_set_profile_role', {
+      p_profile_id: id,
+      p_role: role,
+    });
+    if (error) return { error };
     applyPatch(id, { role });
-    return persistPatch(id, { role }, prev ? { role: prev.role } : null);
-  }, [profiles, applyPatch, persistPatch]);
+    return { error: null };
+  }, [applyPatch]);
 
   const updateInfo = useCallback(async (id, { nome, cargo }) => {
     const prev = profiles.find(p => p.id === id);

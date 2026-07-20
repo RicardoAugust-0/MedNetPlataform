@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../../components/Modal';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useToast } from '../../hooks/useToast.jsx';
 import { supabase } from '../../supabase.js';
+import { API_URL } from '../../lib/runtimeConfig.js';
 
 export default function ChatTab({ initialParams, clearInitialParams }) {
   const toast = useToast();
   const { profile, session } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
   const authHeader = () => ({ Authorization: `Bearer ${session?.access_token}` });
 
   const [chats, setChats] = useState([]);
@@ -161,14 +161,12 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
     const channelName = `whatsapp-chat-live-${crypto.randomUUID()}`;
     const channel = supabase
       .channel(channelName)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_chats' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_chats' }, () => {
         // Reload chats list to reflect last message/unread count updates
         fetchChats();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, (payload) => {
         const newMsg = payload.new;
-        const oldMsg = payload.old;
-
         // If insert event
         if (payload.eventType === 'INSERT') {
           // If message belongs to active chat, append it
@@ -309,7 +307,7 @@ export default function ChatTab({ initialParams, clearInitialParams }) {
       const res = await fetch(`${API_URL}/api/whatsapp/templates`, { headers: authHeader() });
       const data = await res.json();
       setTemplates(data.templates || []);
-    } catch (err) {
+    } catch {
       toast('Erro ao buscar templates.', 'error');
     } finally {
       setLoadingTemplates(false);

@@ -38,7 +38,15 @@ const Workspace = lazy(() => import("./modules/Workspace.jsx"));
 const EmbeddedSheet = lazy(() => import("./modules/EmbeddedSheet.jsx"));
 import { applyAccent } from "./utils.js";
 import { ROLE_LEVEL } from "./data.js";
-import GlobalAiChat from "./components/GlobalAiChat.jsx";
+const GlobalAiChat = lazy(() => import("./components/GlobalAiChat.jsx"));
+
+function RouteLoading() {
+  return (
+    <div className="empty-state" role="status" aria-live="polite">
+      <i className="ti ti-loader-2 fz-spin"></i> Carregando…
+    </div>
+  );
+}
 
 function AdminGuard({ children }) {
   const { profile } = useAuth();
@@ -158,7 +166,7 @@ function AppShell() {
           <div className="main-area">
             {!isChat && <Topbar />}
             <main className={isChat ? "content-area chat-content-area" : "content-area"}>
-              <Suspense fallback={null}>
+              <Suspense fallback={<RouteLoading />}>
                 <div key={topSegment} className="page-transition">
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -177,7 +185,10 @@ function AppShell() {
                     element={<AdminGuard><AdminAiChat /></AdminGuard>}
                   />
                   <Route path="/templates" element={<Templates />} />
-                  <Route path="/automacoes" element={<Automacoes />} />
+                  <Route
+                    path="/automacoes"
+                    element={<RoleGuard min="lider"><Automacoes /></RoleGuard>}
+                  />
                   <Route path="/workspace" element={<Workspace />} />
                   <Route path="/workspace/:categoria" element={<Workspace />} />
                   <Route path="/notas" element={<Notes />} />
@@ -243,7 +254,11 @@ function AppShell() {
               para admins)
             </div>
           )}
-          <GlobalAiChat />
+          {profile?.role === "admin" && (
+            <Suspense fallback={null}>
+              <GlobalAiChat />
+            </Suspense>
+          )}
         </div>
       </DataProvider>
     </RemindersProvider>
@@ -253,7 +268,7 @@ function AppShell() {
 export default function App() {
   const { session, loading, authType } = useAuth();
 
-  if (loading) return null;
+  if (loading) return <RouteLoading />;
 
   if (session && (authType === "invite" || authType === "recovery"))
     return <SetPasswordPage />;

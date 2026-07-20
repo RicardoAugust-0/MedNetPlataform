@@ -1,6 +1,7 @@
 import { aggregate, PLATFORMS, normClf, toUF } from '../src/utils/fatigueParser.js';
 import { buildSingleAnalyticsViaRPC, buildCompareViaRPC, companiesFromFleets, deriveDateParams } from './analytics-rpc.js';
 import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
+import { isTransientFetchError } from './transient-retry.js';
 
 // In-memory caches
 const rawEventsCache = {};
@@ -10,6 +11,33 @@ const RESULT_TTL = 5 * 60 * 1000;
 
 // Hierarquia de acesso (espelha src/data.js ROLE_LEVEL e o AdminGuard do front).
 const ROLE_LEVELS = { operador: 0, lider: 1, admin: 2 };
+
+export function isMissingPlatformCountsRpcError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+  return ['PGRST202', '42883'].includes(code)
+    && /analytics_platform_counts/i.test(message)
+    && /could not find|does not exist|schema cache/i.test(message);
+}
+
+export function isTransientAnalyticsRpcError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  return isTransientFetchError(error)
+    || error?.name === 'TimeoutError'
+    || error?.name === 'AbortError'
+    || code.startsWith('08')
+    || code === 'ANALYTICS_SUPPORT_RPC_MISSING'
+    || ['53300', '57014', '57P01', 'PGRST000', 'PGRST001', 'PGRST002', 'PGRST003'].includes(code);
+}
+
+export function isMissingAnalyticsRollupRpcError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  if (code === 'PGRST202') return true;
+  if (code !== '42883') return false;
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+  return /analytics_metadata_rollup|get_analytics_rollup(?:_multi)?/i.test(message)
+    && /does not exist|could not find/i.test(message);
+}
 
 // Middleware: exige um JWT Supabase válido no header Authorization e um role
 // igual/superior a `minRole`. O front (Analytics) é admin-only, mas o front
@@ -266,8 +294,20 @@ export function registerAnalyticsRoutes(app, supabase) {
       // Contagens (eventos ativos por plataforma) servidas pelo rollup —
       // uma RPC, sem varrer driver_events. Fallback: head count por plataforma.
       const { data: rollupCounts, error: rcErr } = await supabase.rpc('analytics_platform_counts');
-      if (!rcErr && rollupCounts && typeof rollupCounts === 'object') {
-        return res.json(rollupCounts);
+      if (!rcErr) {
+        return res.json(
+          rollupCounts && typeof rollupCounts === 'object' ? rollupCounts : {},
+        );
+      }
+
+      // O fallback legado existe apenas para ambientes que ainda nao receberam
+      // a migration da RPC. Em timeout/indisponibilidade, abrir mais oito queries
+      // contra o mesmo Supabase amplia a falha; responda 503 para o cliente recuar.
+      if (!isMissingPlatformCountsRpcError(rcErr)) {
+        res.set('Retry-After', '5');
+        return res.status(503).json({
+          error: 'Contagens temporariamente indisponiveis. Tente novamente em instantes.',
+        });
       }
 
       const counts = {};
@@ -358,6 +398,7 @@ export function registerAnalyticsRoutes(app, supabase) {
           );
           return sendPayload(payload);
         } catch (rpcErr) {
+          if (!isMissingAnalyticsRollupRpcError(rpcErr)) throw rpcErr;
           console.error('[MedNet Backend] RPC falhou, fallback JS:', rpcErr.message || rpcErr);
         }
       }
@@ -386,6 +427,7 @@ export function registerAnalyticsRoutes(app, supabase) {
             return sendPayload(payload);
           }
         } catch (rpcErr) {
+          if (!isMissingAnalyticsRollupRpcError(rpcErr)) throw rpcErr;
           console.error('[MedNet Backend] RPC compare falhou, fallback JS:', rpcErr.message || rpcErr);
         }
       }
@@ -523,6 +565,12 @@ export function registerAnalyticsRoutes(app, supabase) {
       }
     } catch (err) {
       console.error('[MedNet Backend] Erro no /api/analytics:', err);
+      if (isTransientAnalyticsRpcError(err)) {
+        res.set('Retry-After', '5');
+        return res.status(503).json({
+          error: 'Analytics temporariamente indisponivel. Tente novamente em instantes.',
+        });
+      }
       res.status(500).json({ error: err.message || String(err) });
     }
   });

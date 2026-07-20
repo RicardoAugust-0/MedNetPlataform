@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as XLSX from 'xlsx';
 import { detect, parse } from './parser.js';
-import { applyHistoryFilter } from '../shared/history.js';
 
 // polyfill FileReader minimal surface for Node environment
 beforeAll(() => {

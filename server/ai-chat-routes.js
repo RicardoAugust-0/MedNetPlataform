@@ -1,5 +1,35 @@
 import { requireRole } from './ai-chat/middleware.js';
 import { executeTool } from './ai-chat/tool-handlers.js';
+import { safeSecretEqual } from './security.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function pdfContentLimitBytes() {
+  const configured = Number.parseInt(process.env.AI_PDF_MAX_CONTENT_BYTES || '', 10);
+  return Number.isInteger(configured) && configured > 0 ? configured : 512 * 1024;
+}
+
+export function validateInternalPdfPayload(body, maxContentBytes = pdfContentLimitBytes()) {
+  const { userId, title, content, subtitle } = body || {};
+  if (!UUID_RE.test(String(userId || ''))) return { error: 'userId invalido.' };
+  if (typeof title !== 'string' || !title.trim() || title.trim().length > 200) {
+    return { error: 'title invalido.' };
+  }
+  if (typeof content !== 'string' || !content.trim() || Buffer.byteLength(content, 'utf8') > maxContentBytes) {
+    return { error: 'content invalido ou acima do limite.' };
+  }
+  if (subtitle !== undefined && (typeof subtitle !== 'string' || subtitle.length > 500)) {
+    return { error: 'subtitle invalido.' };
+  }
+  return {
+    value: {
+      userId,
+      title: title.trim(),
+      content,
+      subtitle: subtitle?.trim() || undefined,
+    },
+  };
+}
 
 // Extrai bloco JSON (gráfico ou ação de navegação) do texto da IA.
 // Tenta ```json primeiro, depois ``` simples como fallback.
@@ -45,11 +75,14 @@ export function registerAiChatRoutes(app, supabase) {
 
   // 2. Criar um novo tópico (thread) de conversa
   app.post('/api/ai/chat/threads', requireRole(supabase, 'admin'), async (req, res) => {
-    const { title = 'Nova conversa' } = req.body;
+    const { title = 'Nova conversa' } = req.body || {};
+    if (typeof title !== 'string' || !title.trim() || title.trim().length > 120) {
+      return res.status(400).json({ error: 'Titulo invalido.' });
+    }
     try {
       const { data, error } = await supabase
         .from('ai_chat_threads')
-        .insert({ user_id: req.authUser.id, title })
+        .insert({ user_id: req.authUser.id, title: title.trim() })
         .select('id, user_id, title, created_at, updated_at');
       if (error) throw error;
       return res.status(200).json(data[0]);
@@ -61,6 +94,7 @@ export function registerAiChatRoutes(app, supabase) {
   // 3. Deletar um tópico (thread) de conversa
   app.delete('/api/ai/chat/threads/:id', requireRole(supabase, 'admin'), async (req, res) => {
     const { id } = req.params;
+    if (!UUID_RE.test(id)) return res.status(400).json({ error: 'id invalido.' });
     try {
       // Deleta mensagens vinculadas implicitamente por Cascade
       const { error } = await supabase
@@ -81,6 +115,7 @@ export function registerAiChatRoutes(app, supabase) {
     if (!thread_id) {
       return res.status(200).json([]);
     }
+    if (!UUID_RE.test(thread_id)) return res.status(400).json({ error: 'thread_id invalido.' });
     try {
       const { data, error } = await supabase
         .from('ai_chat_messages')
@@ -112,9 +147,15 @@ export function registerAiChatRoutes(app, supabase) {
 
   // 6. Enviar mensagem para a IA vinculando a um tópico (Delegando ao n8n)
   app.post('/api/ai/chat', requireRole(supabase, 'admin'), async (req, res) => {
-    const { message, thread_id, context } = req.body;
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Parâmetro "message" é obrigatório.' });
+    const { message, thread_id, context } = req.body || {};
+    if (
+      typeof message !== 'string'
+      || !message.trim()
+      || message.length > 20_000
+      || (thread_id && !UUID_RE.test(thread_id))
+      || Buffer.byteLength(JSON.stringify(context ?? null), 'utf8') > 64 * 1024
+    ) {
+      return res.status(400).json({ error: 'Mensagem, thread_id ou contexto invalido.' });
     }
 
     try {
@@ -154,7 +195,7 @@ export function registerAiChatRoutes(app, supabase) {
       const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/medbot-chat';
       const internalKey = process.env.INTERNAL_API_KEY;
 
-      console.log(`[MedBot] Encaminhando mensagem ao n8n (${n8nWebhookUrl}) para usuário ${req.authUser.id}`);
+      console.log('[MedBot] Encaminhando mensagem ao n8n.');
       
       const n8nResponse = await fetch(n8nWebhookUrl, {
         method: 'POST',
@@ -240,14 +281,16 @@ export function registerAiChatRoutes(app, supabase) {
     const internalKey = process.env.INTERNAL_API_KEY;
     const incomingKey = req.headers['x-internal-key'];
 
-    if (internalKey && incomingKey !== internalKey) {
+    if (!internalKey) {
+      return res.status(503).json({ error: 'Endpoint interno nao configurado.' });
+    }
+    if (!safeSecretEqual(incomingKey, internalKey)) {
       return res.status(401).json({ error: 'Não autorizado.' });
     }
 
-    const { userId, title, content, subtitle } = req.body;
-    if (!userId || !title || !content) {
-      return res.status(400).json({ error: 'userId, title e content são obrigatórios.' });
-    }
+    const validation = validateInternalPdfPayload(req.body);
+    if (validation.error) return res.status(400).json({ error: validation.error });
+    const { userId, title, content, subtitle } = validation.value;
 
     try {
       const result = await executeTool(supabase, userId, 'generate_pdf_report', { title, content, subtitle });
@@ -275,9 +318,17 @@ export function registerAiChatRoutes(app, supabase) {
 
   // 8. Salvar relatório manualmente
   app.post('/api/ai/reports', requireRole(supabase, 'admin'), async (req, res) => {
-    const { title, content, chart_payload } = req.body;
-    if (!title || !content) {
-      return res.status(400).json({ error: 'Título e Conteúdo são obrigatórios.' });
+    const { title, content, chart_payload } = req.body || {};
+    if (
+      typeof title !== 'string'
+      || !title.trim()
+      || title.length > 200
+      || typeof content !== 'string'
+      || !content.trim()
+      || Buffer.byteLength(content, 'utf8') > 512 * 1024
+      || Buffer.byteLength(JSON.stringify(chart_payload ?? null), 'utf8') > 256 * 1024
+    ) {
+      return res.status(400).json({ error: 'Relatorio invalido ou acima do limite.' });
     }
     try {
       const { data, error } = await supabase
@@ -299,6 +350,7 @@ export function registerAiChatRoutes(app, supabase) {
   // 9. Deletar um relatório
   app.delete('/api/ai/reports/:id', requireRole(supabase, 'admin'), async (req, res) => {
     const { id } = req.params;
+    if (!UUID_RE.test(id)) return res.status(400).json({ error: 'id invalido.' });
     try {
       const { error } = await supabase
         .from('ai_generated_reports')

@@ -1,56 +1,75 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 
 const NotificationsCtx = createContext(null);
-const STORAGE_KEY = 'mn_notification_center';
+const STORAGE_PREFIX = 'mn_notification_center';
 const MAX_STORED = 50;
 
-function load() {
+function storageKey(userId) {
+  return userId ? `${STORAGE_PREFIX}:${userId}` : null;
+}
+
+function load(userId) {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    return v ? JSON.parse(v) : [];
+    const key = storageKey(userId);
+    if (!key) return [];
+    const v = localStorage.getItem(key);
+    const parsed = v ? JSON.parse(v) : [];
+    if (!Array.isArray(parsed)) return [];
+    // Funções nunca são restauradas de storage. Também neutraliza registros
+    // legados cuja action foi serializada apenas com label, sem handler.
+    return parsed.map((notification) => ({ ...notification, action: null }));
   } catch {
     return [];
   }
 }
 
-function save(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch { /* storage não crítico */ }
+function save(userId, list) {
+  try {
+    const key = storageKey(userId);
+    if (!key) return;
+    const serializable = list.map((notification) => {
+      const copy = { ...notification };
+      delete copy.action;
+      return copy;
+    });
+    localStorage.setItem(key, JSON.stringify(serializable));
+  } catch { /* storage não crítico */ }
 }
 
 // Central de notificações persistente — distinta dos toasts efêmeros (useToast):
 // fica registrada até o usuário ler/limpar, sobrevive a reload (localStorage).
-export function NotificationsProvider({ children }) {
-  const [notifications, setNotifications] = useState(load);
+export function NotificationsProvider({ children, userId }) {
+  const [notifications, setNotifications] = useState(() => load(userId));
 
   const notify = useCallback(({ title, body, kind = 'info', link = null, action = null }) => {
     setNotifications(prev => {
       const next = [{ id: crypto.randomUUID(), title, body, kind, link, action, read: false, createdAt: Date.now() }, ...prev];
       const trimmed = next.slice(0, MAX_STORED);
-      save(trimmed);
+      save(userId, trimmed);
       return trimmed;
     });
-  }, []);
+  }, [userId]);
 
   const markRead = useCallback((id) => {
     setNotifications(prev => {
       const next = prev.map(n => (n.id === id ? { ...n, read: true } : n));
-      save(next);
+      save(userId, next);
       return next;
     });
-  }, []);
+  }, [userId]);
 
   const markAllRead = useCallback(() => {
     setNotifications(prev => {
       const next = prev.map(n => ({ ...n, read: true }));
-      save(next);
+      save(userId, next);
       return next;
     });
-  }, []);
+  }, [userId]);
 
   const clearAll = useCallback(() => {
     setNotifications([]);
-    save([]);
-  }, []);
+    save(userId, []);
+  }, [userId]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

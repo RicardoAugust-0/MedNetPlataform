@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabase.js';
 
 // Sub-components import
@@ -7,8 +6,6 @@ import MetricsGrid from './MetricsGrid.jsx';
 import DispatchesTable from './DispatchesTable.jsx';
 
 export default function DisparosTab() {
-  const { profile } = useAuth();
-  
   // Dispatches state
   const [dispatches, setDispatches] = useState([]);
   const [loadingDispatches, setLoadingDispatches] = useState(false);
@@ -36,7 +33,7 @@ export default function DisparosTab() {
     
     const sub = supabase
       .channel('whatsapp_dispatches_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_dispatches' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_dispatches' }, () => {
         fetchDispatches();
       })
       .subscribe();

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext, createElement } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, createElement } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 import { useToast } from './useToast.jsx';
+import { createDebouncedPatchQueue } from './debouncedPatchQueue.js';
 
 const TemplatesContext = createContext(null);
 const TEMPLATE_COLUMNS = 'id, tag, tag_label, title, body, position, created_at';
@@ -9,14 +10,26 @@ export function TemplatesProvider({ children }) {
   const toast = useToast();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const timers = useRef({});
+  const [patchQueue] = useState(() => createDebouncedPatchQueue({
+    delay: 600,
+    persist: async (id, patch) => {
+      const dbPatch = {};
+      if (patch.tag      !== undefined) dbPatch.tag       = patch.tag;
+      if (patch.tagLabel !== undefined) dbPatch.tag_label = patch.tagLabel;
+      if (patch.title    !== undefined) dbPatch.title     = patch.title;
+      if (patch.text     !== undefined) dbPatch.body      = patch.text;
+      const { error } = await supabase.from('templates').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    onError: () => toast('Erro ao salvar template', 'error'),
+  }));
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('templates').select(TEMPLATE_COLUMNS).order('position', { ascending: true }).order('created_at', { ascending: true });
     if (error) toast('Erro ao carregar templates', 'error');
     else if (data) setTemplates(data.map(toLocal));
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -28,14 +41,16 @@ export function TemplatesProvider({ children }) {
         setTemplates(prev => prev.some(t => t.id === row.id) ? prev : [...prev, toLocal(row)]);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'templates' }, ({ new: row }) => {
-        setTemplates(prev => prev.map(t => t.id === row.id ? toLocal(row) : t));
+        setTemplates(prev => prev.map(t => t.id === row.id ? patchQueue.overlay(row.id, toLocal(row)) : t));
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'templates' }, ({ old: row }) => {
         setTemplates(prev => prev.filter(t => t.id !== row.id));
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, []);
+  }, [patchQueue]);
+
+  useEffect(() => () => { void patchQueue.flushAll(); }, [patchQueue]);
 
   const add = useCallback(async ({ tag, tagLabel, title, text }) => {
     const pos = templates.length > 0 ? Math.max(...templates.map(t => t.position ?? 0)) + 1 : 0;
@@ -51,21 +66,12 @@ export function TemplatesProvider({ children }) {
       return;
     }
     setTemplates(prev => prev.map(t => t.id === opt.id ? toLocal(data) : t));
-  }, [templates]);
+  }, [templates, toast]);
 
   const update = useCallback((id, patch) => {
     setTemplates(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-    clearTimeout(timers.current[id]);
-    timers.current[id] = setTimeout(async () => {
-      const dbPatch = {};
-      if (patch.tag      !== undefined) dbPatch.tag       = patch.tag;
-      if (patch.tagLabel !== undefined) dbPatch.tag_label = patch.tagLabel;
-      if (patch.title    !== undefined) dbPatch.title     = patch.title;
-      if (patch.text     !== undefined) dbPatch.body      = patch.text;
-      const { error } = await supabase.from('templates').update(dbPatch).eq('id', id);
-      if (error) toast('Erro ao salvar template', 'error');
-    }, 600);
-  }, []);
+    patchQueue.enqueue(id, patch);
+  }, [patchQueue]);
 
   const reorder = useCallback(async (newTemplates) => {
     setTemplates(newTemplates);
@@ -80,10 +86,11 @@ export function TemplatesProvider({ children }) {
   }, [load, toast]);
 
   const remove = useCallback(async (id) => {
+    patchQueue.discard(id);
     setTemplates(prev => prev.filter(t => t.id !== id));
     const { error } = await supabase.from('templates').delete().eq('id', id);
     if (error) { load(); toast('Erro ao excluir template', 'error'); }
-  }, [load]);
+  }, [load, patchQueue, toast]);
 
   return createElement(
     TemplatesContext.Provider,

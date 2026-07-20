@@ -71,8 +71,8 @@ function EditModal({ reminder, onSave, onClose }) {
 
   return createPortal(
     <div className="edit-reminder-modal" onClick={onClose}>
-      <div className="edit-reminder-modal-card" onClick={e => e.stopPropagation()}>
-        <div className="add-reminder-title" style={{ marginBottom: 14 }}><i className="ti ti-pencil"></i> Editar lembrete</div>
+      <div className="edit-reminder-modal-card" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-reminder-modal-title">
+        <div id="edit-reminder-modal-title" className="add-reminder-title" style={{ marginBottom: 14 }}><i className="ti ti-pencil"></i> Editar lembrete</div>
         <div className="form-group">
           <label className="form-label" htmlFor="edit-reminder-title">Título</label>
           <input id="edit-reminder-title" className="form-control" value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} autoFocus />

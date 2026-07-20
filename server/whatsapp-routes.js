@@ -1,7 +1,27 @@
 import { requireRole } from './ai-chat/middleware.js';
+import { safeSecretEqual } from './security.js';
+import { processWhatsappWebhook, verifyWhatsappSignature } from './whatsapp-webhook.js';
 
 const WHATSAPP_CREDENTIAL_COLUMNS = 'id, token, phone_number_id, whatsapp_business_account_id, updated_at';
 const WHATSAPP_TEMPLATE_COLUMNS = 'id, name, category, language, status, components, updated_at';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const META_ID_RE = /^\d{5,32}$/;
+const TEMPLATE_NAME_RE = /^[a-z0-9_]{1,512}$/;
+
+function isNonEmptyString(value, maxLength) {
+  return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength;
+}
+
+function maxWhatsappMessageChars() {
+  const configured = Number.parseInt(process.env.WHATSAPP_MESSAGE_MAX_CHARS || '', 10);
+  return Number.isInteger(configured) && configured > 0 ? configured : 4096;
+}
+
+function validPhone(value) {
+  if (typeof value !== 'string') return null;
+  const phone = value.replace(/\D/g, '');
+  return phone.length >= 8 && phone.length <= 20 ? phone : null;
+}
 
 export function registerWhatsappRoutes(app, supabase) {
   const requireOperador = requireRole(supabase, 'operador');
@@ -27,9 +47,13 @@ export function registerWhatsappRoutes(app, supabase) {
 
   // 2. Save/Update WhatsApp credentials
   app.post('/api/whatsapp/credentials', requireAdmin, async (req, res) => {
-    const { token, phone_number_id, whatsapp_business_account_id, userId } = req.body;
-    if (!token || !phone_number_id || !whatsapp_business_account_id) {
-      return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
+    const { token, phone_number_id, whatsapp_business_account_id } = req.body || {};
+    if (
+      !isNonEmptyString(token, 4096)
+      || !META_ID_RE.test(String(phone_number_id || ''))
+      || !META_ID_RE.test(String(whatsapp_business_account_id || ''))
+    ) {
+      return res.status(400).json({ error: 'Credenciais do WhatsApp invalidas.' });
     }
     try {
       const { data: existing } = await supabase
@@ -48,7 +72,7 @@ export function registerWhatsappRoutes(app, supabase) {
             phone_number_id,
             whatsapp_business_account_id,
             updated_at: new Date().toISOString(),
-            updated_by: userId || null
+            updated_by: req.authUser.id
           })
           .eq('id', existing.id);
       } else {
@@ -58,7 +82,7 @@ export function registerWhatsappRoutes(app, supabase) {
             token,
             phone_number_id,
             whatsapp_business_account_id,
-            updated_by: userId || null
+            updated_by: req.authUser.id
           });
       }
 
@@ -159,13 +183,21 @@ export function registerWhatsappRoutes(app, supabase) {
 
   // 4. Send Message Template via Meta Graph API
   app.post('/api/whatsapp/send', requireOperador, async (req, res) => {
-    const { recipient_phone, recipient_name, template_name, language_code, variables, userId } = req.body;
+    const { recipient_phone, recipient_name, template_name, language_code, variables } = req.body || {};
+    const cleanPhone = validPhone(recipient_phone);
+    const safeVariables = variables === undefined ? [] : variables;
 
-    if (!recipient_phone || !template_name) {
-      return res.status(400).json({ error: 'Telefone do destinatário e nome do template são obrigatórios.' });
+    if (
+      !cleanPhone
+      || !TEMPLATE_NAME_RE.test(String(template_name || ''))
+      || (recipient_name !== undefined && !isNonEmptyString(recipient_name, 200))
+      || (language_code !== undefined && !/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language_code))
+      || !Array.isArray(safeVariables)
+      || safeVariables.length > 20
+      || safeVariables.some((value) => String(value).length > 1024)
+    ) {
+      return res.status(400).json({ error: 'Dados do disparo WhatsApp invalidos.' });
     }
-
-    const cleanPhone = recipient_phone.replace(/\D/g, '');
 
     try {
       const { data: creds, error: credsErr } = await supabase
@@ -202,7 +234,7 @@ export function registerWhatsappRoutes(app, supabase) {
         estimatedCost = 0.15;
       }
 
-      const parameters = (variables || []).map(v => ({
+      const parameters = safeVariables.map(v => ({
         type: 'text',
         text: String(v)
       }));
@@ -228,7 +260,7 @@ export function registerWhatsappRoutes(app, supabase) {
         }
       };
 
-      console.log(`[MedNet Backend] Disparando template ${template_name} para ${cleanPhone}...`);
+      console.log(`[MedNet Backend] Disparando template ${template_name}.`);
 
       const response = await fetch(
         `https://graph.facebook.com/v18.0/${creds.phone_number_id}/messages`,
@@ -259,9 +291,9 @@ export function registerWhatsappRoutes(app, supabase) {
           category,
           estimated_cost: 0.0000,
           status: 'failed',
-          variables: variables || [],
+          variables: safeVariables,
           error_message: errorMessage,
-          sent_by: userId || null
+          sent_by: req.authUser.id
         });
 
         return res.status(400).json({ error: errorMessage });
@@ -276,9 +308,9 @@ export function registerWhatsappRoutes(app, supabase) {
         category,
         estimated_cost: estimatedCost,
         status: 'sent',
-        variables: variables || [],
+        variables: safeVariables,
         meta_message_id: messageId,
-        sent_by: userId || null
+        sent_by: req.authUser.id
       });
 
       res.json({ success: true, messageId, estimatedCost });
@@ -290,9 +322,9 @@ export function registerWhatsappRoutes(app, supabase) {
           recipient_phone: cleanPhone,
           template_name,
           status: 'failed',
-          variables: variables || [],
+          variables: safeVariables,
           error_message: err.message || String(err),
-          sent_by: userId || null
+          sent_by: req.authUser.id
         });
       } catch (dbErr) {
         console.error('[MedNet Backend] Erro ao tentar registrar log de falha crítica:', dbErr);
@@ -321,6 +353,7 @@ export function registerWhatsappRoutes(app, supabase) {
   // 6. GET messages for a specific chat
   app.get('/api/whatsapp/chats/:chatId/messages', requireOperador, async (req, res) => {
     const { chatId } = req.params;
+    if (!UUID_RE.test(chatId)) return res.status(400).json({ error: 'chatId invalido.' });
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
@@ -340,6 +373,7 @@ export function registerWhatsappRoutes(app, supabase) {
   // 7. POST mark messages as read (reset unread count)
   app.post('/api/whatsapp/chats/:chatId/read', requireOperador, async (req, res) => {
     const { chatId } = req.params;
+    if (!UUID_RE.test(chatId)) return res.status(400).json({ error: 'chatId invalido.' });
     try {
       const { error } = await supabase
         .from('whatsapp_chats')
@@ -357,10 +391,11 @@ export function registerWhatsappRoutes(app, supabase) {
   // 8. POST send free-text message
   app.post('/api/whatsapp/chats/:chatId/send', requireOperador, async (req, res) => {
     const { chatId } = req.params;
-    const { message, userId } = req.body;
+    const { message } = req.body || {};
+    const cleanMessage = typeof message === 'string' ? message.trim() : '';
 
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: 'A mensagem não pode ser vazia.' });
+    if (!UUID_RE.test(chatId) || !cleanMessage || cleanMessage.length > maxWhatsappMessageChars()) {
+      return res.status(400).json({ error: 'chatId ou mensagem invalido.' });
     }
 
     try {
@@ -388,7 +423,8 @@ export function registerWhatsappRoutes(app, supabase) {
         return res.status(404).json({ error: 'Conversa não encontrada.' });
       }
 
-      const cleanPhone = chat.phone.replace(/\D/g, '');
+      const cleanPhone = validPhone(chat.phone);
+      if (!cleanPhone) return res.status(422).json({ error: 'Telefone da conversa invalido.' });
 
       // 3. Send text message to Meta Cloud API
       const response = await fetch(
@@ -404,7 +440,7 @@ export function registerWhatsappRoutes(app, supabase) {
             recipient_type: "individual",
             to: cleanPhone,
             type: "text",
-            text: { body: message.trim() }
+            text: { body: cleanMessage }
           })
         }
       );
@@ -429,10 +465,10 @@ export function registerWhatsappRoutes(app, supabase) {
         await supabase.from('whatsapp_messages').insert({
           chat_id: chatId,
           direction: 'outbound',
-          body: message.trim(),
+          body: cleanMessage,
           status: 'failed',
           error_message: userMessage,
-          sender_id: userId || null
+          sender_id: req.authUser.id
         });
 
         return res.status(400).json({ error: userMessage, code: errMeta?.code });
@@ -446,10 +482,10 @@ export function registerWhatsappRoutes(app, supabase) {
         .insert({
           chat_id: chatId,
           direction: 'outbound',
-          body: message.trim(),
+          body: cleanMessage,
           status: 'sent',
           meta_message_id: messageId,
-          sender_id: userId || null
+          sender_id: req.authUser.id
         })
         .select('id, chat_id, direction, body, status, meta_message_id, error_message, sender_id, created_at')
         .single();
@@ -473,14 +509,14 @@ export function registerWhatsappRoutes(app, supabase) {
 
   // 9. POST start/open chat by phone number (new conversation from UI)
   app.post('/api/whatsapp/chats/open', requireOperador, async (req, res) => {
-    const { phone, name } = req.body;
-    if (!phone) {
-      return res.status(400).json({ error: 'O número de telefone é obrigatório.' });
+    const { phone, name } = req.body || {};
+    const cleanPhone = validPhone(phone);
+    if (!cleanPhone || (name !== undefined && !isNonEmptyString(name, 200))) {
+      return res.status(400).json({ error: 'Telefone ou nome invalido.' });
     }
 
     try {
-      const cleanPhone = phone.replace(/\D/g, '');
-      const displayName = name || phone;
+      const displayName = name?.trim() || cleanPhone;
 
       // Check if chat already exists
       let { data: chat } = await supabase
@@ -514,133 +550,40 @@ export function registerWhatsappRoutes(app, supabase) {
 
   // 10. GET Webhook verification (Meta App setup)
   app.get('/api/whatsapp/webhook', (req, res) => {
-    const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'mednet_verify_token';
+    const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    if (mode && token) {
-      if (mode === 'subscribe' && token === verifyToken) {
-        console.log('[MedNet Backend] Webhook verificado com sucesso pela Meta.');
-        return res.status(200).send(challenge);
-      } else {
-        console.warn('[MedNet Backend] Falha de verificação do webhook. Token incorreto.');
-        return res.sendStatus(403);
-      }
+    if (!verifyToken) {
+      return res.status(503).json({ error: 'Webhook WhatsApp nao configurado.' });
     }
-    res.sendStatus(400);
+    if (mode === 'subscribe' && safeSecretEqual(token, verifyToken) && typeof challenge === 'string') {
+      return res.status(200).send(challenge);
+    }
+    return res.sendStatus(mode && token ? 403 : 400);
   });
 
   // 11. POST Webhook endpoint (Status updates & Incoming text messages from Meta in real-time)
   app.post('/api/whatsapp/webhook', async (req, res) => {
+    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    if (!appSecret) {
+      return res.status(503).json({ error: 'Webhook WhatsApp nao configurado.' });
+    }
+
+    const signature = req.get('x-hub-signature-256');
+    if (!verifyWhatsappSignature(req.rawBody, signature, appSecret)) {
+      return res.status(401).json({ error: 'Assinatura do webhook invalida.' });
+    }
+
     try {
-      const entry = req.body?.entry?.[0];
-      const change = entry?.changes?.[0];
-      const messages = change?.value?.messages;
-      const contacts = change?.value?.contacts;
-      const statusObj = change?.value?.statuses?.[0];
-
-      // Case A: Incoming user message (Free-text reply)
-      if (messages && messages.length > 0) {
-        const msgObj = messages[0];
-        const fromPhone = msgObj.from;
-        const msgId = msgObj.id;
-        const msgTime = new Date(parseInt(msgObj.timestamp) * 1000).toISOString();
-
-        let msgBody = '';
-        if (msgObj.type === 'text') {
-          msgBody = msgObj.text?.body || '';
-        } else {
-          msgBody = `[Mensagem do tipo: ${msgObj.type}]`;
-        }
-
-        const contactObj = contacts?.find(c => c.wa_id === fromPhone);
-        const contactName = contactObj?.profile?.name || fromPhone;
-
-        // 1. Get or Create Chat Session
-        let { data: chat } = await supabase
-          .from('whatsapp_chats')
-          .select('id, unread_count')
-          .eq('phone', fromPhone)
-          .maybeSingle();
-
-        let chatId;
-        if (!chat) {
-          const { data: newChat, error: createErr } = await supabase
-            .from('whatsapp_chats')
-            .insert({
-              phone: fromPhone,
-              name: contactName,
-              unread_count: 1,
-              last_message_at: msgTime
-            })
-            .select('id')
-            .single();
-
-          if (createErr) throw createErr;
-          chatId = newChat.id;
-        } else {
-          chatId = chat.id;
-          await supabase
-            .from('whatsapp_chats')
-            .update({
-              last_message_at: msgTime,
-              unread_count: chat.unread_count + 1
-            })
-            .eq('id', chatId);
-        }
-
-        // 2. Insert Message
-        await supabase
-          .from('whatsapp_messages')
-          .insert({
-            chat_id: chatId,
-            direction: 'inbound',
-            body: msgBody,
-            status: 'read', // Incoming is marked as read or received on Meta
-            meta_message_id: msgId,
-            created_at: msgTime
-          });
-
-        console.log(`[MedNet Webhook] Nova resposta de ${contactName} (${fromPhone}): ${msgBody}`);
-      }
-
-      // Case B: Status update of sent messages (sent, delivered, read, failed)
-      if (statusObj) {
-        const metaMessageId = statusObj.id;
-        const metaStatus = statusObj.status;
-        const errorObj = statusObj.errors?.[0];
-
-        let mappedStatus = 'sent';
-        if (metaStatus === 'delivered') mappedStatus = 'delivered';
-        else if (metaStatus === 'read') mappedStatus = 'read';
-        else if (metaStatus === 'failed') mappedStatus = 'failed';
-
-        console.log(`[MedNet Backend Webhook] Atualização de status: ID ${metaMessageId} -> ${mappedStatus}`);
-
-        const updateData = { status: mappedStatus };
-        if (errorObj) {
-          updateData.error_message = errorObj.message || 'Falha de entrega Meta API';
-        }
-
-        // Update bulk templates history
-        await supabase
-          .from('whatsapp_dispatches')
-          .update(updateData)
-          .eq('meta_message_id', metaMessageId);
-
-        // Update individual chat message status
-        await supabase
-          .from('whatsapp_messages')
-          .update(updateData)
-          .eq('meta_message_id', metaMessageId);
-      }
-
-      res.status(200).send('EVENT_RECEIVED');
+      const result = await processWhatsappWebhook(supabase, req.body);
+      return res.status(200).json({ received: true, ...result });
     } catch (err) {
-      console.error('[MedNet Backend Webhook] Erro ao processar webhook:', err);
-      res.status(200).send('EVENT_RECEIVED');
+      // Retorna erro para a Meta repetir. A RPC transacional torna o retry seguro.
+      console.error('[MedNet Backend Webhook] Falha ao persistir evento assinado:', err?.message || err);
+      return res.status(500).json({ error: 'Falha temporaria ao processar webhook.' });
     }
   });
 }

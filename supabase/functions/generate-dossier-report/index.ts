@@ -6,6 +6,7 @@ const CORS = {
 };
 
 interface RequestBody {
+  driver_health_id?: string;
   motorista: string;
   placa?: string;
   clinicalData: {
@@ -29,6 +30,17 @@ interface Atendimento {
   tipo: string;
   obs: string;
   created_at: string;
+}
+
+interface DossierRpcResponse {
+  driver?: {
+    driver_health_id?: string | null;
+    nome?: string;
+    placa?: string;
+  };
+  health?: Partial<RequestBody['clinicalData']> | null;
+  telemetry_events?: TelemetryEvent[];
+  atendimentos?: Atendimento[];
 }
 
 function buildPrompt(
@@ -132,8 +144,10 @@ Deno.serve(async (req) => {
     const sbSvc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const body: RequestBody = await req.json();
-    const { motorista, placa, clinicalData } = body;
-    if (!motorista?.trim()) return json({ error: 'motorista é obrigatório' }, 400);
+    const { driver_health_id: driverHealthId, motorista, placa, clinicalData } = body;
+    if (!driverHealthId && !motorista?.trim()) {
+      return json({ error: 'driver_health_id ou motorista é obrigatório' }, 400);
+    }
 
     // Carrega ai_config padrão
     const { data: cfgRow } = await sbSvc.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle();
@@ -151,44 +165,38 @@ Deno.serve(async (req) => {
     }
     const apiKey = credRow.api_key;
 
-    // 1. Busca histórico de telemetria do motorista nos últimos 6 meses
+    // O RPC resolve a identidade no banco. Com prontuário usa UUID; sem ele,
+    // aplica nome normalizado AND placa normalizada nas fontes operacionais.
+    // Assim o relatório não mistura homônimos nem baixa históricos ilimitados.
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 6);
+    const { data: dossierData, error: dossierErr } = await sbSvc.rpc('get_dossier_driver', {
+      p_driver_health_id: driverHealthId || null,
+      p_motorista_nome: motorista?.trim() || null,
+      p_placa: placa?.trim() || null,
+      p_event_limit: 100,
+      p_atendimento_limit: 100,
+      p_since: cutoff.toISOString(),
+    });
+    if (dossierErr) throw new Error('Erro ao consultar dossiê: ' + dossierErr.message);
 
-    let teleQuery = sbSvc.from('driver_events').select('nome_evento, severidade, categoria_bucket, ocorrido_em');
-    if (placa) {
-      teleQuery = teleQuery.or(`placa.eq.${placa},nome.eq.${motorista}`);
-    } else {
-      teleQuery = teleQuery.eq('nome', motorista);
-    }
-    
-    const { data: telemetries, error: teleErr } = await teleQuery
-      .gte('ocorrido_em', cutoff.toISOString())
-      .order('ocorrido_em', { ascending: false });
-
-    if (teleErr) throw new Error('Erro ao consultar telemetria: ' + teleErr.message);
-
-    // 2. Busca histórico de contatos (atendimentos) operacionais
-    let atendQuery = sbSvc.from('atendimentos').select('tipo, obs, created_at');
-    if (placa) {
-      atendQuery = atendQuery.or(`placa.eq.${placa},motorista.eq.${motorista}`);
-    } else {
-      atendQuery = atendQuery.eq('motorista', motorista);
-    }
-    
-    const { data: actions, error: atendErr } = await atendQuery
-      .gte('created_at', cutoff.toISOString())
-      .order('created_at', { ascending: false });
-
-    if (atendErr) throw new Error('Erro ao consultar atendimentos: ' + atendErr.message);
+    const dossier = (dossierData || {}) as DossierRpcResponse;
+    const resolvedMotorista = dossier.driver?.nome || motorista;
+    const resolvedPlaca = dossier.driver?.placa || placa || '';
+    const resolvedClinical = {
+      ...(dossier.health || {}),
+      ...clinicalData,
+    } as RequestBody['clinicalData'];
+    const telemetries = dossier.telemetry_events || [];
+    const actions = dossier.atendimentos || [];
 
     // Constrói o Prompt
     const prompt = buildPrompt(
-      motorista,
-      placa || '',
-      clinicalData,
-      telemetries || [],
-      actions || []
+      resolvedMotorista,
+      resolvedPlaca,
+      resolvedClinical,
+      telemetries,
+      actions
     );
 
     // Invoca IA

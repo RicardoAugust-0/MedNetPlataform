@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // Skeleton loader for table
 const TableSkeleton = () => (
@@ -31,6 +31,7 @@ export default function DispatchesTable({ dispatches = [], loadingDispatches = f
   const [vagaFilter, setVagaFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [filterReferenceTime, setFilterReferenceTime] = useState(Date.now);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -64,11 +65,11 @@ export default function DispatchesTable({ dispatches = [], loadingDispatches = f
     let matchesDate = true;
     if (dateFilter === 'today') {
       const dDate = new Date(d.created_at);
-      const today = new Date();
+      const today = new Date(filterReferenceTime);
       matchesDate = dDate.toDateString() === today.toDateString();
     } else if (dateFilter === 'week') {
       const dDate = new Date(d.created_at).getTime();
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const sevenDaysAgo = filterReferenceTime - 7 * 24 * 60 * 60 * 1000;
       matchesDate = dDate >= sevenDaysAgo;
     }
     
@@ -85,6 +86,7 @@ export default function DispatchesTable({ dispatches = [], loadingDispatches = f
     setVagaFilter('all');
     setStatusFilter('all');
     setDateFilter('all');
+    setFilterReferenceTime(Date.now());
     setCurrentPage(1);
   };
 
@@ -148,7 +150,7 @@ export default function DispatchesTable({ dispatches = [], loadingDispatches = f
           <select 
             className="form-control"
             value={dateFilter}
-            onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
+            onChange={e => { setDateFilter(e.target.value); setFilterReferenceTime(Date.now()); setCurrentPage(1); }}
             style={{ width: 'auto', minWidth: '140px', height: '38px', padding: '0 10px', fontWeight: '600', color: 'var(--text-secondary)' }}
           >
             <option value="all">Período: Todo histórico</option>

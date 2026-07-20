@@ -1,6 +1,7 @@
 import { requireRole } from './analytics-routes.js';
 import { buildAutomationWebhookBody } from './automation-webhook.js';
 import { requireHorizonBotToken } from './horizon-routes.js';
+import { fetchAutomationWebhook, UnsafeUrlError } from './security.js';
 
 export const BOT_ACTIVITY_AUTOMATIONS = {
   horizon_treatment: 'f0a94e82-e3e7-4c74-bfd4-3a56df93df27',
@@ -129,7 +130,7 @@ export function registerAutomationRoutes(app, supabase) {
       const headers = { 'Content-Type': 'application/json' };
       if (automation.token) headers.Authorization = `Bearer ${automation.token}`;
 
-      const response = await fetch(automation.endpoint, {
+      const response = await fetchAutomationWebhook(automation.endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(buildAutomationWebhookBody(automation.endpoint, {
@@ -158,6 +159,9 @@ export function registerAutomationRoutes(app, supabase) {
         detail: payload.detail,
       });
     } catch (err) {
+      if (err instanceof UnsafeUrlError) {
+        return res.status(422).json({ error: err.message });
+      }
       console.error('[Automation Run] Erro ao disparar webhook:', err);
       return res.status(502).json({ error: 'Não foi possível acionar o webhook da automação.' });
     }

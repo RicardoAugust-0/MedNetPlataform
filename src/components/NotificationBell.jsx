@@ -47,6 +47,7 @@ export default function NotificationBell() {
         className="topbar-icon-btn"
         title="Notificações"
         aria-label={`Notificações${unreadCount ? ` (${unreadCount} não lidas)` : ''}`}
+        aria-expanded={open}
         onClick={() => { setOpen(v => !v); }}
         style={{ position: 'relative' }}
       >
@@ -89,7 +90,7 @@ export default function NotificationBell() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="notif-item-title">{n.title}</div>
                     {n.body && <div className="notif-item-body">{n.body}</div>}
-                    {n.action && (
+                    {typeof n.action?.fn === 'function' && (
                       <button
                         className="notif-panel-action"
                         style={{ marginTop: 4 }}

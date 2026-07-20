@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase, isSupabaseConfigured, isMockAuthEnabled } from '../supabase';
 
 const AuthCtx = createContext(null);
 
@@ -13,11 +13,36 @@ export function AuthProvider({ children }) {
   const [session, setSession]   = useState(undefined);
   const [profile, setProfile]   = useState(null);
   const [authType, setAuthType] = useState(null); // 'invite' | 'recovery' | null
+  const [profileRetryNonce, setProfileRetryNonce] = useState(0);
+  const profileRetryRef = useRef({ identity: null, failures: 0 });
+
+  // O Supabase pode emitir SIGNED_IN novamente ao recuperar o foco e cria um
+  // novo objeto de sessao ao renovar o token. A identidade abaixo permanece
+  // estavel nesses eventos para nao reler o mesmo perfil a cada emissao.
+  const sessionUserId = session?.user?.id || null;
+  const sessionUserEmail = session?.user?.email || '';
+  const sessionUserNome = session?.user?.user_metadata?.nome || '';
+  const sessionUserCargo = session?.user?.user_metadata?.cargo || '';
+  const profileIdentity = useMemo(() => (
+    sessionUserId
+      ? {
+          id: sessionUserId,
+          email: sessionUserEmail,
+          initialNome: sessionUserNome || sessionUserEmail.split('@')[0],
+          initialCargo: sessionUserCargo || 'Operador',
+        }
+      : null
+  ), [sessionUserCargo, sessionUserEmail, sessionUserId, sessionUserNome]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      const saved = localStorage.getItem('dev-mock-session');
-      setSession(saved ? JSON.parse(saved) : null);
+      if (isMockAuthEnabled) {
+        const saved = localStorage.getItem('dev-mock-session');
+        setSession(saved ? JSON.parse(saved) : null);
+      } else {
+        localStorage.removeItem('dev-mock-session');
+        setSession(null);
+      }
       return;
     }
 
@@ -34,40 +59,54 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!session?.user) { setProfile(null); return; }
-    const meta = session.user.user_metadata;
-    const emailFallback = session.user.email.split('@')[0];
+    if (!profileIdentity) {
+      profileRetryRef.current = { identity: null, failures: 0 };
+      setProfile(null);
+      return;
+    }
+
+    if (profileRetryRef.current.identity !== profileIdentity) {
+      profileRetryRef.current = { identity: profileIdentity, failures: 0 };
+    }
+
+    const {
+      id: userId,
+      email: userEmail,
+      initialNome,
+      initialCargo,
+    } = profileIdentity;
+    const emailFallback = userEmail.split('@')[0];
     // Usado apenas na criação do perfil (primeiro login). Para perfis já
     // existentes a fonte de verdade é a tabela `profiles` — nunca o
     // user_metadata, que pode estar desatualizado se um admin renomeou o
     // operador (admin atualiza só `profiles`, não o auth user_metadata).
-    const initialNome  = meta?.nome  || emailFallback;
-    const initialCargo = meta?.cargo || 'Operador';
 
     if (!isSupabaseConfigured) {
-      const role = session.user.id === 'mock-admin' ? 'admin' : 'operador';
-      setProfile({ id: session.user.id, email: session.user.email, nome: initialNome, cargo: initialCargo, role });
+      const role = userId === 'mock-admin' ? 'admin' : 'operador';
+      setProfile({ id: userId, email: userEmail, nome: initialNome, cargo: initialCargo, role });
       return;
     }
 
     let ignore = false;
+    let retryTimer = null;
     const syncProfile = async () => {
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('profiles')
         .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
-        .eq('id', session.user.id)
+        .eq('id', userId)
+        .retry(false)
         .maybeSingle();
 
-      if (existing) {
-        await supabase
-          .from('profiles')
-          .update({ last_seen: new Date().toISOString() })
-          .eq('id', session.user.id);
+      // Falha de rede nao significa que o perfil nao existe. Sem este teste, um
+      // timeout seguia para INSERT e depois para uma segunda leitura, multiplicando
+      // requisicoes durante indisponibilidade do Supabase.
+      if (existingError) throw existingError;
 
+      if (existing) {
         if (!ignore) {
           setProfile({
-            id: session.user.id,
-            email: session.user.email,
+            id: userId,
+            email: userEmail,
             nome: existing.nome || emailFallback,
             cargo: existing.cargo || 'Operador',
             role: existing.role || 'operador',
@@ -77,26 +116,45 @@ export function AuthProvider({ children }) {
             maxtrack_email:         existing.maxtrack_email         || '',
           });
         }
+
+        // last_seen e telemetria best-effort; nunca deve bloquear a liberacao do
+        // perfil nem transformar uma leitura bem-sucedida em falha de login.
+        supabase
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', userId)
+          .then(({ error }) => {
+            if (error) console.warn('[Auth] Nao foi possivel atualizar last_seen:', error.message);
+          });
         return;
       }
 
       const { data, error } = await supabase
         .from('profiles')
-        .insert({ id: session.user.id, nome: initialNome, cargo: initialCargo, last_seen: new Date().toISOString() })
+        .insert({ id: userId, nome: initialNome, cargo: initialCargo, last_seen: new Date().toISOString() })
         .select('role')
         .single();
 
       if (error) {
-        const { data: current } = await supabase
+        // Uma segunda leitura so e valida para a corrida de primeiro login. Em
+        // qualquer outro erro (rede, permissao, schema), propague a causa real.
+        if (error.code !== '23505') throw error;
+
+        const { data: current, error: currentError } = await supabase
           .from('profiles')
           .select('nome, cargo, role, avatar_url, telefone, bio, maxtrack_email')
-          .eq('id', session.user.id)
+          .eq('id', userId)
+          .retry(false)
           .maybeSingle();
 
-        if (!ignore && current) {
+        if (currentError) throw currentError;
+
+        if (!current) throw new Error('Perfil criado, mas ainda nao esta disponivel para leitura.');
+
+        if (!ignore) {
           setProfile({
-            id: session.user.id,
-            email: session.user.email,
+            id: userId,
+            email: userEmail,
             nome: current.nome || emailFallback,
             cargo: current.cargo || 'Operador',
             role: current.role || 'operador',
@@ -111,21 +169,38 @@ export function AuthProvider({ children }) {
 
       if (!ignore) {
         setProfile({
-          id: session.user.id, email: session.user.email,
+          id: userId, email: userEmail,
           nome: initialNome, cargo: initialCargo, role: data?.role || 'operador',
           avatar_url: null, telefone: '', bio: '', maxtrack_email: '',
         });
       }
     };
 
-    syncProfile().catch((error) => {
-      console.error('Erro ao sincronizar perfil do usuário:', error);
-    });
-    return () => { ignore = true; };
-  }, [session]);
+    syncProfile()
+      .then(() => {
+        if (!ignore) profileRetryRef.current.failures = 0;
+      })
+      .catch((error) => {
+        if (ignore) return;
+        const failures = profileRetryRef.current.failures + 1;
+        profileRetryRef.current.failures = failures;
+        const delayMs = Math.min(5000 * (2 ** (failures - 1)), 60000);
+        console.error('Erro ao sincronizar perfil do usuário; nova tentativa agendada:', error);
+        retryTimer = setTimeout(() => {
+          setProfileRetryNonce(current => current + 1);
+        }, delayMs);
+      });
+    return () => {
+      ignore = true;
+      clearTimeout(retryTimer);
+    };
+  }, [profileIdentity, profileRetryNonce]);
 
   const signIn = async (email, password) => {
     if (!isSupabaseConfigured) {
+      if (!isMockAuthEnabled) {
+        return { error: new Error('Serviço de autenticação indisponível. Verifique a configuração do ambiente.') };
+      }
       const isAdmin = email === 'admin@mednet.com.br';
       const mockSession = {
         user: {
@@ -150,8 +225,12 @@ export function AuthProvider({ children }) {
     return supabase.auth.signOut();
   };
 
-  const resetPassword = (email) =>
-    supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  const resetPassword = (email) => {
+    if (!isSupabaseConfigured) {
+      return Promise.resolve({ error: new Error('Serviço de autenticação indisponível.') });
+    }
+    return supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  };
 
   // Aceita tanto a assinatura antiga (nome, cargo) quanto um objeto com
   // qualquer subconjunto de { nome, cargo, telefone, bio, avatar_url }.

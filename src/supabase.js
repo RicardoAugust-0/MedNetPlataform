@@ -4,15 +4,26 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const isSupabaseConfigured = !!(url && key && !url.includes('placeholder'));
+export const isMockAuthEnabled = import.meta.env.DEV
+  && import.meta.env.VITE_ENABLE_MOCK_AUTH === 'true';
 
 if (!isSupabaseConfigured) {
-  console.warn('[MedNet] Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (ou VITE_SUPABASE_PUBLISHABLE_KEY).');
+  console.warn(
+    isMockAuthEnabled
+      ? '[MedNet] Supabase não configurado. Mock de autenticação habilitado explicitamente para desenvolvimento.'
+      : '[MedNet] Supabase não configurado. A autenticação permanecerá indisponível.',
+  );
 }
 
 // Fallback evita erro de createClient(undefined, undefined)
 export const supabase = createClient(
   url || 'https://placeholder.supabase.co',
   key || 'placeholder-key',
+  {
+    // Evita que leituras REST presas no proxy mantenham telas e pollings
+    // bloqueados ate o timeout de rede do navegador.
+    db: { timeout: 15000 },
+  },
 );
 
 /**

@@ -5,7 +5,6 @@
 
 import { normalize } from '../shared/normalize.js';
 import { parseSpeed, parseEventDate, parseTurno, maxSeveridade } from '../shared/parsers.js';
-import { emptyDriver, emptyStats } from '../base.js';
 import {
   COLUMNS,
   INTERVENCAO_EVENTOS,
@@ -55,7 +54,7 @@ export function detect({ fileName = '', headers = [] } = {}) {
   return Math.min(1, score);
 }
 
-export async function parse(file, { history = [], operatorEmail = 'hevilyntfzero@gmail.com' } = {}) {
+export async function parse(file, { operatorEmail = 'hevilyntfzero@gmail.com' } = {}) {
   const XLSX = await import('xlsx');
 
   return new Promise((resolve, reject) => {

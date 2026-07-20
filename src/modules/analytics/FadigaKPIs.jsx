@@ -153,7 +153,7 @@ export default function FadigaKPIs({ d, prevD, activeKpi, setActiveKpi }) {
 
   return (
     <div className="kpi-grid">
-      {kpis.map((k, idx) => {
+      {kpis.map((k) => {
         const isActive = activeKpi === k.id;
         return (
           <div

@@ -6,10 +6,16 @@ import { useToast } from '../hooks/useToast.jsx';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Modal from '../components/Modal.jsx';
-import { useAtendimentos } from '../hooks/useAtendimentos.js';
 import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { uploadDriverDocument, getDriverDocumentUrl, removeDriverDocument } from '../lib/uploadDriverDocument.js';
+import {
+  getDossierDriver,
+  listDossierDrivers,
+  normalizeDossierName,
+  normalizeDossierPlate,
+  saveDossierDriverHealth,
+} from '../lib/dossierService.js';
 
 const DOC_TYPES = [
   { id: 'cnh',             label: 'CNH',             icon: 'ti-id-badge-2' },
@@ -67,35 +73,22 @@ function renderMarkdown(md) {
   return '<p>' + html + '</p>';
 }
 
-// Detecta se o "nome" é de fato um nome de motorista, ou apenas a placa do veículo
-// preenchida no lugar (problema comum de qualidade de dados nas fontes de telemetria).
-const PLATE_RE = /^[A-Z]{3}\d[A-Z0-9]\d{2}$|^[A-Z]{3}\d{4}$/;
-function isValidDriverName(nome, placa) {
-  const n = String(nome || '').trim();
-  if (!n) return false;
-  const compact = n.replace(/[\s-]/g, '').toUpperCase();
-  if (PLATE_RE.test(compact)) return false;
-  if (placa && compact === String(placa).replace(/[\s-]/g, '').toUpperCase()) return false;
-  return true;
-}
-
 let cachedDriversList = null;
-const DRIVER_HEALTH_COLUMNS = 'motorista_nome, escala_epworth, polissonografia, historico_clinico, ultimo_exame_em, placa, transportadora, frota, turno, cpf, rg, data_nascimento, cnh_numero, cnh_categoria, cnh_validade';
-const DRIVER_EVENT_DOSSIER_COLUMNS = 'id, platform_id, severidade, nome_evento, ocorrido_em, velocidade_kmh';
-const ATENDIMENTO_DOSSIER_COLUMNS = 'id, created_at, tipo, obs, operador_nome';
-const DRIVER_DOCUMENT_COLUMNS = 'id, motorista_nome, placa, tipo_documento, file_name, storage_path, status, extracted_data, error_message, created_at, reviewed_by, reviewed_at';
+const DRIVER_DOCUMENT_COLUMNS = 'id, driver_health_id, motorista_nome, placa, tipo_documento, file_name, storage_path, status, extracted_data, error_message, created_at, reviewed_by, reviewed_at';
 
 export default function DossiesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { profile } = useAuth();
+  const canManageClinical = profile?.role === 'admin' || profile?.role === 'lider';
   const [searchParams, setSearchParams] = useSearchParams();
   const { tab = 'clinico' } = useParams();
   const navigate = useNavigate();
   const { resolveMonitorName } = useCarrierAliases();
-  const { history: atendimentosHistory } = useAtendimentos();
 
   const initialDriverName = searchParams.get('driver') || '';
+  const initialDriverPlate = searchParams.get('plate') || '';
+  const initialDriverId = searchParams.get('driverId') || '';
 
   // Lista de motoristas e busca
   const [searchQuery, setSearchQuery] = useState('');
@@ -158,7 +151,8 @@ export default function DossiesPage() {
       });
   }, []);
 
-  // Busca lista de motoristas únicos cadastrados nas tabelas do Supabase (roda apenas na montagem)
+  // O banco consolida as fontes e devolve apenas identidades únicas. A tela não
+  // baixa mais driver_events/atendimentos brutos para deduplicar no navegador.
   useEffect(() => {
     if (cachedDriversList) return;
 
@@ -169,110 +163,7 @@ export default function DossiesPage() {
       }
       try {
         setLoadingList(true);
-
-        // 1. Puxa prontuários já cadastrados (contendo possíveis edições manuais)
-        const { data: healthList } = await supabase
-          .from('driver_health')
-          .select('motorista_nome, placa, transportadora, frota, turno');
-
-        // 2. Puxa motoristas de driver_events
-        const { data: eventsData } = await supabase
-          .from('driver_events')
-          .select('nome, placa, transportadora, frota, turno')
-          .not('nome', 'is', null);
-
-        // 3. Puxa motoristas de atendimentos do cache local (ou fallback se vazio)
-        const atendData = atendimentosHistory.length > 0
-          ? atendimentosHistory
-          : (await supabase.from('atendimentos').select('motorista, placa, transportadora')).data || [];
-
-        // Consolida e remove duplicados
-        const map = new Map();
-
-        // Insere prontuários do driver_health primeiro (dados prioritários)
-        if (healthList) {
-          healthList.forEach(r => {
-            const key = String(r.motorista_nome).trim().toUpperCase();
-            if (key) {
-              map.set(key, {
-                nome: r.motorista_nome,
-                placa: r.placa || '',
-                transportadora: r.transportadora || '—',
-                frota: r.frota || '',
-                turno: r.turno || 'diurno',
-                isEdited: true, // flag de prioridade
-              });
-            }
-          });
-        }
-
-        // Adiciona dados do driver_events
-        if (eventsData) {
-          eventsData.forEach(r => {
-            const key = String(r.nome).trim().toUpperCase();
-            if (key) {
-              const existing = map.get(key);
-              if (!existing) {
-                map.set(key, {
-                  nome: r.nome,
-                  placa: r.placa || '',
-                  transportadora: r.transportadora || '—',
-                  frota: r.frota || '',
-                  turno: r.turno || 'diurno',
-                });
-              } else if (!existing.isEdited) {
-                // Se ainda não editado no prontuário, complementa dados vazios
-                if (r.placa && !existing.placa) existing.placa = r.placa;
-                if (r.transportadora && existing.transportadora === '—') existing.transportadora = r.transportadora;
-                if (r.frota && !existing.frota) existing.frota = r.frota;
-              }
-            }
-          });
-        }
-
-        // Adiciona dados do atendimentos
-        if (atendData) {
-          atendData.forEach(r => {
-            const key = String(r.motorista).trim().toUpperCase();
-            if (key) {
-              const existing = map.get(key);
-              if (!existing) {
-                map.set(key, {
-                  nome: r.motorista,
-                  placa: r.placa || '',
-                  transportadora: r.transportadora || '—',
-                  frota: '',
-                  turno: 'diurno',
-                });
-              } else if (!existing.isEdited) {
-                if (r.placa && !existing.placa) existing.placa = r.placa;
-                if (r.transportadora && existing.transportadora === '—') existing.transportadora = r.transportadora;
-              }
-            }
-          });
-        }
-
-        // Separa registros com nome real dos que só têm placa (sem identificação de motorista).
-        // Registros só-placa ficam ocultos da listagem, mas enriquecem um registro nomeado
-        // da mesma placa (caso exista) com dados complementares antes de serem descartados.
-        const namedRecords = [];
-        const plateOnlyByPlaca = new Map();
-        for (const rec of map.values()) {
-          if (isValidDriverName(rec.nome, rec.placa)) {
-            namedRecords.push(rec);
-          } else if (rec.placa) {
-            plateOnlyByPlaca.set(rec.placa.trim().toUpperCase(), rec);
-          }
-        }
-        namedRecords.forEach(rec => {
-          const po = rec.placa && plateOnlyByPlaca.get(rec.placa.trim().toUpperCase());
-          if (!po) return;
-          if (!rec.transportadora || rec.transportadora === '—') rec.transportadora = po.transportadora;
-          if (!rec.frota) rec.frota = po.frota;
-        });
-
-        const consolidated = namedRecords.sort((a, b) => a.nome.localeCompare(b.nome));
-        setDriversList(consolidated);
+        setDriversList(await listDossierDrivers({ limit: 500 }));
       } catch (err) {
         console.warn('Erro ao carregar lista de motoristas:', err);
       } finally {
@@ -280,7 +171,7 @@ export default function DossiesPage() {
       }
     }
     loadDrivers();
-  }, [atendimentosHistory]); // Dependência atualizada
+  }, []);
 
   // Mantém o cache atualizado
   useEffect(() => {
@@ -289,25 +180,38 @@ export default function DossiesPage() {
     }
   }, [driversList]);
 
-  // Seleciona o motorista com base no initialDriverName ou na lista carregada (decupado de loadDrivers)
+  // URLs novas carregam UUID ou nome + placa. Links legados contendo apenas o
+  // nome só são aceitos quando esse nome identifica exatamente uma pessoa.
   useEffect(() => {
     if (loadingList) return;
-    if (initialDriverName) {
-      const match = driversList.find(d => d.nome.toLowerCase() === initialDriverName.toLowerCase());
+    if (initialDriverId || initialDriverName) {
+      let match = initialDriverId
+        ? driversList.find(d => d.healthId === initialDriverId)
+        : null;
+
+      if (!match && initialDriverName) {
+        const nameMatches = driversList.filter(
+          d => normalizeDossierName(d.nome) === normalizeDossierName(initialDriverName),
+        );
+        match = initialDriverPlate
+          ? nameMatches.find(d => normalizeDossierPlate(d.placa) === normalizeDossierPlate(initialDriverPlate))
+          : (nameMatches.length === 1 ? nameMatches[0] : null);
+      }
+
       if (match) {
         setSelectedDriver(match);
-      } else if (driversList.length > 0) {
-        // Cria motorista temporário se veio parametrizado mas não está na listagem
-        setSelectedDriver({ nome: initialDriverName, placa: '', transportadora: '—', frota: '', turno: 'diurno' });
+      } else {
+        setSelectedDriver(null);
       }
     } else if (driversList.length > 0) {
       setSelectedDriver(driversList[0]);
     }
-  }, [driversList, initialDriverName, loadingList]);
+  }, [driversList, initialDriverId, initialDriverName, initialDriverPlate, loadingList]);
 
   // Carrega prontuário, telemetria e atendimentos do motorista selecionado
   useEffect(() => {
     if (!selectedDriver) return;
+    let cancelled = false;
     
     async function loadDriverDossier() {
       setLoadingHistory(true);
@@ -342,15 +246,9 @@ export default function DossiesPage() {
       }
 
       try {
-        const name = selectedDriver.nome;
-        const placa = selectedDriver.placa;
-
-        // 1. Busca prontuário clínico
-        const { data: healthRecord } = await supabase
-          .from('driver_health')
-          .select(DRIVER_HEALTH_COLUMNS)
-          .eq('motorista_nome', name)
-          .maybeSingle();
+        const dossier = await getDossierDriver(selectedDriver);
+        if (cancelled) return;
+        const healthRecord = dossier?.health;
 
         if (healthRecord) {
           setHealthData({
@@ -370,59 +268,27 @@ export default function DossiesPage() {
             cnh_validade: healthRecord.cnh_validade ?? '',
           });
         }
-
-        // 2. Busca eventos de telemetria — count real + primeiros 200 para exibição
-        const buildTeleFilter = (q) => placa
-          ? q.or(`placa.eq.${placa},nome.eq.${name}`)
-          : q.eq('nome', name);
-
-        const [{ count: teleCount }, { data: teleData }] = await Promise.all([
-          buildTeleFilter(supabase.from('driver_events').select('id', { count: 'exact', head: true })),
-          buildTeleFilter(supabase.from('driver_events').select(DRIVER_EVENT_DOSSIER_COLUMNS))
-            .order('ocorrido_em', { ascending: false })
-            .limit(200),
-        ]);
-
-        if (teleData) setTelemetryEvents(teleData);
-        setTelemetryTotal(teleCount ?? teleData?.length ?? 0);
-
-        // 3. Busca atendimentos anteriores
-        let atendQuery = supabase.from('atendimentos').select(ATENDIMENTO_DOSSIER_COLUMNS);
-        if (placa) {
-          atendQuery = atendQuery.or(`placa.eq.${placa},motorista.eq.${name}`);
-        } else {
-          atendQuery = atendQuery.eq('motorista', name);
-        }
-
-        const { data: atendData } = await atendQuery
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (atendData) setAtendimentosList(atendData);
-
-        // 4. Busca documentos já enviados (CNH/ASO/Polissonografia)
-        const { data: docsData } = await supabase
-          .from('driver_documents')
-          .select(DRIVER_DOCUMENT_COLUMNS)
-          .eq('motorista_nome', name)
-          .order('created_at', { ascending: false });
-
-        if (docsData) setDocuments(docsData);
-
+        setTelemetryEvents(dossier?.telemetry_events || []);
+        setTelemetryTotal(dossier?.telemetry_total || 0);
+        setAtendimentosList(dossier?.atendimentos || []);
+        setDocuments(dossier?.documents || []);
       } catch (err) {
-        console.warn('Erro ao carregar prontuário do motorista:', err);
+        if (!cancelled) console.warn('Erro ao carregar prontuário do motorista:', err);
       } finally {
-        setLoadingHistory(false);
+        if (!cancelled) setLoadingHistory(false);
       }
     }
 
     loadDriverDossier();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDriver]);
 
   // Salva alterações da ficha médica no Supabase
   const handleSaveHealth = async (e) => {
     e.preventDefault();
-    if (!selectedDriver) return;
+    if (!selectedDriver || !canManageClinical) return;
     setSavingHealth(true);
 
     try {
@@ -445,30 +311,29 @@ export default function DossiesPage() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('driver_health')
-        .upsert(payload, { onConflict: 'motorista_nome' });
-
-      if (error) throw error;
+      const savedHealth = await saveDossierDriverHealth(selectedDriver, payload);
 
       toast('Dados clínicos de saúde salvos com sucesso!', 'success');
       setEditingHealth(false);
 
-      // Atualiza o motorista selecionado e a lista na memória para refletir imediatamente!
-      setSelectedDriver(prev => ({
-        ...prev,
+      const updatedDriver = {
+        ...selectedDriver,
+        healthId: savedHealth.id,
+        identityKey: `health:${savedHealth.id}`,
+        hasHealthRecord: true,
         placa: payload.placa || '',
         transportadora: payload.transportadora || '—',
         frota: payload.frota || '',
         turno: payload.turno || 'diurno',
-      }));
-      setDriversList(prev => prev.map(d => d.nome.toUpperCase() === selectedDriver.nome.toUpperCase() ? {
-        ...d,
-        placa: payload.placa || '',
-        transportadora: payload.transportadora || '—',
-        frota: payload.frota || '',
-        turno: payload.turno || 'diurno',
-      } : d));
+      };
+
+      setSelectedDriver(updatedDriver);
+      setDriversList(prev => prev.map(d => d.identityKey === selectedDriver.identityKey ? updatedDriver : d));
+      setSearchParams({
+        driver: updatedDriver.nome,
+        plate: updatedDriver.placa,
+        driverId: updatedDriver.healthId,
+      });
     } catch (err) {
       toast('Erro ao salvar prontuário: ' + err.message, 'error');
     } finally {
@@ -487,6 +352,7 @@ export default function DossiesPage() {
       
       const { data, error } = await supabase.functions.invoke('generate-dossier-report', {
         body: {
+          driver_health_id: selectedDriver.healthId,
           motorista: selectedDriver.nome,
           placa: selectedDriver.placa,
           clinicalData: healthData,
@@ -513,10 +379,11 @@ export default function DossiesPage() {
 
   // Upload de documento do motorista (CNH/ASO/Polissonografia) — OCR/IA chega na próxima etapa
   const handleUploadDocument = async (tipoDocumento, file) => {
-    if (!selectedDriver || !file) return;
+    if (!selectedDriver || !file || !canManageClinical) return;
     setUploadingType(tipoDocumento);
     try {
       const doc = await uploadDriverDocument(file, {
+        driverHealthId: selectedDriver.healthId,
         motorista: selectedDriver.nome,
         placa: selectedDriver.placa,
         tipoDocumento,
@@ -540,6 +407,7 @@ export default function DossiesPage() {
   };
 
   const handleDeleteDocument = async (doc) => {
+    if (!canManageClinical) return;
     if (!(await confirm({ title: 'Excluir documento', message: `Excluir "${doc.file_name}"?`, danger: true }))) return;
     try {
       await removeDriverDocument(doc);
@@ -552,6 +420,7 @@ export default function DossiesPage() {
 
   // Envia o documento pro OCR (Mistral) + extração estruturada por IA; abre revisão ao final
   const handleProcessDocument = async (doc) => {
+    if (!canManageClinical) return;
     setProcessingDocId(doc.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -581,13 +450,14 @@ export default function DossiesPage() {
   };
 
   const openReview = (doc) => {
+    if (!canManageClinical) return;
     setReviewFields(doc.extracted_data || {});
     setReviewingDoc(doc);
   };
 
   // Grava os campos revisados na ficha do motorista (driver_health) e marca o documento como revisado
   const handleApplyReview = async () => {
-    if (!reviewingDoc || !selectedDriver) return;
+    if (!reviewingDoc || !selectedDriver || !canManageClinical) return;
     setApplyingReview(true);
     try {
       let healthPatch = {};
@@ -617,22 +487,41 @@ export default function DossiesPage() {
         };
       }
 
-      const { error: healthErr } = await supabase.from('driver_health').upsert({
+      const savedHealth = await saveDossierDriverHealth(selectedDriver, {
         motorista_nome: selectedDriver.nome,
+        placa: healthData.placa || selectedDriver.placa || null,
         ...healthPatch,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'motorista_nome' });
-      if (healthErr) throw healthErr;
+      });
 
       const { error: docErr } = await supabase.from('driver_documents').update({
+        driver_health_id: savedHealth.id,
         status: 'revisado',
         reviewed_by: profile?.id || null,
         reviewed_at: new Date().toISOString(),
       }).eq('id', reviewingDoc.id);
       if (docErr) throw docErr;
 
+      const previousIdentityKey = selectedDriver.identityKey;
+      const updatedDriver = {
+        ...selectedDriver,
+        healthId: savedHealth.id,
+        identityKey: `health:${savedHealth.id}`,
+        hasHealthRecord: true,
+      };
+      setSelectedDriver(updatedDriver);
+      setDriversList(prev => prev.map(d => d.identityKey === previousIdentityKey ? updatedDriver : d));
+      setSearchParams({
+        driver: updatedDriver.nome,
+        plate: updatedDriver.placa,
+        driverId: updatedDriver.healthId,
+      });
       setHealthData(prev => ({ ...prev, ...healthPatch }));
-      setDocuments(prev => prev.map(d => d.id === reviewingDoc.id ? { ...d, status: 'revisado' } : d));
+      setDocuments(prev => prev.map(d => d.id === reviewingDoc.id ? {
+        ...d,
+        driver_health_id: savedHealth.id,
+        status: 'revisado',
+      } : d));
       toast('Dados aplicados na ficha do motorista!', 'success');
       setReviewingDoc(null);
     } catch (err) {
@@ -734,27 +623,29 @@ export default function DossiesPage() {
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
             {filteredDrivers.map(d => (
               <div
-                key={d.nome + d.placa}
+                key={d.identityKey}
                 onClick={() => {
                   setSelectedDriver(d);
-                  setSearchParams({ driver: d.nome });
+                  const nextParams = { driver: d.nome, plate: d.placa };
+                  if (d.healthId) nextParams.driverId = d.healthId;
+                  setSearchParams(nextParams);
                 }}
                 style={{
                   padding: '7px 12px',
                   borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.03))',
                   cursor: 'pointer',
-                  background: selectedDriver?.nome === d.nome ? 'var(--surface-1, rgba(255,255,255,0.05))' : 'transparent',
-                  borderLeft: selectedDriver?.nome === d.nome ? '3px solid var(--accent-500)' : '3px solid transparent',
+                  background: selectedDriver?.identityKey === d.identityKey ? 'var(--surface-1, rgba(255,255,255,0.05))' : 'transparent',
+                  borderLeft: selectedDriver?.identityKey === d.identityKey ? '3px solid var(--accent-500)' : '3px solid transparent',
                   transition: 'all 0.2s',
                 }}
                 onMouseEnter={e => {
-                  if (selectedDriver?.nome !== d.nome) e.currentTarget.style.background = 'var(--surface-05, rgba(255,255,255,0.02))';
+                  if (selectedDriver?.identityKey !== d.identityKey) e.currentTarget.style.background = 'var(--surface-05, rgba(255,255,255,0.02))';
                 }}
                 onMouseLeave={e => {
-                  if (selectedDriver?.nome !== d.nome) e.currentTarget.style.background = 'transparent';
+                  if (selectedDriver?.identityKey !== d.identityKey) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 12, color: selectedDriver?.nome === d.nome ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: selectedDriver?.identityKey === d.identityKey ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {d.nome}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -851,7 +742,7 @@ export default function DossiesPage() {
                   <div className="card-title">
                     <i className="ti ti-activity" style={{ color: 'var(--accent-500)' }}></i> Ficha Clínica & Dados Cadastrais
                   </div>
-                  {!editingHealth && (
+                  {!editingHealth && canManageClinical && (
                     <button className="btn btn-sm btn-ghost" onClick={() => setEditingHealth(true)}>
                       <i className="ti ti-edit"></i> Editar Ficha
                     </button>
@@ -1093,6 +984,7 @@ export default function DossiesPage() {
                   </div>
                 </div>
 
+                {canManageClinical ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginBottom: 10 }}>
                   {DOC_TYPES.map(dt => (
                     <label
@@ -1125,6 +1017,11 @@ export default function DossiesPage() {
                     </label>
                   ))}
                 </div>
+                ) : (
+                  <div className="field-hint" style={{ marginBottom: 10 }}>
+                    Documentos clínicos em modo somente leitura. Upload e alterações exigem perfil Líder ou Admin.
+                  </div>
+                )}
 
                 <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.4 }}>
                   Leitura automática por OCR e preenchimento assistido por I.A chegam na próxima etapa. Por enquanto, os documentos ficam arquivados aqui e os dados seguem sendo cadastrados manualmente na aba Clínico.
@@ -1153,7 +1050,7 @@ export default function DossiesPage() {
                           ) : (
                             <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{st.label}</span>
                           )}
-                          {(doc.status === 'pendente' || doc.status === 'erro') && (
+                          {canManageClinical && (doc.status === 'pendente' || doc.status === 'erro') && (
                             <button className="btn btn-sm btn-primary" onClick={() => handleProcessDocument(doc)} disabled={processingDocId === doc.id}>
                               {processingDocId === doc.id ? (
                                 <><i className="ti ti-loader-2 ti-spin"></i> Processando...</>
@@ -1162,7 +1059,7 @@ export default function DossiesPage() {
                               )}
                             </button>
                           )}
-                          {doc.status === 'processado' && (
+                          {canManageClinical && doc.status === 'processado' && (
                             <button className="btn btn-sm btn-primary" onClick={() => openReview(doc)}>
                               <i className="ti ti-clipboard-check"></i> Revisar
                             </button>
@@ -1170,9 +1067,11 @@ export default function DossiesPage() {
                           <button className="btn btn-sm btn-ghost btn-icon-only" onClick={() => handleViewDocument(doc)} title="Visualizar">
                             <i className="ti ti-eye"></i>
                           </button>
-                          <button className="btn btn-sm btn-ghost btn-icon-only btn-danger" onClick={() => handleDeleteDocument(doc)} title="Excluir">
-                            <i className="ti ti-trash"></i>
-                          </button>
+                          {canManageClinical && (
+                            <button className="btn btn-sm btn-ghost btn-icon-only btn-danger" onClick={() => handleDeleteDocument(doc)} title="Excluir">
+                              <i className="ti ti-trash"></i>
+                            </button>
+                          )}
                         </div>
                       );
                     })}

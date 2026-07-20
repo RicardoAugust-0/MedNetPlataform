@@ -1,5 +1,5 @@
--- Garante que os cards, logs e fila das automações recebam eventos Realtime.
--- A migration legada adicionava várias tabelas num único bloco com exception:
+-- Garante que os cards, logs e fila das automacoes recebam eventos Realtime.
+-- A migration legada adicionava varias tabelas num unico bloco com exception:
 -- uma duplicata na primeira tabela impedia as demais de serem publicadas.
 
 do $$
@@ -37,4 +37,4 @@ end
 $$;
 
 comment on table public.automation_logs is
-  'Histórico operacional das automações, publicado no Supabase Realtime.';
+  'Historico operacional das automacoes, publicado no Supabase Realtime.';

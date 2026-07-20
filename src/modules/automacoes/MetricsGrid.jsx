@@ -1,4 +1,3 @@
-import React from 'react';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 
 export default function MetricsGrid({ dispatches = [] }) {

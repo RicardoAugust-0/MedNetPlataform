@@ -329,7 +329,7 @@ export default function EmbeddedSheet() {
       const { error } = await supabase.from('intervencoes_sheet')
         .update({ [colKey]: newValue, status_sync: 'pendente' }).eq('id', originalRow.id);
       if (error) throw error;
-    } catch (err) {
+    } catch {
       toast('Erro ao atualizar registro', 'error');
       loadData();
     }

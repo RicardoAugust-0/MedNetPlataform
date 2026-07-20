@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { mergeOptimisticAutomationLogs } from './useAutomations.js';
+import {
+  getAutomationPollingDelay,
+  mergeOptimisticAutomationLogs,
+} from './useAutomations.js';
+
+describe('getAutomationPollingDelay', () => {
+  it('applies bounded exponential backoff after consecutive failures', () => {
+    expect(getAutomationPollingDelay(2000, 0)).toBe(2000);
+    expect(getAutomationPollingDelay(2000, 1)).toBe(4000);
+    expect(getAutomationPollingDelay(2000, 4)).toBe(32000);
+    expect(getAutomationPollingDelay(2000, 20)).toBe(120000);
+  });
+
+  it('supports a larger cap for the VPS healthcheck', () => {
+    expect(getAutomationPollingDelay(30000, 1, 240000)).toBe(60000);
+    expect(getAutomationPollingDelay(30000, 8, 240000)).toBe(240000);
+  });
+});
 
 describe('mergeOptimisticAutomationLogs', () => {
   const optimistic = {
