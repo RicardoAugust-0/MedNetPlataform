@@ -9,7 +9,6 @@ import { StringDecoder } from 'node:string_decoder';
 import * as XLSX from 'xlsx';
 import {
   PLATFORMS,
-  parseCSV,
   readHeaders,
   toDate,
   toNum,
@@ -262,6 +261,17 @@ async function inspectUploadFile(file) {
   return isCsv ? inspectCsvFile(file) : inspectWorkbookFile(file);
 }
 
+export async function readUploadHeaders(file) {
+  const extension = path.extname(String(file?.originalname || '')).toLowerCase();
+  const mime = String(file?.mimetype || '').toLowerCase();
+  const isCsv = extension === '.csv' || ['text/csv', 'application/csv', 'text/plain'].includes(mime);
+  if (!isCsv) return inspectWorkbookFile(file).headers;
+
+  const { iterator, headers } = await openCsvData(file);
+  if (typeof iterator.return === 'function') await iterator.return();
+  return headers;
+}
+
 async function* iterateUploadRows(descriptor) {
   if (descriptor.kind === 'csv') {
     yield* iterateCsvDataRows(descriptor.file);
@@ -326,70 +336,84 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
     let parsedRowCount = 0;
 
     for (const file of req.files) {
-      const isCsv = /\.csv$/i.test(file.originalname) || file.mimetype === 'text/csv';
-      const fileData = file.buffer;
-
-      let aoa;
-      if (isCsv) {
-        const text = fileData.toString('utf-8');
-        aoa = parseCSV(text);
-      } else {
-        const wb = XLSX.read(fileData, { type: 'buffer', cellDates: true });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      }
-
-      const { headers, dataRows } = readHeaders(aoa);
-      if (!headers.length || !dataRows.length) {
+      const descriptor = await inspectUploadFile(file);
+      if (!descriptor.headers.length || descriptor.dataRowCount === 0) {
         return res.status(400).json({
           error: `Não foi possível identificar o cabeçalho ou linhas de dados no arquivo: ${file.originalname}`
         });
       }
 
-      parsedRowCount += dataRows.length;
+      parsedRowCount += descriptor.dataRowCount;
       if (parsedRowCount > maxRows) {
         return res.status(413).json({ error: `Quantidade de linhas acima do limite de ${maxRows}.` });
       }
-
-      parsedFiles.push({ name: file.originalname, headers, dataRows });
+      parsedFiles.push(descriptor);
     }
 
-    // Combinar os dados de todas as planilhas
-    const baseFile = parsedFiles[0];
-    const baseHeaders = baseFile.headers;
-    let combinedDataRows = [...baseFile.dataRows];
+    const baseHeaders = parsedFiles[0].headers;
+    const baseStage = { platformId, headers: baseHeaders, mapping };
+    const importAuthority = getImportAuthority(baseStage);
+    const stats = { lidas: 0, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 };
+    const seenKeys = new Set();
+    let dupsFiltered = 0;
+    let uniqueSavedCount = 0;
+    let pendingRows = [];
 
-    // Alinha as colunas dos arquivos subsequentes com base nas colunas da primeira planilha
-    for (let i = 1; i < parsedFiles.length; i++) {
-      const currentFile = parsedFiles[i];
-      
-      const headersMatch = currentFile.headers.length === baseHeaders.length &&
-        currentFile.headers.every((h, idx) => h === baseHeaders[idx]);
-
-      if (headersMatch) {
-        combinedDataRows.push(...currentFile.dataRows);
-      } else {
-        const mappedRows = currentFile.dataRows.map(row => {
-          return baseHeaders.map(baseHeader => {
-            const currentIdx = currentFile.headers.indexOf(baseHeader);
-            return currentIdx > -1 ? row[currentIdx] : '';
-          });
-        });
-        combinedDataRows.push(...mappedRows);
+    const flushRows = async () => {
+      if (pendingRows.length === 0) return;
+      const chunk = pendingRows;
+      pendingRows = [];
+      const { error: upsertError } = await retryTransientFetch(
+        () => supabase.rpc('upsert_driver_events_preserve', {
+          p_rows: chunk,
+          ...importAuthority,
+        }),
+        { label: `Import Backend · lote ${Math.floor(uniqueSavedCount / IMPORT_BATCH_SIZE) + 1}` },
+      );
+      if (upsertError) {
+        console.error('[Import Backend] Erro no upsert do Supabase:', upsertError);
+        throw upsertError;
       }
+      uniqueSavedCount += chunk.length;
+    };
+
+    const importDataRows = async (dataRows) => {
+      const { rows, stats: batchStats } = buildImportRows({ ...baseStage, dataRows }, operatorEmail);
+      mergeImportStats(stats, batchStats);
+      for (const rowValue of rows) {
+        const key = `${rowValue.platform_id}|${rowValue.placa}|${rowValue.ocorrido_em}|${rowValue.nome_evento}`;
+        if (seenKeys.has(key)) {
+          dupsFiltered += 1;
+          continue;
+        }
+        seenKeys.add(key);
+        pendingRows.push(rowValue);
+        if (pendingRows.length >= IMPORT_BATCH_SIZE) await flushRows();
+      }
+    };
+
+    for (const descriptor of parsedFiles) {
+      const headersMatch = descriptor.headers.length === baseHeaders.length
+        && descriptor.headers.every((header, index) => header === baseHeaders[index]);
+      const headerIndexes = headersMatch
+        ? null
+        : baseHeaders.map((header) => descriptor.headers.indexOf(header));
+      let batch = [];
+      for await (const sourceRow of iterateUploadRows(descriptor)) {
+        batch.push(headerIndexes
+          ? headerIndexes.map((sourceIndex) => (sourceIndex > -1 ? sourceRow[sourceIndex] : ''))
+          : sourceRow);
+        if (batch.length >= IMPORT_BATCH_SIZE) {
+          await importDataRows(batch);
+          batch = [];
+        }
+      }
+      if (batch.length > 0) await importDataRows(batch);
     }
 
-    const stage = {
-      platformId,
-      headers: baseHeaders,
-      dataRows: combinedDataRows,
-      mapping
-    };
-    const importAuthority = getImportAuthority(stage);
+    await flushRows();
 
-    const { rows, stats } = buildImportRows(stage, operatorEmail);
-
-    if (rows.length === 0) {
+    if (uniqueSavedCount === 0) {
       const partes = [];
       if (stats.semData) partes.push(`${stats.semData} sem data/hora válida`);
       if (stats.operador) partes.push(`${stats.operador} de outro operador`);
@@ -398,43 +422,7 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
       return res.status(400).json({ error: 'Nenhuma linha entrou na importação.' + detalhe, stats });
     }
 
-    // Deduplica em memória
-    const uniqueRows = [];
-    const seenKeys = new Set();
-    for (const r of rows) {
-      const key = `${r.platform_id}|${r.placa}|${r.ocorrido_em}|${r.nome_evento}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        uniqueRows.push(r);
-      }
-    }
-
-    const dupsFiltered = rows.length - uniqueRows.length;
-    console.log(`[Import Backend] De ${rows.length} linhas, ${uniqueRows.length} são únicas. ${dupsFiltered} duplicados locais filtrados.`);
-
-    // Inserção em lote no banco
-    const chunkSize = 5000;
-    let i = 0;
-    const totalRows = uniqueRows.length;
-
-    while (i < totalRows) {
-      const chunk = uniqueRows.slice(i, i + chunkSize);
-      // O RPC faz upsert pela chave natural do evento, portanto e seguro
-      // repetir quando a conexao cai sem uma resposta conclusiva.
-      const { error: upsertError } = await retryTransientFetch(
-        () => supabase.rpc('upsert_driver_events_preserve', {
-          p_rows: chunk,
-          ...importAuthority,
-        }),
-        { label: `Import Backend · lote ${Math.floor(i / chunkSize) + 1}` },
-      );
-
-      if (upsertError) {
-        console.error('[Import Backend] Erro no upsert do Supabase:', upsertError);
-        throw upsertError;
-      }
-      i += chunk.length;
-    }
+    console.log(`[Import Backend] De ${stats.importadas} linhas válidas, ${uniqueSavedCount} são únicas. ${dupsFiltered} duplicados locais filtrados.`);
 
     // Limpar o cache no backend
     if (clearCache) {
@@ -445,11 +433,13 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
       success: true,
       stats,
       dupsFiltered,
-      uniqueSavedCount: totalRows
+      uniqueSavedCount
     });
 
   } catch (err) {
     console.error('[Import Backend] Erro geral na importação de eventos:', err);
     return res.status(500).json({ error: err.message || String(err) });
+  } finally {
+    await cleanupUploadedFiles(req.files);
   }
 }

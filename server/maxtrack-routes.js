@@ -1,5 +1,5 @@
-import { parseCSV, readHeaders, applyPlatformMap } from '../src/utils/fatigueParser.js';
-import { uploadMiddleware, handleImportEvents } from './analytics-import.js';
+import { applyPlatformMap } from '../src/utils/fatigueParser.js';
+import { uploadMiddleware, handleImportEvents, readUploadHeaders } from './analytics-import.js';
 import { clearAnalyticsCache } from './analytics-routes.js';
 import { requireHorizonBotToken } from './horizon-routes.js';
 import { getHorizonTreatmentQueueSummary, runAutoCrossCheck } from './auto-crosscheck.js';
@@ -9,11 +9,6 @@ const BOT_MAXTRACK_SCRAPING_AUTOMATION_ID = 'a1b94e82-e3e7-4c74-bfd4-3a56df93df2
 
 // Export da MaxTrack sempre vem em CSV (`;`-delimitado) — sem o branch XLSX
 // que o horizon-routes.js tem, porque a MaxTrack não exporta nesse formato.
-function readFirstFileHeaders(file) {
-  const { headers } = readHeaders(parseCSV(file.buffer.toString('utf-8')));
-  return headers;
-}
-
 function timeLabel() {
   return new Date().toLocaleTimeString('pt-BR', {
     hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo',
@@ -69,7 +64,7 @@ export function registerMaxtrackRoutes(app, supabase) {
     };
 
     try {
-      const headers = readFirstFileHeaders(req.files[0]);
+      const headers = await readUploadHeaders(req.files[0]);
       req.body.platformId = 'maxtrack';
       req.body.mapping = JSON.stringify(applyPlatformMap(headers, 'maxtrack', {}));
       req.body.operatorEmail = '';
