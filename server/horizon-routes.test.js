@@ -59,7 +59,7 @@ describe('buildHorizonCredentialUpdate', () => {
 });
 
 describe('inspectHorizonExport', () => {
-  it('reconhece CSV Horizon valido sem nenhuma linha de eventos', () => {
+  it('reconhece CSV Horizon valido sem nenhuma linha de eventos', async () => {
     const file = {
       originalname: 'dados_ALP_2026-07-13.csv',
       mimetype: 'text/csv',
@@ -73,7 +73,7 @@ describe('inspectHorizonExport', () => {
     });
   });
 
-  it('reconhece XLSX Horizon valido sem nenhuma linha de eventos', () => {
+  it('reconhece XLSX Horizon valido sem nenhuma linha de eventos', async () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([HORIZON_HEADERS]), 'Eventos');
     const file = {
@@ -89,7 +89,7 @@ describe('inspectHorizonExport', () => {
     });
   });
 
-  it('mantem export Horizon com eventos no fluxo normal de importacao', () => {
+  it('mantem export Horizon com eventos no fluxo normal de importacao', async () => {
     const eventRow = ['13/07/2026 10:30:00', 'Motorista', 'ABC1D23', 'Grave', 'Fadiga'];
     const file = {
       originalname: 'dados_ALP_2026-07-13.csv',
@@ -104,7 +104,7 @@ describe('inspectHorizonExport', () => {
     });
   });
 
-  it('nao aceita arquivo vazio desconhecido como export Horizon sem eventos', () => {
+  it('nao aceita arquivo vazio desconhecido como export Horizon sem eventos', async () => {
     const file = {
       originalname: 'dados_ALP_2026-07-13.csv',
       mimetype: 'text/csv',
