@@ -55,7 +55,7 @@ async function waitForAuthHeaders(timeoutMs = 1200) {
  * É seguro reenviar: um 401 significa que a request não foi processada.
  */
 export async function apiFetch(path, options = {}) {
-  const { timeoutMs = 12000, signal: externalSignal, ...fetchOptions } = options;
+  const { timeoutMs = 30000, signal: externalSignal, ...fetchOptions } = options;
 
   let timer = null;
   let signal = externalSignal;

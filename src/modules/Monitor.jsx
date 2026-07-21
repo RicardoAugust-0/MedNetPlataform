@@ -380,6 +380,7 @@ export default function Monitor() {
           const importResponse = await apiFetch('/api/analytics/import', {
             method: 'POST',
             body: formData,
+            timeoutMs: 180000,
           });
           if (!importResponse.ok) {
             const errorBody = await importResponse.json().catch(() => ({}));

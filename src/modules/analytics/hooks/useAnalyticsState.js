@@ -587,6 +587,7 @@ export function useAnalyticsState() {
       const response = await apiFetch('/api/analytics/import', {
         method: 'POST',
         body: formData,
+        timeoutMs: 180000,
       });
 
       if (!response.ok) {
