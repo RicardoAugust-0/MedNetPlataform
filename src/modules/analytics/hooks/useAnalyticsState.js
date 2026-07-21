@@ -297,27 +297,32 @@ export function useAnalyticsState() {
 
       if (forceCountsRefresh || !cacheIsFresh) {
         try {
-          const res = await apiFetch('/api/platforms', { signal: controller.signal });
+          const res = await apiFetch('/api/platforms', { signal: controller.signal, timeoutMs: 8000 });
           if (!res.ok) throw new Error(`Falha ao obter contagem do servidor (${res.status})`);
           counts = await res.json();
         } catch (err) {
-          if (err.name === 'AbortError') return;
-          console.warn('[MedNet] API de contagens indisponivel; tentando RPC agregada:', err);
+          if (controller.signal.aborted) return;
+          console.warn('[MedNet] API de contagens indisponivel ou timeout; tentando RPC agregada:', err);
 
-          // Uma falha do backend antes abria oito HEADs paralelos na mesma VPS.
-          // A RPC entrega o mesmo rollup em uma unica requisicao e respeita o
-          // AbortController da carga atual.
-          const { data: fallbackCounts, error: fallbackError } = await supabase
-            .rpc('analytics_platform_counts')
-            .abortSignal(controller.signal)
-            .retry(false);
-          if (fallbackError) {
+          try {
+            const { data: fallbackCounts, error: fallbackError } = await supabase
+              .rpc('analytics_platform_counts')
+              .abortSignal(controller.signal)
+              .retry(false);
+            if (fallbackError) {
+              if (controller.signal.aborted) return;
+              console.warn('[MedNet] RPC de contagens tambem indisponivel:', fallbackError);
+              counts = counts || {};
+            } else {
+              counts = fallbackCounts && typeof fallbackCounts === 'object'
+                ? fallbackCounts
+                : {};
+            }
+          } catch (rpcErr) {
             if (controller.signal.aborted) return;
-            throw fallbackError;
+            console.warn('[MedNet] Erro ao invocar RPC de contagens:', rpcErr);
+            counts = counts || {};
           }
-          counts = fallbackCounts && typeof fallbackCounts === 'object'
-            ? fallbackCounts
-            : {};
         }
 
         if (isStale()) return;
@@ -341,8 +346,18 @@ export function useAnalyticsState() {
       let targetPlatformId = preferredPlatformId;
       if (!targetPlatformId && activeId) {
         const cleanId = activeId.replace('src-', '');
-        if (counts[cleanId] > 0) {
+        if (counts[cleanId] > 0 || !haveCounts) {
           targetPlatformId = cleanId;
+        }
+      }
+
+      if (!targetPlatformId && !compare) {
+        const firstWithData = Object.keys(counts).find((pid) => counts[pid] > 0);
+        if (firstWithData) {
+          targetPlatformId = firstWithData;
+        } else if (PLATFORMS.length > 0) {
+          const activePlatform = PLATFORMS.find((p) => p.status === 'active') || PLATFORMS[0];
+          targetPlatformId = activePlatform.id;
         }
       }
 
@@ -390,7 +405,7 @@ export function useAnalyticsState() {
         uf: selectedUf,
       });
 
-      const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal });
+      const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal, timeoutMs: 15000 });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || 'Erro no servidor de analytics');
@@ -431,7 +446,7 @@ export function useAnalyticsState() {
         }
       }
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (controller.signal.aborted || err.name === 'AbortError') return;
       console.error('[MedNet] Erro ao carregar analíticos:', err);
       toast('Não foi possível carregar os dados de analytics: ' + (err.message || String(err)), 'error');
     } finally {

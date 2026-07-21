@@ -55,36 +55,63 @@ async function waitForAuthHeaders(timeoutMs = 1200) {
  * É seguro reenviar: um 401 significa que a request não foi processada.
  */
 export async function apiFetch(path, options = {}) {
-  const auth = await waitForAuthHeaders();
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { ...(options.headers || {}), ...auth },
-  });
+  const { timeoutMs = 12000, signal: externalSignal, ...fetchOptions } = options;
 
-  if (res.status !== 401) return res;
+  let timer = null;
+  let signal = externalSignal;
 
-  // Tenta renovar a sessão e repetir uma única vez.
-  let refreshed;
+  if (timeoutMs > 0) {
+    const controller = new AbortController();
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort(externalSignal.reason);
+      } else {
+        externalSignal.addEventListener('abort', () => controller.abort(externalSignal.reason), { once: true });
+      }
+    }
+    timer = setTimeout(() => {
+      controller.abort(new Error(`Timeout de ${timeoutMs}ms excedido na requisição ${path}`));
+    }, timeoutMs);
+    signal = controller.signal;
+  }
+
   try {
-    const { data } = await supabase.auth.refreshSession();
-    refreshed = data?.session?.access_token || null;
-  } catch {
-    refreshed = null;
-  }
-  if (!refreshed) {
-    // fallback: relê a sessão (pode ter terminado de restaurar nesse meio-tempo)
-    const retryAuth = await getAuthHeaders();
-    if (!retryAuth.Authorization) return res; // sem token: devolve o 401 original
-    return fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: { ...(options.headers || {}), ...retryAuth },
+    const auth = await waitForAuthHeaders();
+    const res = await fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      signal,
+      headers: { ...(fetchOptions.headers || {}), ...auth },
     });
-  }
 
-  return fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { ...(options.headers || {}), Authorization: `Bearer ${refreshed}` },
-  });
+    if (res.status !== 401) return res;
+
+    // Tenta renovar a sessão e repetir uma única vez.
+    let refreshed;
+    try {
+      const { data } = await supabase.auth.refreshSession();
+      refreshed = data?.session?.access_token || null;
+    } catch {
+      refreshed = null;
+    }
+    if (!refreshed) {
+      // fallback: relê a sessão (pode ter terminado de restaurar nesse meio-tempo)
+      const retryAuth = await getAuthHeaders();
+      if (!retryAuth.Authorization) return res; // sem token: devolve o 401 original
+      return fetch(`${API_URL}${path}`, {
+        ...fetchOptions,
+        signal,
+        headers: { ...(fetchOptions.headers || {}), ...retryAuth },
+      });
+    }
+
+    return fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      signal,
+      headers: { ...(fetchOptions.headers || {}), Authorization: `Bearer ${refreshed}` },
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
