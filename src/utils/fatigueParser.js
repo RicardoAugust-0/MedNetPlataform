@@ -339,7 +339,7 @@ export function readHeaders(aoa) {
   }
   const headers = (aoa[hi] || []).map((c) => String(c == null ? '' : c).trim());
   const dataRows = aoa.slice(hi + 1).filter((r) => (r || []).some((c) => c !== '' && c != null));
-  return { headers, dataRows };
+  return { headers, dataRows, headerIndex: hi };
 }
 
 // ── Detecção: plataforma (assinatura) + mapeamento (sinônimos) ──

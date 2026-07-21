@@ -16,6 +16,72 @@ import {
 
 const DEFAULT_OPERATOR_EMAIL = 'hevilyntfzero@gmail.com';
 
+// Mantém o preview leve sem apresentar a amostra como se fosse o arquivo inteiro.
+async function countNonEmptyCsvRecords(file) {
+  if (!file?.stream) return null;
+
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder('utf-8');
+  let count = 0;
+  let inQuotes = false;
+  let quotePending = false;
+  let fieldHasContent = false;
+  let rowHasContent = false;
+  const finishField = () => {
+    if (fieldHasContent) rowHasContent = true;
+    fieldHasContent = false;
+  };
+  const finishRow = () => {
+    finishField();
+    if (rowHasContent) count++;
+    rowHasContent = false;
+  };
+  const consume = (chunk) => {
+    for (const char of chunk) {
+      if (quotePending) {
+        quotePending = false;
+        if (char === '"') {
+          fieldHasContent = true;
+          continue;
+        }
+        inQuotes = false;
+      }
+      if (inQuotes) {
+        if (char === '"') quotePending = true;
+        else if (!/\s/.test(char)) fieldHasContent = true;
+      } else if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',' || char === ';' || char === '\t') {
+        finishField();
+      } else if (char === '\n') {
+        finishRow();
+      } else if (char !== '\r' && !/\s/.test(char)) {
+        fieldHasContent = true;
+      }
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      consume(decoder.decode(value, { stream: true }));
+    }
+    consume(decoder.decode());
+    if (fieldHasContent || rowHasContent) finishRow();
+    return count;
+  } catch (err) {
+    console.warn('[ImportModal] CSV count failed:', err);
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function countNonEmptyRows(rows) {
+  return rows.filter((row) => (row || []).some((cell) => cell !== '' && cell != null)).length;
+}
+
 function fmtDateTimeShort(dt) {
   if (!dt) return '—';
   const p = (n) => String(n).padStart(2, '0');
@@ -92,6 +158,7 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
 
       for (const f of files) {
         const isCsv = /\.csv$/i.test(f.name) || f.type === 'text/csv';
+        const csvRecordCountPromise = isCsv ? countNonEmptyCsvRecords(f) : null;
         
         const fileData = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -117,22 +184,36 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
           aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         }
 
-        const { headers, dataRows } = readHeaders(aoa);
+        const { headers, dataRows, headerIndex } = readHeaders(aoa);
         if (!headers.length || !dataRows.length) {
           throw new Error(`Não foi possível identificar o cabeçalho ou linhas de dados no arquivo: ${f.name}`);
         }
 
-        parsedFiles.push({ name: f.name, headers, dataRows });
+        const headerAndPreambleCount = countNonEmptyRows(aoa.slice(0, headerIndex + 1));
+        const countedRecords = csvRecordCountPromise ? await csvRecordCountPromise : null;
+        const totalRecords = countedRecords == null
+          ? dataRows.length
+          : Math.max(0, countedRecords - headerAndPreambleCount);
+
+        parsedFiles.push({
+          name: f.name,
+          headers,
+          dataRows,
+          totalRecords,
+          hasExactTotal: countedRecords != null,
+        });
       }
 
       // Combinar os dados de todas as planilhas
       const baseFile = parsedFiles[0];
       const baseHeaders = baseFile.headers;
       let combinedDataRows = [...baseFile.dataRows];
+      let totalRecords = baseFile.totalRecords;
 
       // Alinha as colunas dos arquivos subsequentes com base nas colunas da primeira planilha
       for (let i = 1; i < parsedFiles.length; i++) {
         const currentFile = parsedFiles[i];
+        totalRecords += currentFile.totalRecords;
         
         // Se as colunas forem idênticas em ordem e quantidade, adiciona diretamente
         const headersMatch = currentFile.headers.length === baseHeaders.length &&
@@ -163,6 +244,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
           : `${files.length} arquivos (${baseFile.name} + ${files.length - 1} outro${files.length > 2 ? 's' : ''})`,
         headers: baseHeaders,
         dataRows: combinedDataRows,
+        totalRecords,
+        hasExactTotal: parsedFiles.every((file) => file.hasExactTotal),
+        isPreviewSample: !parsedFiles.every((file) => file.hasExactTotal) || totalRecords > combinedDataRows.length,
         platformId: det.platform,
         platformName: det.platformName,
         mapping: det.mapping,
@@ -408,7 +492,9 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
                   {stage.fileName}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {stage.dataRows.length.toLocaleString('pt-BR')} registros · {stage.headers.length} colunas encontradas
+                  {stage.hasExactTotal
+                    ? `${stage.totalRecords.toLocaleString('pt-BR')} registros encontrados`
+                    : `${stage.totalRecords.toLocaleString('pt-BR')} registros na amostra`} · {stage.headers.length} colunas
                 </div>
               </div>
             </div>
@@ -505,9 +591,15 @@ export default function ImportModal({ modalOpen, setModalOpen, saving, onImportC
             {summary && (
               <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', background: 'rgba(45,167,90,0.1)', border: '1px solid rgba(45,167,90,0.3)', padding: '3px 9px', borderRadius: '99px' }}>
-                  {summary.importadas.toLocaleString('pt-BR')} importadas
+                  {summary.importadas.toLocaleString('pt-BR')} {stage.isPreviewSample ? 'importáveis na amostra' : 'importadas'}
                 </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>de {summary.lidas.toLocaleString('pt-BR')} lidas</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {stage.isPreviewSample
+                    ? stage.hasExactTotal
+                      ? `de ${stage.totalRecords.toLocaleString('pt-BR')} registros no arquivo`
+                      : `em ${summary.lidas.toLocaleString('pt-BR')} linhas da amostra`
+                    : `de ${summary.lidas.toLocaleString('pt-BR')} lidas`}
+                </span>
                 {summary.leves > 0 && (
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 9px', borderRadius: '99px' }}>
                     {summary.leves.toLocaleString('pt-BR')} leves (salvas, fora da análise)
