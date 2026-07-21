@@ -688,7 +688,7 @@ export function useAnalyticsState() {
       while (true) {
         const { data, error } = await supabase.rpc('delete_driver_events_platform_batch', {
           p_platform_id: targetSource.platformId,
-          p_batch_size: 250,
+          p_batch_size: 100,
         });
 
         if (error) throw error;
