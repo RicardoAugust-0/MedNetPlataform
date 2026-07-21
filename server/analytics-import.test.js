@@ -91,6 +91,7 @@ describe('handleImportEvents · colunas financeiras MaxTrack', () => {
     expect(rpc).toHaveBeenCalledWith('upsert_driver_events_preserve', expect.objectContaining({
       p_authoritative_operator: true,
       p_authoritative_treatment_end: true,
+      p_defer_analytics_refresh: true,
       p_rows: [expect.objectContaining({
         operador: null,
         fim_tratativa: null,
@@ -135,7 +136,11 @@ describe('handleImportEvents · colunas financeiras MaxTrack', () => {
         },
       }, res, vi.fn());
 
-      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(rpc.mock.calls.filter(([name]) => name === 'upsert_driver_events_preserve')).toHaveLength(1);
+      expect(rpc).toHaveBeenCalledWith('refresh_analytics_daily', {
+        p_platform: 'maxtrack',
+        p_dias: null,
+      });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
@@ -184,7 +189,7 @@ describe('handleImportEvents · colunas financeiras MaxTrack', () => {
         },
       }, res, vi.fn());
 
-      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(rpc.mock.calls.filter(([name]) => name === 'upsert_driver_events_preserve')).toHaveLength(1);
       expect(res.status).toHaveBeenCalledWith(200);
     } finally {
       await rm(tempDir, { recursive: true, force: true });

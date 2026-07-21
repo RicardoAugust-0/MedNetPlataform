@@ -682,16 +682,23 @@ export function useAnalyticsState() {
     });
     if (!confirmed) return;
 
+    let deletedTotal = 0;
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('driver_events')
-        .delete()
-        .eq('platform_id', targetSource.platformId);
+      while (true) {
+        const { data, error } = await supabase.rpc('delete_driver_events_platform_batch', {
+          p_platform_id: targetSource.platformId,
+          p_batch_size: 250,
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast(`Todos os registros de ${targetSource.platformName} foram excluídos.`, 'success');
+        const deleted = Number(data || 0);
+        deletedTotal += deleted;
+        if (deleted === 0) break;
+      }
+
+      toast(`${deletedTotal} registros de ${targetSource.platformName} foram excluídos.`, 'success');
       if (activeId === id) {
         setActiveId(null);
         localStorage.removeItem('mednet_analytics_active_id');
@@ -699,7 +706,10 @@ export function useAnalyticsState() {
       await loadFromDatabase(null, false, true);
     } catch (err) {
       console.error('Erro ao excluir registros:', err);
-      toast('Erro ao excluir registros do banco de dados: ' + (err.message || String(err)), 'error');
+      const partialDeletion = deletedTotal > 0
+        ? ` ${deletedTotal} registro(s) já foram excluídos; atualize a tela antes de tentar novamente.`
+        : '';
+      toast('Erro ao excluir registros do banco de dados: ' + (err.message || String(err)) + partialDeletion, 'error');
     } finally {
       setLoading(false);
     }

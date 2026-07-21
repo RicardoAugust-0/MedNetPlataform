@@ -310,12 +310,15 @@ export function getImportAuthority(stage) {
 
 // Handler da rota do Express que orquestra a importação
 export async function handleImportEvents(supabase, req, res, clearCache) {
+  let deferredRollupDirty = false;
+  let deferredRollupPlatformId = '';
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado para importação.' });
     }
 
     const platformId = typeof req.body?.platformId === 'string' ? req.body.platformId.trim() : '';
+    deferredRollupPlatformId = platformId;
     const operatorEmail = req.authUser?.email || req.body?.operatorEmail || '';
     
     if (!PLATFORMS.some((platform) => platform.id === platformId)) {
@@ -366,6 +369,19 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
     let uniqueSavedCount = 0;
     let pendingRows = [];
 
+    const refreshDeferredRollup = async () => {
+      if (!deferredRollupDirty) return;
+      const { error: refreshError } = await retryTransientFetch(
+        () => supabase.rpc('refresh_analytics_daily', {
+          p_platform: platformId,
+          p_dias: null,
+        }),
+        { label: `Import Backend · rollup ${platformId}` },
+      );
+      if (refreshError) throw refreshError;
+      deferredRollupDirty = false;
+    };
+
     const flushRows = async () => {
       if (pendingRows.length === 0) return;
       const chunk = pendingRows;
@@ -374,6 +390,7 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
         () => supabase.rpc('upsert_driver_events_preserve', {
           p_rows: chunk,
           ...importAuthority,
+          p_defer_analytics_refresh: true,
         }),
         { label: `Import Backend · lote ${Math.floor(uniqueSavedCount / IMPORT_BATCH_SIZE) + 1}` },
       );
@@ -382,6 +399,7 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
         throw upsertError;
       }
       uniqueSavedCount += chunk.length;
+      deferredRollupDirty = true;
     };
 
     const importDataRows = async (dataRows) => {
@@ -419,6 +437,9 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
     }
 
     await flushRows();
+    // Um arquivo historico pode conter centenas de milhares de eventos. Em vez
+    // de reconstruir analytics_daily por lote, reconcilia uma unica vez aqui.
+    await refreshDeferredRollup();
 
     if (uniqueSavedCount === 0) {
       const partes = [];
@@ -444,6 +465,19 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
     });
 
   } catch (err) {
+    if (deferredRollupDirty && deferredRollupPlatformId) {
+      try {
+        await retryTransientFetch(
+          () => supabase.rpc('refresh_analytics_daily', {
+            p_platform: deferredRollupPlatformId,
+            p_dias: null,
+          }),
+          { label: 'Import Backend · recuperacao do rollup' },
+        );
+      } catch (refreshErr) {
+        console.error('[Import Backend] Falha ao recuperar rollup apos erro:', refreshErr);
+      }
+    }
     console.error('[Import Backend] Erro geral na importação de eventos:', err);
     return res.status(500).json({ error: err.message || String(err) });
   } finally {
