@@ -21,6 +21,7 @@ import { useCarrierAliases } from '../hooks/useCarrierAliases.js';
 import { useSheetHistory } from '../hooks/useSheetHistory.js';
 import { supabase } from '../supabase.js';
 import { detect, parseCSV, readHeaders, buildImportRows } from '../utils/fatigueParser.js';
+import { apiFetch } from '../lib/analyticsApi.js';
 
 const normStr = s =>
   String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -369,10 +370,21 @@ export default function Monitor() {
             seen.add(key);
             return true;
           });
-          const { error: evInsertErr } = await supabase
-            .from('driver_events')
-            .upsert(deduped, { onConflict: 'platform_id,placa,ocorrido_em,nome_evento', ignoreDuplicates: false });
-          if (evInsertErr) console.warn('[Monitor] Erro ao persistir driver_events:', evInsertErr.message);
+          const formData = new FormData();
+          formData.append('files', file);
+          formData.append('platformId', detectedPlatId);
+          formData.append('platformName', detection.platformName);
+          formData.append('mapping', JSON.stringify(detection.mapping));
+          formData.append('operatorEmail', operatorEmail);
+
+          const importResponse = await apiFetch('/api/analytics/import', {
+            method: 'POST',
+            body: formData,
+          });
+          if (!importResponse.ok) {
+            const errorBody = await importResponse.json().catch(() => ({}));
+            throw new Error(errorBody.error || `Não foi possível salvar os eventos (HTTP ${importResponse.status}).`);
+          }
         }
       }
 
