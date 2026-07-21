@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { normClf, normCrit, toUF, detect, aggregate, buildImportRows } from './fatigueParser.js';
+import { normClf, normCrit, toDate, toUF, detect, aggregate, buildImportRows } from './fatigueParser.js';
+
+describe('fatigueParser · datas de importação', () => {
+  it('interpreta data/hora sem fuso da MaxTrack sempre em São Paulo', () => {
+    expect(toDate('02/07/2026 00:54:00')?.toISOString()).toBe('2026-07-02T03:54:00.000Z');
+    expect(toDate('2026-07-02T00:54:00')?.toISOString()).toBe('2026-07-02T03:54:00.000Z');
+  });
+
+  it('preserva um timestamp que já declara UTC', () => {
+    expect(toDate('2026-07-02T00:54:00Z')?.toISOString()).toBe('2026-07-02T00:54:00.000Z');
+  });
+});
 
 describe('fatigueParser · normClf', () => {
   it('identifica falso positivo', () => {

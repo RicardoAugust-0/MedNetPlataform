@@ -183,18 +183,48 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
 // ── Conversores robustos ──
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+const saoPauloDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: SAO_PAULO_TIME_ZONE,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+// A exportação da MaxTrack informa data/hora local, sem offset. Não podemos
+// deixar `new Date(ano, ...)` decidir o fuso: no browser e no backend esse
+// construtor usa o fuso da máquina, o que fez a mesma planilha entrar com -3h
+// depois de uma mudança de ambiente. Converte explicitamente a parede de São
+// Paulo para UTC; duas iterações também cobrem datas históricas de DST.
+function saoPauloWallTimeToDate(year, month, day, hour = 0, minute = 0, second = 0) {
+  const expected = Date.UTC(year, month - 1, day, hour, minute, second);
+  let timestamp = expected;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = Object.fromEntries(saoPauloDateFormatter.formatToParts(new Date(timestamp))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]));
+    const renderedAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    timestamp += expected - renderedAsUtc;
+  }
+  return new Date(timestamp);
+}
+
 export function toDate(v) {
   if (v instanceof Date) return isNaN(v) ? null : v;
-  if (typeof v === 'number') { // serial Excel
-    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
-    return isNaN(d) ? null : d;
+  if (typeof v === 'number') { // serial Excel, interpretado como hora local da planilha
+    const raw = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return saoPauloWallTimeToDate(
+      raw.getUTCFullYear(), raw.getUTCMonth() + 1, raw.getUTCDate(),
+      raw.getUTCHours(), raw.getUTCMinutes(), raw.getUTCSeconds(),
+    );
   }
   const s = String(v || '').trim();
   if (!s) return null;
   let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0)); }
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; return saoPauloWallTimeToDate(y, +m[2], +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)); }
   m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (m) return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  if (m && !/[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    return saoPauloWallTimeToDate(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  }
   const d = new Date(s); return isNaN(d) ? null : d;
 }
 
