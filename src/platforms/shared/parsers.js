@@ -26,29 +26,10 @@ export function parseSpeed(value) {
 
 // Aceita Date, número serial do Excel (dias desde 1900-01-01) ou string em
 // formatos comuns: "DD/MM/AAAA HH:MM[:SS]" ou "DD/MM/AAAA". Devolve Date ou null.
+import { toDate } from '../../utils/fatigueParser.js';
+
 export function parseEventDate(value) {
-  if (value == null || value === '') return null;
-  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-  if (typeof value === 'number') {
-    const ms = (value - 25569) * 86400 * 1000;
-    const d = new Date(ms);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  const str = String(value).trim();
-  let m = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  if (m) {
-    const [, dd, mm, yyRaw, h, mi, s] = m;
-    const year = yyRaw.length === 2 ? 2000 + parseInt(yyRaw, 10) : parseInt(yyRaw, 10);
-    return new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10), parseInt(h, 10), parseInt(mi, 10), parseInt(s || '0', 10));
-  }
-  m = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-  if (m) {
-    const [, dd, mm, yyRaw] = m;
-    const year = yyRaw.length === 2 ? 2000 + parseInt(yyRaw, 10) : parseInt(yyRaw, 10);
-    return new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
-  }
-  const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
+  return toDate(value);
 }
 
 // Regra padrão de turno: Diurno 06–18h, Noturno 18–06h.
