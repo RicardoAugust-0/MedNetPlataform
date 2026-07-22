@@ -70,3 +70,58 @@ describe('shouldPreserveHorizonQueueItem', () => {
     expect(shouldPreserveHorizonQueueItem('pending')).toBe(false);
   });
 });
+
+describe('runAutoCrossCheck', () => {
+  it('executa a verificação cruzada em lote com o cliente Supabase fornecido', async () => {
+    const mockMaxtrack = [
+      { id: 'm1', placa: 'ABC1D23', ocorrido_em: '2026-07-22T10:00:00Z', analise_ia_plataforma: 'Positivo', descricao: 'Fadiga' },
+    ];
+    const mockHorizon = [
+      { id: 'h1', placa: 'ABC-1D23', ocorrido_em: '2026-07-22T10:01:00Z', analise_ia_plataforma: 'Não classificado' },
+    ];
+
+    const upsertCalls = [];
+    const supabase = {
+      from: (table) => {
+        if (table === 'driver_events') {
+          const builder = {
+            eq: () => builder,
+            gte: () => builder,
+            lte: () => builder,
+            in: () => builder,
+            order: () => builder,
+            limit: () => Promise.resolve({ data: mockMaxtrack, error: null }),
+            range: () => Promise.resolve({ data: mockHorizon, error: null }),
+          };
+          return { select: () => builder };
+        }
+        if (table === 'horizon_treatment_queue') {
+          return {
+            select: () => ({
+              in: () => Promise.resolve({ data: [], error: null }),
+            }),
+            upsert: (rows, opts) => {
+              upsertCalls.push({ rows, opts });
+              return Promise.resolve({ error: null });
+            },
+            delete: () => ({
+              in: () => ({
+                eq: () => Promise.resolve({ error: null }),
+              }),
+            }),
+          };
+        }
+        return {};
+      },
+    };
+
+    const { runAutoCrossCheck } = await import('./auto-crosscheck.js');
+    await expect(runAutoCrossCheck(supabase, 'maxtrack')).resolves.toBeUndefined();
+    expect(upsertCalls.length).toBeGreaterThan(0);
+    expect(upsertCalls[0].rows[0]).toEqual(expect.objectContaining({
+      driver_event_id: 'm1',
+      horizon_driver_event_id: 'h1',
+      status: 'pending',
+    }));
+  });
+});

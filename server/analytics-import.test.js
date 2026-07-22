@@ -139,7 +139,7 @@ describe('handleImportEvents · colunas financeiras MaxTrack', () => {
       expect(rpc.mock.calls.filter(([name]) => name === 'upsert_driver_events_preserve')).toHaveLength(1);
       expect(rpc).toHaveBeenCalledWith('refresh_analytics_daily', {
         p_platform: 'maxtrack',
-        p_dias: null,
+        p_dias: ['2026-07-20'],
       });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({

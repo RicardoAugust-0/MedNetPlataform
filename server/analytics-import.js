@@ -365,16 +365,18 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
     const importAuthority = getImportAuthority(baseStage);
     const stats = { lidas: 0, semData: 0, operador: 0, velocidade: 0, leves: 0, importadas: 0 };
     const seenKeys = new Set();
+    const affectedDias = new Set();
     let dupsFiltered = 0;
     let uniqueSavedCount = 0;
     let pendingRows = [];
 
     const refreshDeferredRollup = async () => {
       if (!deferredRollupDirty) return;
+      const diasArray = affectedDias.size > 0 ? Array.from(affectedDias) : null;
       const { error: refreshError } = await retryTransientFetch(
         () => supabase.rpc('refresh_analytics_daily', {
           p_platform: platformId,
-          p_dias: null,
+          p_dias: diasArray,
         }),
         { label: `Import Backend · rollup ${platformId}` },
       );
@@ -412,6 +414,16 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
           continue;
         }
         seenKeys.add(key);
+        if (rowValue.ocorrido_em) {
+          try {
+            const diaStr = new Date(rowValue.ocorrido_em).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+            if (diaStr && diaStr.length === 10) {
+              affectedDias.add(diaStr);
+            }
+          } catch {
+            // data invalida ignorada para calculo de dias afetados
+          }
+        }
         pendingRows.push(rowValue);
         if (pendingRows.length >= IMPORT_BATCH_SIZE) await flushRows();
       }
@@ -467,10 +479,11 @@ export async function handleImportEvents(supabase, req, res, clearCache) {
   } catch (err) {
     if (deferredRollupDirty && deferredRollupPlatformId) {
       try {
+        const diasArray = affectedDias.size > 0 ? Array.from(affectedDias) : null;
         await retryTransientFetch(
           () => supabase.rpc('refresh_analytics_daily', {
             p_platform: deferredRollupPlatformId,
-            p_dias: null,
+            p_dias: diasArray,
           }),
           { label: 'Import Backend · recuperacao do rollup' },
         );
