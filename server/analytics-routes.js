@@ -669,11 +669,13 @@ export function registerAnalyticsRoutes(app, supabase) {
           p_date_from: from,
           p_date_to: to,
           p_severity: severity || null,
+          p_tz: 'America/Sao_Paulo',
         }),
         supabase.rpc('get_operator_sheet_activity', {
           p_platform_id: platformId,
           p_date_from: from,
           p_date_to: to,
+          p_tz: 'America/Sao_Paulo',
         }),
         supabase
           .from('profiles')
