@@ -405,7 +405,7 @@ export function useAnalyticsState() {
         uf: selectedUf,
       });
 
-      const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal, timeoutMs: 15000 });
+      const res = await apiFetch(`/api/analytics?${qs}`, { signal: controller.signal, timeoutMs: 30000 });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || 'Erro no servidor de analytics');

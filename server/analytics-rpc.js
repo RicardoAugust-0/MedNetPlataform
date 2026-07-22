@@ -234,48 +234,37 @@ export async function buildSingleAnalyticsViaRPC(supabase, {
     p_tz: 'America/Sao_Paulo',
   };
 
-  // 3. Período atual.
-  const d = await callGetAnalytics(supabase, {
-    ...baseParams,
-    p_date_from: from,
-    p_date_to: to,
-    p_daily: daily,
-    p_window_months: windowMonths,
-  });
-  resolveFrotaChart(d, resolveMonitorName, aliases);
-  await enrichRollupSupportMetrics(supabase, d, {
-    platformId,
-    frotas: pFrotas,
-    dateFrom: from,
-    dateTo: to,
-    severity,
-    classification,
-    eventType,
-  });
+  const fetchPeriodData = async (dateFrom, dateTo, isDaily, isWindowMonths) => {
+    const [rollupData, supportData] = await Promise.all([
+      callGetAnalytics(supabase, {
+        ...baseParams,
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_daily: isDaily,
+        p_window_months: isWindowMonths,
+      }),
+      querySupportMetrics(supabase, {
+        platformId,
+        frotas: pFrotas,
+        dateFrom,
+        dateTo,
+        severity,
+        classification,
+        eventType,
+      }),
+    ]);
+    resolveFrotaChart(rollupData, resolveMonitorName, aliases);
+    mergeSupportMetrics(rollupData, supportData);
+    return rollupData;
+  };
 
-  // 4. Mês anterior (apenas quando há um mês específico selecionado).
-  let prevD = null;
-  if (month && month !== 'all' && month !== 'custom' && month.includes('-')) {
-    const pk = prevMonthKey(month);
-    const pb = spMonthBounds(pk);
-    prevD = await callGetAnalytics(supabase, {
-      ...baseParams,
-      p_date_from: pb.from,
-      p_date_to: pb.to,
-      p_daily: true,
-      p_window_months: false,
-    });
-    resolveFrotaChart(prevD, resolveMonitorName, aliases);
-    await enrichRollupSupportMetrics(supabase, prevD, {
-      platformId,
-      frotas: pFrotas,
-      dateFrom: pb.from,
-      dateTo: pb.to,
-      severity,
-      classification,
-      eventType,
-    });
-  }
+  const hasPrevMonth = Boolean(month && month !== 'all' && month !== 'custom' && month.includes('-'));
+  const prevBounds = hasPrevMonth ? spMonthBounds(prevMonthKey(month)) : null;
+
+  const [d, prevD] = await Promise.all([
+    fetchPeriodData(from, to, daily, windowMonths),
+    prevBounds ? fetchPeriodData(prevBounds.from, prevBounds.to, true, false) : Promise.resolve(null),
+  ]);
 
   // availableUfs = todas as UFs presentes (não filtrado por UF — a RPC nunca roda
   // com filtro de UF; quando há um, o caminho JS assume). d.uf já vem do rollup.
