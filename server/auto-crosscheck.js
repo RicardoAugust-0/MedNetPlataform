@@ -203,6 +203,48 @@ async function recentEligibleMaxtrackEvents(supabase) {
   return data || [];
 }
 
+const IN_QUERY_CHUNK_SIZE = 50;
+
+async function fetchQueueInChunks(supabase, column, ids, chunkSize = IN_QUERY_CHUNK_SIZE) {
+  if (!ids || !ids.length) return [];
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    chunks.push(ids.slice(i, i + chunkSize));
+  }
+  const responses = await Promise.all(
+    chunks.map((chunk) => (
+      supabase
+        .from('horizon_treatment_queue')
+        .select('id, driver_event_id, horizon_driver_event_id, status, match_key')
+        .in(column, chunk)
+    ))
+  );
+  const rows = [];
+  for (const res of responses) {
+    if (res.error) throw res.error;
+    if (res.data) rows.push(...res.data);
+  }
+  return rows;
+}
+
+async function deleteQueueInChunks(supabase, filterColumn, ids, extraFilters = {}, chunkSize = IN_QUERY_CHUNK_SIZE) {
+  if (!ids || !ids.length) return;
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    chunks.push(ids.slice(i, i + chunkSize));
+  }
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      let query = supabase.from('horizon_treatment_queue').delete().in(filterColumn, chunk);
+      if (extraFilters.match_key) {
+        query = query.eq('match_key', extraFilters.match_key);
+      }
+      const { error } = await query;
+      if (error) throw error;
+    })
+  );
+}
+
 async function processRecentMaxtrackEvents(supabase) {
   const sourceEvents = await recentEligibleMaxtrackEvents(supabase);
   if (!sourceEvents.length) return;
@@ -217,27 +259,14 @@ async function processRecentMaxtrackEvents(supabase) {
   }
   const horizonEventIds = Array.from(new Set(allAssignedHorizonEvents.map((h) => h.id)));
 
-  // 1. Busca em lote do estado atual da fila para alvos Horizon e fontes Maxtrack
-  const [horizonRes, sourceRes] = await Promise.all([
-    horizonEventIds.length > 0
-      ? supabase
-        .from('horizon_treatment_queue')
-        .select('id, driver_event_id, horizon_driver_event_id, status, match_key')
-        .in('horizon_driver_event_id', horizonEventIds)
-      : { data: [], error: null },
-    sourceEventIds.length > 0
-      ? supabase
-        .from('horizon_treatment_queue')
-        .select('id, driver_event_id, horizon_driver_event_id, status, match_key')
-        .in('driver_event_id', sourceEventIds)
-      : { data: [], error: null },
+  // 1. Busca em lote fracionada (chunks de 50 IDs) para evitar estouro de URL (URI too long HTTP 414)
+  const [horizonRows, sourceRows] = await Promise.all([
+    fetchQueueInChunks(supabase, 'horizon_driver_event_id', horizonEventIds),
+    fetchQueueInChunks(supabase, 'driver_event_id', sourceEventIds),
   ]);
 
-  if (horizonRes.error) throw horizonRes.error;
-  if (sourceRes.error) throw sourceRes.error;
-
   const existingMap = new Map();
-  for (const row of [...(horizonRes.data || []), ...(sourceRes.data || [])]) {
+  for (const row of [...horizonRows, ...sourceRows]) {
     existingMap.set(row.id, row);
   }
   const existingQueueRows = Array.from(existingMap.values());
@@ -335,7 +364,7 @@ async function processRecentMaxtrackEvents(supabase) {
     }
   }
 
-  // 3. Executa as operações em lote (Bulk Operations)
+  // 3. Executa as operações em lote (Bulk Operations) fracionadas por chunks
   if (queueItemsToUpsert.length > 0) {
     const { error } = await supabase
       .from('horizon_treatment_queue')
@@ -344,20 +373,11 @@ async function processRecentMaxtrackEvents(supabase) {
   }
 
   if (staleQueueIdsToDelete.length > 0) {
-    const { error } = await supabase
-      .from('horizon_treatment_queue')
-      .delete()
-      .in('id', staleQueueIdsToDelete);
-    if (error) throw error;
+    await deleteQueueInChunks(supabase, 'id', staleQueueIdsToDelete);
   }
 
   if (unmatchedSourceIdsToDelete.length > 0) {
-    const { error } = await supabase
-      .from('horizon_treatment_queue')
-      .delete()
-      .in('driver_event_id', unmatchedSourceIdsToDelete)
-      .eq('match_key', 'unmatched');
-    if (error) throw error;
+    await deleteQueueInChunks(supabase, 'driver_event_id', unmatchedSourceIdsToDelete, { match_key: 'unmatched' });
   }
 
   if (unmatchedPlaceholdersToUpsert.length > 0) {
